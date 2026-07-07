@@ -3,8 +3,8 @@ services:
     name: intelligence-suite-web
     env: python
     plan: standard
-    buildCommand: python3 -m pip install --upgrade pip setuptools wheel && python3 -m pip install -r requirements.txt
-    startCommand: python3 backend/server.py
+    buildCommand: python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip setuptools wheel && .venv/bin/python -m pip install -r requirements.txt
+    startCommand: .venv/bin/python backend/server.py
     healthCheckPath: /healthz
     envVars:
       - key: PYTHON_VERSION
