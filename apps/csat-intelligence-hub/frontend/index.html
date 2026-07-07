@@ -1,0 +1,2334 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CSAT Dashboard</title>
+    <link rel="stylesheet" href="styles.css?v=20260705-period-performance-v78" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-block">
+        <span class="logo logo-text" aria-label="Krestrel Analysis Suite">KA</span>
+        <span class="brand-divider"></span>
+        <span class="hub-name">CSAT Intelligence Hub <small>18.6 Pilot</small></span>
+        <span class="team-chip">Customer Intelligence Team</span>
+      </div>
+      <div class="topbar-actions"></div>
+    </header>
+
+    <section id="datePanel" class="date-panel hidden">
+      <span>Quick Select</span>
+      <button data-range="Today">Today</button>
+      <button data-range="Yesterday">Yesterday</button>
+      <button data-range="7D">7D</button>
+      <button data-range="This Month">This Month</button>
+      <button data-range="Last 90D">Last 90D</button>
+      <button data-range="All Time">All Time</button>
+      <input id="customStart" type="date" />
+      <input id="customEnd" type="date" />
+      <button id="applyCustomRange">Apply Custom</button>
+    </section>
+
+    <main class="shell">
+      <aside class="nav">
+        <div class="nav-title">Navigation</div>
+        <div class="nav-section open">
+          <button class="nav-section-toggle" type="button" aria-expanded="true">
+            <span class="nav-section-icon" data-section-icon="setup"></span>
+            <span><strong>Data Setup</strong><small>Upload, mapping, column coverage</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item active" data-view="setuphome" data-icon="settings">Setup Home</button>
+            <button class="nav-item" data-view="setup" data-icon="settings">Setup</button>
+            <button class="nav-item" data-view="columnexplorer" data-icon="document">Column Explorer</button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="downloads"></span>
+            <span><strong>Downloads and Outputs</strong><small>Board pack and GenAI files</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="boardpdf" data-icon="document">Board Room PDF</button>
+            <button id="genAiJsonOutput" class="nav-item" data-icon="document" type="button">Create Gen AI JSON</button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="results"></span>
+            <span><strong>Analysis Results</strong><small>Generated views after analysis</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="datasetsummary" data-icon="document">Data Set Summary</button>
+            <button class="nav-item" data-view="performanceoverview" data-icon="dashboard">Performance Overview</button>
+            <button class="nav-item" data-view="executivesummary" data-icon="document">Executive Read</button>
+            <button class="nav-item" data-view="decisionguide" data-icon="target">Decision Guide</button>
+            <button class="nav-item" data-view="dimensions" data-icon="dashboard">Dimensions</button>
+            <button class="nav-item" data-view="results" data-icon="analysis">Results</button>
+            <button class="nav-item" data-view="sentimentbriefing" data-icon="feedback">Sentiment Briefing</button>
+            <button class="nav-item" data-view="insightsreadout" data-icon="performance">Insights Readout</button>
+          </div>
+        </div>
+
+        <button class="nav-item nav-item-standalone nav-item-top-moved" data-view="executivelens" data-icon="target">Executive Lens</button>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="command"></span>
+            <span><strong>Dashboard Suite</strong><small>Leadership and performance views</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="executive" data-icon="dashboard">Executive Dashboard</button>
+            <button class="nav-item" data-view="agent" data-icon="agent">Agent Dashboard</button>
+            <button class="nav-item" data-view="manager" data-icon="manager">Manager Dashboard</button>
+            <button class="nav-item" data-view="customdashboards" data-icon="stats">Custom Dashboards</button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="performance"></span>
+            <span><strong>Performance Lens</strong><small>Master Lens, moving averages, statistics</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="performancequestions" data-icon="performance">Master Lens</button>
+            <button class="nav-item" data-view="movingaverageslaunch" data-icon="performance">Moving Averages</button>
+            <button class="nav-item" data-view="quartilelaunch" data-icon="quartile">Quartile Intelligence</button>
+            <button class="nav-item" data-view="statistics" data-icon="stats">Statistics</button>
+            <button class="nav-item" data-view="customstatslaunch" data-icon="stats">Custom Statistics</button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="sentiment"></span>
+            <span><strong>Sentiment Engine</strong><small>Sparrow sentiment intelligence</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="feedback" data-icon="feedback">Sentiment Intelligence</button>
+            <button class="nav-item" data-view="sentimentcompare" data-icon="analysis">Sentiment Comparison</button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="theme"></span>
+            <span><strong>Theme Intelligence</strong><small>Theme, ACPT, and resolution</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="themebuilder" data-icon="target" type="button">Build Theme Classification</button>
+            <button class="nav-item" data-view="themecompare" data-icon="analysis" type="button">Theme Comparison</button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="dimension"></span>
+            <span><strong>Dimension Studio</strong><small>Wave, tenure, custom cuts</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="wave" data-icon="wave">Wave Intelligence</button>
+            <button class="nav-item" data-view="tenure" data-icon="tenure">Tenure Intelligence</button>
+            <button class="nav-item" data-view="customdims" data-icon="dashboard">Custom Dimensions</button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="signals"></span>
+            <span><strong>Experience Signals</strong><small>Themes, ACPT, Satisfied DNA, alerts</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="themesoverview" data-icon="target">Themes Overview</button>
+            <button class="nav-item" data-view="acptoverview" data-icon="analysis">ACPT</button>
+            <button class="nav-item" data-view="rootcause" data-icon="cloud">Word Cloud Intelligence</button>
+            <button class="nav-item" data-view="Satisfieddna" data-icon="dna">Satisfied DNA</button>
+            <button class="nav-item" data-view="alerts" data-icon="alert">Alert Badges</button>
+            <button class="nav-item" data-view="analysis" data-icon="analysis">Compare</button>
+          </div>
+        </div>
+
+        <div class="nav-section nav-section-project-actions">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="downloads"></span>
+            <span><strong>Project Actions</strong><small>Suite, import, export, session</small></span>
+          </button>
+          <div class="nav-section-body">
+            <a class="nav-item" href="/index.html#suite-tools" data-icon="target">Suite Home</a>
+            <button id="exportAnalysisProject" class="nav-item" data-icon="downloads" type="button">Export Analysis</button>
+            <label class="nav-item" data-icon="document" for="importAnalysisProjectFile">Import Analysis</label>
+            <input id="importAnalysisProjectFile" type="file" accept=".json,application/json" hidden />
+            <button id="dateToggle" class="nav-item" data-icon="wave" type="button" title="Date Range (All Time)" aria-label="Date Range (All Time)">Date Range <span id="dateLabel">All Time</span></button>
+            <button id="signOutAndStop" class="nav-item" data-icon="risk" type="button">Sign Out</button>
+          </div>
+        </div>
+
+        <div class="nav-section nav-section-hidden">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="wip"></span>
+            <span><strong>Work In Progress</strong><small>Future intelligence modules</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item nav-item-wip" data-view="operations" data-icon="operations"><span class="nav-label">Operations</span><span class="wip-pill" title="Work in progress">WIP</span></button>
+            <button class="nav-item nav-item-wip" data-view="gap" data-icon="target"><span class="nav-label">Gap & Opportunity</span><span class="wip-pill" title="Work in progress">WIP</span></button>
+            <button class="nav-item nav-item-wip" data-view="churn" data-icon="risk"><span class="nav-label">Churn Risk</span><span class="wip-pill" title="Work in progress">WIP</span></button>
+            <button class="nav-item nav-item-wip" data-view="detail" data-icon="document"><span class="nav-label">Detailed Insights</span><span class="wip-pill" title="Work in progress">WIP</span></button>
+          </div>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <section id="setuphome" class="view active setup-landing-view">
+          <div class="setup-landing-shell">
+            <div class="setup-landing-card">
+              <div class="setup-landing-copy">
+                <p class="eyebrow">Analysis Workspace</p>
+                <h1>Start or restore an analysis</h1>
+                <p>Run a fresh CSAT analysis, or import a saved analysis file to continue with all result views and date filtering.</p>
+                <div class="setup-landing-actions">
+                  <button id="startNewAnalysis" class="button button-primary" type="button">Run New Analysis</button>
+                  <label class="button button-secondary" for="importAnalysisProjectFile">Import Analysis</label>
+                </div>
+              </div>
+              <div class="setup-landing-motion" aria-hidden="true">
+                <span></span><span></span><span></span>
+                <i></i><i></i><i></i>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="setup" class="view">
+          <div class="setup-grid">
+            <div class="setup-main guided-setup">
+              <div class="setup-welcome">
+                <p class="eyebrow">CSAT Dashboard Setup</p>
+                <h1>Configure CSAT analysis</h1>
+                <p class="lede">
+                  Complete the setup inputs, review the mapping, choose the analysis methods, and run the dashboard analysis from this workspace.
+                </p>
+                <button id="baseInfoButton" class="guided-info-button" type="button" title="Base File information" aria-label="Base File information">
+                  <span>i</span>
+                </button>
+              </div>
+
+              <div class="setup-step-guide" aria-label="CSAT setup progress">
+                <div class="setup-guide-title"><strong>Setup Progress</strong><small>Follow the steps</small></div>
+                <div class="setup-guide-item is-current" data-guide-step="1"><span>1</span><strong>Base File</strong><small>Upload survey data</small></div>
+                <div class="setup-guide-item" data-guide-step="2"><span>2</span><strong>Field Check</strong><small>Confirm lookup need</small></div>
+                <div class="setup-guide-item" data-guide-step="3"><span>3</span><strong>Lookup File</strong><small>Optional enrichment</small></div>
+                <div class="setup-guide-item" data-guide-step="4"><span>4</span><strong>Column Mapping</strong><small>Review required fields</small></div>
+                <div class="setup-guide-item" data-guide-step="5"><span>5</span><strong>Target & Scale</strong><small>CSAT rules</small></div>
+                <div class="setup-guide-item" data-guide-step="6"><span>6</span><strong>Calendar</strong><small>Week and fiscal start</small></div>
+                <div class="setup-guide-item" data-guide-step="7"><span>7</span><strong>Dimensions</strong><small>Optional report cuts</small></div>
+                <div class="setup-guide-item" data-guide-step="8"><span>8</span><strong>Intelligence</strong><small>Optional engines</small></div>
+                <div class="setup-guide-item" data-guide-step="9"><span>9</span><strong>Run Analysis</strong><small>Generate dashboards</small></div>
+              </div>
+
+              <div class="guided-step active" id="guidedBaseStep">
+                <div class="guided-step-copy">
+                  <span class="guided-step-kicker">First question</span>
+                  <h2>Please upload the Base File</h2>
+                  <p>
+                    Once the upload is complete, I will read the file, comment on the row volume, and guide you to the next step.
+                  </p>
+                </div>
+                <div class="upload-card guided-upload-card">
+                <div>
+                  <h3><span class="setup-step-number">1</span>Base File</h3>
+                  <p>Required survey file with comment, score, agent, and date fields.</p>
+                  <strong id="baseStatus">Pending</strong>
+                </div>
+                <label id="baseUploadButton" class="button button-primary upload-button">
+                  <span id="baseUploadLabel">Upload Base File</span>
+                  <input id="baseFile" type="file" accept=".xlsx,.xls" hidden />
+                </label>
+                </div>
+              </div>
+
+              <div id="baseInfoPanel" class="guided-info-panel" hidden>
+                <button id="baseInfoClose" class="guided-info-close" type="button" aria-label="Close information">x</button>
+                <span>What is a Base File?</span>
+                <h2>Your Base File is the main CSAT survey export.</h2>
+                <p>
+                  It usually contains one row per customer response, with fields such as CSAT score, satisfaction category, comment, feedback date, agent, manager, queue, channel, wave, or tenure. If some of those fields are missing, do not worry. After this upload, I will ask whether you want to add a lookup file and I can join both files using a unique key.
+                </p>
+                <small>Accepted formats: .xlsx or .xls. Keep the original column headers in the first row.</small>
+              </div>
+
+              <div class="guided-file-insight" id="guidedFileInsight" hidden>
+                <div class="guided-success-mark" aria-hidden="true"></div>
+                <span>Upload complete</span>
+                <strong id="guidedFileInsightTitle">Great!</strong>
+                <p id="guidedFileInsightText">I have read the file and will guide the next step.</p>
+                <button id="guidedSuccessContinue" class="button button-primary guided-continue-button" type="button">Continue</button>
+              </div>
+
+              <div class="guided-step is-locked" id="guidedCoverageStep">
+                <div class="guided-step-copy">
+                  <span class="guided-step-kicker">Step 2</span>
+                  <h2>Does the Base File already have all required fields?</h2>
+                  <p>
+                    If your Base File already includes all the fields you want to analyze, continue without a lookup. If fields such as manager, TL, tenure, wave, site, or employee details are in another file, choose lookup support and I will join both files for you.
+                  </p>
+                </div>
+                <div class="coverage-choice" role="group" aria-label="Raw data field coverage">
+                  <button class="coverage-option" type="button" data-coverage-choice="complete">
+                    <strong>Yes, the Base File has everything</strong>
+                    <span>Continue with the uploaded raw data and map the columns directly.</span>
+                  </button>
+                  <button class="coverage-option" type="button" data-coverage-choice="lookup">
+                    <strong>No, help me add a lookup file</strong>
+                    <span>Upload a second file and select the unique key in both files so I can join them.</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="guided-step lookup-guided-step is-locked" id="guidedLookupStep" hidden>
+                <div class="guided-step-copy">
+                  <span class="guided-step-kicker">Step 3</span>
+                  <h2>Upload the Lookup File</h2>
+                  <p>
+                    A Lookup File is an optional reference file that contains extra fields missing from the Base File. To join it correctly, both files must share a common unique key, such as employee ID, agent ID, interaction ID, case ID, or another stable identifier.
+                  </p>
+                </div>
+                <div class="upload-card guided-upload-card">
+                  <div>
+                    <h3><span class="setup-step-number">3</span>Lookup File</h3>
+                    <p>Optional workforce/context file for manager, tenure, wave, or other cuts.</p>
+                    <strong id="lookupStatus">Optional - not uploaded</strong>
+                  </div>
+                  <label id="lookupUploadButton" class="button button-primary upload-button">
+                    <span id="lookupUploadLabel">Upload Lookup File</span>
+                    <input id="lookupFile" type="file" accept=".xlsx,.xls" hidden />
+                  </label>
+                </div>
+                <div class="join-key-guide">
+                  <strong>Unique key guidance</strong>
+                  <span>Select the same business identifier in Base Join Key and Lookup Join Key below. I will use that key to enrich the base rows before analysis.</span>
+                </div>
+              </div>
+
+              <div class="panel guided-mapping-panel" id="guidedMappingPanel">
+                <div class="panel-header setup-step-header">
+                  <h2><span class="setup-step-number">3/4</span>Review Column Mapping</h2>
+                  <span id="rowStatus">I mapped some columns by default. Please review and confirm once.</span>
+                </div>
+                <div class="guided-mapping-intro">
+                  <strong>I have mapped some columns by default.</strong>
+                  <p>Please check the selections below and confirm. If something does not look right, change it before moving ahead.</p>
+                </div>
+                <div class="form-grid">
+                  <label>Verbatim Feedback<select id="feedbackCol"></select></label>
+                  <label>CSAT score<select id="scoreCol"></select></label>
+                  <label>Satisfaction Level / CSAT Category<select id="satisfactionCol"></select></label>
+                  <label>Agent Name<select id="agentCol"></select></label>
+                  <label>Manager / TL<select id="managerCol"></select></label>
+                  <label>Feedback Date<select id="dateCol"></select></label>
+                  <label>Wave Field<select id="waveCol"></select></label>
+                  <label>Tenure Field<select id="tenureCol"></select></label>
+                  <label>Base Join Key<select id="baseKey"></select></label>
+                  <label>Lookup Join Key<select id="lookupKey"></select></label>
+                </div>
+                <div class="guided-mapping-actions">
+                  <button id="confirmMappingBtn" class="button button-primary guided-continue-button" type="button">Confirm Mapping</button>
+                </div>
+                <div class="score-band-config guided-advanced-setup">
+                  <div>
+                    <h3><span class="setup-step-number">5</span>Score-to-CSAT Bands</h3>
+                    <p>If Satisfaction Level is not mapped, these thresholds classify each score as Satisfied, Neutral, or Dissatisfied.</p>
+                  </div>
+                  <div class="score-band-fields">
+                    <label>Score Scale
+                      <select id="csatScoreScale">
+                        <option value="5" selected>1-5 scale</option>
+                        <option value="10">0-10 scale</option>
+                        <option value="100">0-100 scale</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                    </label>
+                    <label>Satisfied starts at<input id="csatSatisfiedMin" type="number" step="0.1" value="4" /></label>
+                    <label>Neutral starts at<input id="csatNeutralMin" type="number" step="0.1" value="3" /></label>
+                    <span id="csatBandHelp">Dissatisfied is any valid score below the Neutral threshold.</span>
+                  </div>
+                </div>
+                <div class="engine-training-strip guided-advanced-setup">
+                  <span>Training tools</span>
+                  <button id="trainSparrowSetup" class="button button-secondary train-direct-button" type="button">Train Sparrow</button>
+                  <button id="trainOwlSetup" class="button button-secondary train-direct-button" type="button">Train Owl</button>
+                </div>
+                <div class="model-config-grid guided-advanced-setup">
+                  <div class="model-config-card">
+                    <div class="engine-card-head">
+                      <div>
+                        <h3><span class="setup-step-number">6</span>Sentiment Engine</h3>
+                        <span>Sparrow AI sentiment layer</span>
+                      </div>
+                      <div class="engine-ai-badge sentiment-ai" aria-hidden="true">
+                        <strong>AI</strong>
+                        <small>S</small>
+                      </div>
+                    </div>
+                    <label>Analysis Method<select id="sentimentEngine"><option value="local" selected>Local</option><option value="sparrow">Sparrow Model</option></select></label>
+                    <label>Sparrow Model Path<input id="sparrowModelPath" /></label>
+                    <div class="model-actions">
+                      <button id="browseSparrowModel" class="button button-secondary" type="button">Browse</button>
+                      <button id="validateSparrowModel" class="button button-secondary" type="button">Validate</button>
+                    </div>
+                    <small id="sparrowModelStatus">Default: Local analysis.</small>
+                  </div>
+                  <div class="model-config-card">
+                    <div class="engine-card-head">
+                      <div>
+                        <h3><span class="setup-step-number">6</span>Theme Engine</h3>
+                        <span>Owl intelligence layer</span>
+                      </div>
+                      <div class="engine-ai-badge theme-ai" aria-hidden="true">
+                        <strong>AI</strong>
+                        <small>T</small>
+                      </div>
+                    </div>
+                    <label class="hidden">Analysis Method<select id="themeEngine"><option value="local" selected>Local</option><option value="theme">Owl Model</option></select></label>
+                    <label class="engine-choice"><input type="checkbox" id="themeOutput" /> <span><strong>Themes</strong><small>Use the trained model for business themes and drivers.</small></span></label>
+                    <label class="engine-choice"><input type="checkbox" id="acptOutput" /> <span><strong>ACPT</strong><small>Use the trained model for Agent, Customer, Process, or Technology ownership.</small></span></label>
+                    <label class="engine-choice"><input type="checkbox" id="resolutionOutput" /> <span><strong>Resolution Status</strong><small>Use the trained model for resolved, unresolved, partially resolved, or not mentioned.</small></span></label>
+                    <div id="themeModelPathField" class="model-path-field hidden">
+                      <label>Theme / ACPT / Resolution Model Path<input id="vultureModelPath" /></label>
+                      <div class="model-actions">
+                        <button id="browseOwlModel" class="button button-secondary" type="button">Browse</button>
+                        <button id="validateOwlModel" class="button button-secondary" type="button">Validate</button>
+                      </div>
+                      <small id="vultureModelStatus">Default: Local analysis.</small>
+                    </div>
+                  </div>
+                </div>
+                <button id="analyzeBtn" class="button button-primary wide guided-advanced-setup" disabled>Analyze Feedback</button>
+              </div>
+
+              <div class="guided-analysis-step" id="guidedAnalysisStep" hidden>
+                <span>Ready for analysis</span>
+                <h2>Before I start, I need one last piece of information.</h2>
+                <p id="guidedAnalysisEstimate">I have your file, lookup decision, and confirmed column mapping. I will run the CSAT analysis and keep you informed while it is working.</p>
+                <div class="guided-analysis-options">
+                  <div>
+                    <strong><span class="setup-step-number inline-step-number">5</span>Target &amp; Scale</strong>
+                    <p>Confirm the CSAT target and score bands so I can judge gaps, recovery priority, and the best investigation path correctly.</p>
+                  </div>
+                  <label>CSAT Target
+                    <input id="guidedCsatTarget" type="number" min="0" max="100" step="0.1" value="85" />
+                  </label>
+                  <label>Score Scale
+                    <select id="guidedCsatScoreScale">
+                      <option value="5" selected>1-5 scale</option>
+                      <option value="10">0-10 / 1-10 scale</option>
+                      <option value="100">0-100 scale</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                  </label>
+                  <label>Satisfied starts at
+                    <input id="guidedCsatSatisfiedMin" type="number" step="0.1" value="4" />
+                  </label>
+                  <label>Neutral starts at
+                    <input id="guidedCsatNeutralMin" type="number" step="0.1" value="3" />
+                  </label>
+                  <div class="guided-analysis-option-note" id="guidedCsatRuleNote">Dissatisfied is any valid score below the neutral threshold.</div>
+                  <button id="confirmTargetScaleBtn" class="button button-secondary setup-confirm-button" type="button">Confirm Target &amp; Scale</button>
+                </div>
+                <div class="guided-analysis-options guided-calendar-options">
+                  <div>
+                    <strong><span class="setup-step-number inline-step-number">6</span>Calendar</strong>
+                    <p>Select the week start and fiscal year start. The performance trend, monthly table, and weekly table will use this calendar.</p>
+                  </div>
+                  <label>Week Start
+                    <select id="setupWeekStartDay">
+                      <option value="Monday" selected>Monday</option>
+                      <option value="Sunday">Sunday</option>
+                      <option value="Saturday">Saturday</option>
+                    </select>
+                  </label>
+                  <label>Fiscal Start
+                    <select id="setupFiscalStartMonth">
+                      <option value="January" selected>January</option>
+                      <option value="February">February</option>
+                      <option value="March">March</option>
+                      <option value="April">April</option>
+                      <option value="May">May</option>
+                      <option value="June">June</option>
+                      <option value="July">July</option>
+                      <option value="August">August</option>
+                      <option value="September">September</option>
+                      <option value="October">October</option>
+                      <option value="November">November</option>
+                      <option value="December">December</option>
+                    </select>
+                  </label>
+                  <button id="confirmCalendarBtn" class="button button-secondary setup-confirm-button" type="button">Confirm Calendar</button>
+                </div>
+                <div class="guided-analysis-options guided-dimension-options">
+                  <div>
+                    <strong><span class="setup-step-number inline-step-number">7</span>Dimensions</strong>
+                    <p>Add optional report cuts for dashboard filters, summaries, and custom views.</p>
+                  </div>
+                  <label>Additional Report Dimensions<select id="dynamicDimensionSelect"></select></label>
+                  <button id="addDynamicDimension" class="button button-secondary" type="button">Add Dimension</button>
+                  <div id="dynamicDimensionChips" class="dimension-chips"></div>
+                  <button id="confirmDimensionsBtn" class="button button-secondary setup-confirm-button" type="button">Confirm Dimensions</button>
+                </div>
+                <div class="guided-analysis-options guided-engine-options">
+                  <div>
+                    <strong><span class="setup-step-number inline-step-number">8</span>Optional intelligence engines</strong>
+                    <p>Local Rules is the fastest default. Use Sparrow for model-based sentiment and Owl for Theme, ACPT, and Resolution when available.</p>
+                  </div>
+                  <div class="engine-training-strip inline-training-strip">
+                    <span>Training tools</span>
+                    <button id="trainSparrowGuided" class="button button-secondary train-direct-button" type="button">Train Sparrow</button>
+                    <button id="trainOwlGuided" class="button button-secondary train-direct-button" type="button">Train Owl</button>
+                  </div>
+                  <label>Sentiment
+                    <select id="guidedSentimentEngine">
+                      <option value="local" selected>Local Rules</option>
+                      <option value="sparrow">Sparrow Model</option>
+                    </select>
+                  </label>
+                  <label class="hidden">Theme Engine
+                    <select id="guidedThemeEngine">
+                      <option value="local" selected>Local Rules</option>
+                      <option value="theme">Owl Model</option>
+                    </select>
+                  </label>
+                  <label><input type="checkbox" id="guidedThemeOutput" /> Themes</label>
+                  <label><input type="checkbox" id="guidedAcptOutput" /> ACPT</label>
+                  <label><input type="checkbox" id="guidedResolutionOutput" /> Resolution Status</label>
+                  <div id="guidedThemeModelPathField" class="model-path-field hidden">
+                    <label>Theme / ACPT / Resolution Model Path<input id="guidedThemeModelPath" /></label>
+                  </div>
+                  <button id="confirmIntelligenceBtn" class="button button-secondary setup-confirm-button" type="button">Confirm Intelligence</button>
+                </div>
+                <div class="guided-analysis-options guided-run-options">
+                  <div>
+                    <strong><span class="setup-step-number inline-step-number">9</span>Run Analysis</strong>
+                    <p>Generate the dashboard, executive read, decision guide, dimensions, results, sentiment briefing, and insights readout.</p>
+                  </div>
+                  <button id="guidedRunAnalysisBtn" class="button button-primary guided-continue-button" type="button">Run Analysis</button>
+                </div>
+              </div>
+
+              <div class="guided-analysis-complete" id="guidedAnalysisComplete" hidden>
+                <div class="guided-celebration" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><span></span><span></span>
+                  <div class="guided-success-mark"></div>
+                </div>
+                <span>Analysis complete</span>
+                <h2>Bingo, the analysis is complete.</h2>
+                <p id="guidedCompletionIntro">Give me a moment to brief you before we open the dashboards.</p>
+                <button id="guidedStartBriefing" class="button button-primary guided-start-briefing" type="button">Show me the insights</button>
+                <div class="guided-left-rail-head" id="guidedLeftRailHead" aria-label="Guided insight section heading">
+                  <span>Insight story</span>
+                  <strong>Guided briefing</strong>
+                </div>
+                <div class="guided-insight-deck" id="guidedInsightDeck">
+                  <div class="guided-briefing-topline">
+                    <span id="guidedInsightCounter">Briefing 1 of 10</span>
+                    <small id="guidedInsightPhase">What happened</small>
+                  </div>
+                  <strong id="guidedInsightTitle">Your analysis is ready.</strong>
+                  <p id="guidedInsightText">I am preparing the first briefing point.</p>
+                  <div class="guided-briefing-evidence" id="guidedBriefingEvidence"></div>
+                  <div class="guided-insight-dots" id="guidedInsightDots"></div>
+                  <div class="guided-insight-actions">
+                    <button id="guidedInsightDeepDive" class="button" type="button" hidden>Deep dive</button>
+                    <button id="guidedInsightBack" class="button button-ghost" type="button" hidden>Back</button>
+                    <button id="guidedInsightNext" class="button button-primary" type="button">Next insight</button>
+                  </div>
+                  <div class="guided-area-filter" id="guidedAreaFilterWrap" hidden>
+                    <label>Area
+                      <select id="guidedAreaFilter">
+                        <option value="All">All areas</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="guided-attack-deck guided-next-actions" id="guidedAttackDeck" hidden></div>
+                  <div class="guided-card-explain" id="guidedCardExplain" hidden>
+                    <div>
+                      <span id="guidedCardExplainKicker">Decision logic</span>
+                      <strong id="guidedCardExplainTitle">How this decision was made</strong>
+                    </div>
+                    <button id="guidedCardExplainClose" type="button" aria-label="Close decision explanation">Close</button>
+                    <p id="guidedCardExplainText"></p>
+                    <dl id="guidedCardExplainFacts"></dl>
+                    <div class="guided-card-evidence" id="guidedCardEvidence"></div>
+                  </div>
+                </div>
+                <div class="guided-field-dive" id="guidedFieldDive" hidden>
+                  <div class="guided-insight-stage-banner" id="guidedInsightStageBanner">
+                    <div>
+                      <span id="guidedInsightStageKicker">Stage 1 of 3</span>
+                      <strong id="guidedInsightStageTitle">CSAT insight generation</strong>
+                      <p id="guidedInsightStageCopy">Generate five account-specific insights to unlock sentiment analysis.</p>
+                    </div>
+                    <b id="guidedInsightStageCount">0 / 5</b>
+                  </div>
+                  <div class="guided-field-dive-nav">
+                    <button id="guidedFieldDiveBackToMap" type="button">Back to signal map</button>
+                  </div>
+                  <div class="guided-field-dive-frame-head">
+                    <span>Investigation</span>
+                    <strong>Table workspace</strong>
+                    <div class="guided-field-dive-controls">
+                      <label><span id="guidedDiveFieldLabel">Group CSAT by</span>
+                        <select id="guidedDeepDiveField"></select>
+                      </label>
+                      <button id="guidedDeepDiveAnalyze" class="button button-primary" type="button">Analyze</button>
+                      <button id="guidedAddInsight" class="button button-ghost" type="button" disabled>Add insight</button>
+                      <button id="guidedDeepDiveExpand" class="button button-ghost guided-expand-button" type="button" aria-pressed="false">Expand</button>
+                    </div>
+                  </div>
+                  <span id="guidedAddInsightMessage" class="guided-add-insight-message" role="status" aria-live="polite"></span>
+                  <div class="guided-field-dive-scroll">
+                    <div class="guided-field-dive-head">
+                      <span id="guidedDiveStageLabel">Investigation</span>
+                      <strong id="guidedDiveStageHeading">Choose a field and I will group CSAT for you.</strong>
+                      <p id="guidedDiveStageDescription">Select any available field from the completed analysis. I will calculate CSAT, satisfaction mix, and the target gap for each group.</p>
+                    </div>
+                    <div class="guided-selected-signal" id="guidedSelectedSignalStrip" hidden>
+                      <button id="guidedSelectedSignalPrev" type="button" aria-label="Previous signal">Back</button>
+                      <div>
+                        <span id="guidedSelectedSignalKicker">Selected signal</span>
+                        <strong id="guidedSelectedSignalTitle">Signal selected</strong>
+                        <p id="guidedSelectedSignalText">I will use this signal to shape the investigation.</p>
+                        <small id="guidedSelectedSignalCalc"></small>
+                      </div>
+                      <button id="guidedSelectedSignalNext" type="button" aria-label="Next signal">Next</button>
+                    </div>
+                    <div class="guided-field-dive-body">
+                      <div class="guided-left-analysis-box">
+                        <div class="guided-summary-strip" id="guidedDeepDiveSummaryStrip"></div>
+                        <div class="guided-mini-chart" id="guidedDeepDiveChart"></div>
+                        <div class="table-shell guided-field-dive-table">
+                          <table id="guidedDeepDiveTable" data-display-limit="200"></table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="guided-post-theme" id="guidedPostTheme" hidden>
+                  <span>Post-theme intelligence</span>
+                  <h2>Your complete insight story</h2>
+                  <p>Every insight you selected across CSAT, sentiment, and theme classification is captured below.</p>
+                  <div class="guided-post-theme-summary" id="guidedPostThemeSummary"></div>
+                </div>
+                <div class="guided-story-chooser" id="guidedStoryChooser" hidden>
+                  <span class="guided-recommendation-label">Signal map ready</span>
+                  <strong id="guidedRecommendedPath">Start with the highest-priority story.</strong>
+                  <p id="guidedRecommendedActionText">I have selected the route I would open first. Start there, or choose another path below.</p>
+                  <button id="guidedRecommendedStart" class="button button-primary guided-recommended-start" type="button" data-guided-recommended-story="health">Start recommended path</button>
+                  <div class="guided-path-scorecard" id="guidedPathScorecard" aria-label="Investigation path scoring"></div>
+                  <div class="guided-metric-score-table" id="guidedMetricScoreTable" aria-label="Metric scoring details"></div>
+                  <span class="guided-path-divider">Which signal should we attack?</span>
+                  <div class="guided-next-actions">
+                    <button type="button" data-guided-story="health">
+                      <strong>Overall CSAT Health</strong>
+                      <small>Score, target gap, response volume, and satisfaction mix.</small>
+                    </button>
+                    <button type="button" data-guided-story="recovery">
+                      <strong>Recovery Gap</strong>
+                      <small>Dissatisfied volume, neutral opportunity, and target distance.</small>
+                    </button>
+                    <button type="button" data-guided-story="watch">
+                      <strong>Target Watch</strong>
+                      <small>Near-target risk, neutral conversion, and quick wins.</small>
+                    </button>
+                    <button type="button" data-guided-story="sustain">
+                      <strong>Sustainability Check</strong>
+                      <small>Consistency, benchmark groups, and performance replication.</small>
+                    </button>
+                    <button type="button" data-guided-story="movement">
+                      <strong>Trend & Movement</strong>
+                      <small>Latest movement, period volume, and performance direction.</small>
+                    </button>
+                    <button type="button" data-guided-story="people">
+                      <strong>People Performance</strong>
+                      <small>Agent, manager, wave, or tenure variance if those fields exist.</small>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <aside class="guided-insight-rail" id="guidedDeepDiveRail" aria-label="Deep dive insight cards" hidden>
+                <div class="guided-insight-rail-head">
+                  <span>Insight stack</span>
+                  <strong>Table signals</strong>
+                  <button id="guidedDeepDiveRailClose" type="button" aria-label="Close insight stack">�</button>
+                </div>
+                <div class="guided-insight-rail-list" id="guidedDeepDiveRailList"></div>
+                <div class="guided-insight-stage-action">
+                  <span id="guidedInsightRailProgress">0 of 5 insights selected</span>
+                  <button id="guidedInsightStageNext" class="button button-primary" type="button" hidden>Move to sentiment analysis</button>
+                </div>
+                <div class="guided-insight-feedback" id="guidedInsightFeedback" hidden>
+                  <strong>Are these signals useful?</strong>
+                  <span>If they look right, continue the story. If not, try another field.</span>
+                  <div>
+                    <button id="guidedFeedbackUseful" type="button">Yes, continue</button>
+                    <button id="guidedFeedbackAnotherField" type="button">Try another field</button>
+                  </div>
+                </div>
+              </aside>
+
+              <div class="guided-story-panel" id="guidedStoryPanel" hidden>
+                <span id="guidedStoryKicker">Guided story</span>
+                <h2 id="guidedStoryTitle">Let�s start with the overall CSAT health.</h2>
+                <p id="guidedStoryIntro">Here are the three things that matter most.</p>
+                <div class="guided-story-points" id="guidedStoryPoints"></div>
+                <div class="guided-story-actions">
+                  <button id="guidedStoryBack" class="button button-ghost" type="button">Choose different signal</button>
+                  <button id="guidedStoryContinue" class="button button-primary guided-continue-button" type="button">Start guided investigation</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="setup-visual">
+              <h2>Ready for CSAT Intelligence?</h2>
+              <img src="assets/CSAT%20Analyzer%20Person%20Standing.jpg" alt="" />
+              <div class="model-status">
+                <div><span id="sparrowDot" class="dot"></span>Sparrow Sentiment: <strong id="sparrowText">Checking</strong></div>
+                <div><span id="vultureDot" class="dot"></span>Owl Model: <strong id="vultureText">Checking</strong></div>
+              </div>
+              <div class="standalone-assurance">
+                <h3>Local Standalone Assurance</h3>
+                <ul>
+                  <li>Data stays on this system</li>
+                  <li>Uses bundled models</li>
+                  <li>No Python required for user</li>
+                  <li>Exports available after analysis</li>
+                  <li>Works without internet access</li>
+                  <li>Built for secure internal reviews</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="datasetsummary" class="view data-view result-page-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Analysis Results</p><h1>Data Set Summary</h1></div>
+            <span id="resultDatasetStatus">Run analysis to populate this result.</span>
+          </div>
+          <p class="insight-text">A post-analysis summary of row volume, mapped inputs, generated outputs, and available evidence.</p>
+          <div id="resultDatasetCards" class="metric-grid"></div>
+          <div class="panel">
+            <div class="panel-title-row"><h2>Analysis-ready data profile</h2></div>
+            <div class="table-wrap fit-table compact-report-table"><table id="resultDatasetTable"></table></div>
+          </div>
+        </section>
+
+        <section id="performanceoverview" class="view data-view result-page-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Analysis Results</p><h1>Performance Overview</h1></div>
+            <span id="resultPerformanceStatus">Run analysis to populate this result.</span>
+          </div>
+          <div id="resultPerformanceCards" class="metric-grid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card medium performance-trend-card"><button class="chart-maximize-button" type="button" data-period-chart="monthly" title="Maximize chart" aria-label="Maximize monthly performance trend">[]</button><h3>Monthly Performance Trend</h3><svg id="resultMonthlyPerformanceTrend" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card medium performance-trend-card"><button class="chart-maximize-button" type="button" data-period-chart="weekly" title="Maximize chart" aria-label="Maximize weekly performance trend">[]</button><h3>Weekly Performance Trend</h3><svg id="resultWeeklyPerformanceTrend" viewBox="0 0 760 260"></svg></div>
+          </div>
+          <div class="panel performance-period-panel">
+            <div class="panel-title-row">
+              <h2>Monthly and weekly performance</h2>
+              <span id="resultPeriodStatus">Run analysis to populate period movement.</span>
+            </div>
+            <div class="performance-period-grid">
+              <div class="performance-period-card">
+                <h3>Monthly performance</h3>
+                <div class="table-wrap fit-table compact-report-table performance-period-table-wrap"><table id="resultMonthlyPerformanceTable"></table></div>
+              </div>
+              <div class="performance-period-card">
+                <h3>Weekly performance</h3>
+                <div class="table-wrap fit-table compact-report-table performance-period-table-wrap"><table id="resultWeeklyPerformanceTable"></table></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="executivesummary" class="view data-view result-page-view">
+          <div class="panel">
+            <div class="panel-title-row"><h2>Executive Read</h2><span id="resultExecutiveSummaryStatus">Run analysis to populate this result.</span></div>
+            <div class="result-export-actions" aria-label="Executive Read exports">
+              <button id="exportExecutiveSummaryTxt" class="pill-button small" type="button">Export TXT</button>
+              <button id="exportExecutiveSummaryPdf" class="pill-button small" type="button">Export PDF</button>
+              <button id="exportExecutiveSummaryHtml" class="pill-button small" type="button">Export HTML</button>
+            </div>
+            <div id="resultExecutiveSummaryBox" class="result-rich-text-box"></div>
+          </div>
+        </section>
+
+        <section id="decisionguide" class="view data-view result-page-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Analysis Results</p><h1>Decision Guide</h1></div>
+            <span id="resultDecisionStatus">Run analysis to populate this result.</span>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row">
+              <h2>Decision checks</h2>
+              <label class="inline-filter">Category
+                <select id="resultDecisionCategory">
+                  <option value="All">All</option>
+                </select>
+              </label>
+              <label class="inline-filter">Decision
+                <select id="resultDecisionDecision">
+                  <option value="All">All</option>
+                </select>
+              </label>
+            </div>
+            <div class="decision-status-legend" aria-label="Decision status legend">
+              <span><b class="decision-status-pill attention">Actionable</b> Needs follow-up or leadership review.</span>
+              <span><b class="decision-status-pill monitor">Monitor</b> Watch the signal before acting.</span>
+              <span><b class="decision-status-pill pass">Favorable</b> Healthy or lower-risk signal.</span>
+              <span><b class="decision-status-pill neutral">No Action Required</b> Informational check only.</span>
+            </div>
+            <div id="resultDecisionGuide" class="driver-list"></div>
+          </div>
+        </section>
+
+        <section id="dimensions" class="view data-view result-page-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Analysis Results</p><h1>Dimensions</h1></div>
+            <span id="resultDimensionsStatus">Run analysis to populate this result.</span>
+          </div>
+          <div class="dimension-control-bar">
+            <div>
+              <span>Dimension workspace</span>
+              <strong>Filter graphs and generated outputs together</strong>
+            </div>
+            <label class="inline-filter">Dimension
+              <select id="resultDimensionSelect">
+                <option value="All">All Dimensions</option>
+              </select>
+            </label>
+            <button id="resultDimensionChartButton" class="dimension-chart-button dimension-chart-header-button" type="button">Open Chart</button>
+          </div>
+          <div id="resultDimensionCards" class="metric-grid"></div>
+          <div class="panel">
+            <div class="panel-title-row"><h2>Generated dimension outputs</h2></div>
+            <div class="table-wrap fit-table compact-report-table"><table id="resultDimensionTable"></table></div>
+          </div>
+        </section>
+
+        <section id="results" class="view data-view result-page-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Analysis Results</p><h1>Results</h1></div>
+            <span id="resultRowsStatus">Run analysis to populate this result.</span>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row"><h2>Answered leadership questions</h2></div>
+            <div id="resultQuestionCards" class="result-question-list"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row"><h2>Generated result rows</h2></div>
+            <div class="table-wrap fit-table compact-report-table"><table id="resultRowsTable"></table></div>
+          </div>
+        </section>
+
+        <section id="sentimentbriefing" class="view data-view result-page-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Analysis Results</p><h1>Sentiment Briefing</h1></div>
+            <span id="resultSentimentStatus">Run analysis to populate this result.</span>
+          </div>
+          <div id="resultSentimentCards" class="metric-grid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card medium"><h3>Sentiment Mix</h3><svg id="resultSentimentChart" viewBox="0 0 760 240"></svg><div id="resultSentimentInsight" class="chart-insight"></div></div>
+            <div class="chart-card medium"><h3>Briefing Notes</h3><div id="resultSentimentReadout" class="driver-list"></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row"><h2>Representative sentiment rows</h2></div>
+            <div class="table-wrap fit-table compact-report-table"><table id="resultSentimentTable"></table></div>
+          </div>
+        </section>
+
+        <section id="insightsreadout" class="view data-view result-page-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Analysis Results</p><h1>Insights Readout</h1></div>
+            <span id="resultInsightsStatus">Run analysis to populate this result.</span>
+          </div>
+          <div id="resultInsightsGrid" class="metric-grid"></div>
+          <div class="panel">
+            <div class="panel-title-row"><h2>Generated readout</h2></div>
+            <div id="resultInsightsReadout" class="driver-list"></div>
+          </div>
+        </section>
+
+        <section id="executive" class="view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Executive Summary</p>
+              <h1>CSAT performance overview</h1>
+            </div>
+            <span id="analysisStatus">Run analysis to populate dashboard.</span>
+          </div>
+          <div id="analysisCompleteBanner" class="analysis-complete-banner hidden">
+            Sparrow sentiment analysis and Theme, ACPT, and Resolution intelligence are complete. The dashboards are ready for review.
+          </div>
+          <div id="executiveDashboardLoader" class="executive-dashboard-loader hidden" role="status" aria-live="polite">
+            <div class="executive-loader-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div>
+              <p class="eyebrow">Preparing dashboard</p>
+              <h2>Loading your CSAT performance view</h2>
+              <p id="executiveDashboardLoaderText">I am bringing in the saved analysis, trends, gauges, and executive insights.</p>
+            </div>
+          </div>
+          <div class="metric-grid" id="metricGrid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card wide">
+              <h3>Weekly CSAT trend</h3>
+              <svg id="npsTrend" viewBox="0 0 760 260"></svg>
+            </div>
+            <div class="chart-card">
+              <h3>CSAT Gauge</h3>
+              <svg id="npsGauge" viewBox="0 0 360 260"></svg>
+            </div>
+            <div class="chart-card medium">
+              <h3>Sentiment Mix</h3>
+              <div id="sentimentMix" class="smiley-row"></div>
+            </div>
+            <div class="chart-card medium">
+              <h3>CSAT Composition</h3>
+              <svg id="npsComposition" viewBox="0 0 360 260"></svg>
+            </div>
+            <div class="chart-card medium">
+              <h3>Response Volume Trend</h3>
+              <svg id="volumeTrend" viewBox="0 0 760 260"></svg>
+            </div>
+            <div class="chart-card medium">
+              <h3>Sentiment Trend Over Time</h3>
+              <svg id="sentimentTrend" viewBox="0 0 760 260"></svg>
+            </div>
+            <div class="chart-card full">
+              <h3>Top Drivers</h3>
+              <div id="driversList" class="driver-list"></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>Executive Insights</h2>
+            <p id="insightsText" class="insight-text">Run analysis to generate insight summary.</p>
+          </div>
+          <div class="panel analysis-snapshot-panel">
+            <div class="panel-title-row">
+              <div>
+                <h2>Analysis Snapshot</h2>
+                <p class="panel-meta">The same quick executive snapshot shown when analysis completes.</p>
+              </div>
+            </div>
+            <div id="analysisSnapshotBody" class="analysis-snapshot-body">
+              <p class="insight-text">Run analysis to generate the Analysis Snapshot.</p>
+            </div>
+          </div>
+        </section>
+
+
+        <section id="themesoverview" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Owl Intelligence</p><h1>Themes Overview</h1></div>
+            <button class="button button-secondary" data-export-table="themesOverviewTable" type="button">Export CSV</button>
+          </div>
+          <div id="themesOverviewMetricGrid" class="metric-grid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card full">
+              <h3>Top Themes</h3>
+              <div id="themesOverviewList" class="driver-list"></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row">
+              <div><h2>Theme Evidence</h2><p id="themesOverviewMeta" class="panel-meta">Run analysis with Owl or local theme output to populate this view.</p></div>
+            </div>
+            <div class="table-wrap fit-table compact-report-table"><table id="themesOverviewTable"></table></div>
+          </div>
+        </section>
+
+        <section id="acptoverview" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Owl Intelligence</p><h1>ACPT</h1></div>
+            <button class="button button-secondary" data-export-table="acptOverviewTable" type="button">Export CSV</button>
+          </div>
+          <div id="acptOverviewMetricGrid" class="metric-grid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card full">
+              <h3>ACPT Ownership Mix</h3>
+              <div id="acptOverviewList" class="driver-list"></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row">
+              <div><h2>ACPT Evidence</h2><p id="acptOverviewMeta" class="panel-meta">Run analysis with Owl ACPT selected to populate this view.</p></div>
+            </div>
+            <div class="table-wrap fit-table compact-report-table"><table id="acptOverviewTable"></table></div>
+          </div>
+        </section>
+
+        <section id="customdashboards" class="view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Dashboard Suite</p>
+              <h1>Custom Dashboards</h1>
+            </div>
+            <span>Build and review custom summary tables from current analysis data.</span>
+          </div>
+          <div class="summary-builder-config">
+            <div class="summary-builder-head">
+              <div>
+                <h3>Summary Builder</h3>
+                <p>Create dynamic dashboard summaries from whichever fields exist in the uploaded report.</p>
+              </div>
+              <span id="summaryBuilderStatus">Run analysis to unlock analyzed rows.</span>
+            </div>
+            <div class="summary-builder-grid">
+              <label>Summary Title<input id="summaryBuilderTitle" value="Custom Performance Summary" /></label>
+              <label>Table Style<select id="summaryBuilderLayout"><option value="csat">CSAT Summary</option><option value="multi">Multi-Metric Table</option><option value="kpi">KPI List</option><option value="best">Best Performer List</option><option value="worst">Focus Area List</option></select></label>
+              <label>Source Rows<select id="summaryBuilderSource"></select></label>
+              <label>Rows / Group By<select id="summaryBuilderGroup"></select></label>
+              <label>Optional Column Cut<select id="summaryBuilderColumn"></select></label>
+              <label>Measure<select id="summaryBuilderMeasure"></select></label>
+              <label>Value Field<select id="summaryBuilderValueField"></select></label>
+              <label>Sort By<select id="summaryBuilderSort"></select></label>
+              <label>Direction<select id="summaryBuilderSortDirection"><option value="desc">High to Low</option><option value="asc">Low to High</option></select></label>
+              <label>Rows to Show <small>0 or blank = all rows</small><input id="summaryBuilderLimit" type="number" min="0" max="100000" value="0" /></label>
+            </div>
+            <div id="summaryBuilderMetricConfig" class="summary-metric-config hidden">
+              <div class="summary-metric-config-head">
+                <strong id="summaryMetricConfigTitle">Table Columns</strong>
+                <span id="summaryMetricConfigHelp">Each row becomes one column in this custom dashboard table.</span>
+              </div>
+              <div id="summaryBuilderMetricRows" class="summary-metric-rows"></div>
+              <button id="summaryBuilderAddMetric" class="button button-secondary summary-add-column" type="button">+ Add Column</button>
+            </div>
+            <div class="summary-builder-actions">
+              <button id="summaryBuilderPreview" class="button button-secondary" type="button">Preview</button>
+              <button id="summaryBuilderAdd" class="button button-primary" type="button">Add to Dashboard</button>
+            </div>
+            <div id="summaryBuilderMessage" class="summary-builder-message">Choose a source and grouping to preview the summary.</div>
+            <div class="table-wrap compact-table summary-builder-preview-wrap">
+              <table id="summaryBuilderPreviewTable"></table>
+            </div>
+          </div>
+          <div class="panel summary-dashboard-panel">
+            <div class="panel-title-row">
+              <div>
+                <h2>Dynamic Summary Tables</h2>
+                <p id="summaryBuilderDashboardMeta" class="panel-meta">Use Summary Builder to add custom summary tables here.</p>
+              </div>
+              <button id="summaryBuilderClear" class="button button-secondary" type="button">Clear</button>
+            </div>
+            <div id="summaryBuilderDashboard" class="summary-dashboard-output"></div>
+          </div>
+        </section>
+
+        <section id="executivelens" class="view executive-lens-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Executive Lens</p>
+              <h1>Role-based leadership summaries</h1>
+            </div>
+            <span id="executiveLensStatus">Run analysis to personalize each lens.</span>
+          </div>
+          <p class="insight-text">
+            Select a role to view the specific readout that leader needs: current signal, risk, interpretation, and next actions.
+          </p>
+          <div id="executiveLensQuadrants" class="executive-lens-quadrants">
+            <button class="executive-lens-card active" data-lens-role="qa" type="button">
+              <span>01</span>
+              <strong>QA Lens</strong>
+              <small>Quality defects, repeat issues, and coaching signals</small>
+            </button>
+            <button class="executive-lens-card" data-lens-role="teamleader" type="button">
+              <span>02</span>
+              <strong>TL Lens</strong>
+              <small>Team coaching, agent focus, and conversion opportunities</small>
+            </button>
+            <button class="executive-lens-card" data-lens-role="operations" type="button">
+              <span>03</span>
+              <strong>Operations Manager Lens</strong>
+              <small>Process friction, capacity, and operational execution</small>
+            </button>
+            <button class="executive-lens-card" data-lens-role="vp" type="button">
+              <span>04</span>
+              <strong>VP Lens</strong>
+              <small>Business risk, loyalty movement, and strategic priorities</small>
+            </button>
+            <button class="executive-lens-card" data-lens-role="client" type="button">
+              <span>05</span>
+              <strong>Client Lens</strong>
+              <small>Client-ready CSAT health, risks, and action narrative</small>
+            </button>
+          </div>
+          <div id="executiveLensDetail" class="executive-lens-detail"></div>
+        </section>
+
+        <section id="alerts" class="view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Leadership Signals</p>
+              <h1>Alert Badge Register</h1>
+            </div>
+            <span id="alertScore">0/0 Alerts</span>
+          </div>
+          <div id="alertCards" class="alert-grid"></div>
+        </section>
+
+        <section id="feedback" class="view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Sentiment Intelligence</p>
+              <h1>Categorized sentiment table</h1>
+            </div>
+            <button class="button button-secondary" data-download="feedback" type="button">Export CSV</button>
+          </div>
+          <div class="sentiment-summary" id="feedbackSentimentSummary"></div>
+          <div class="dashboard-grid feedback-chart-grid">
+            <div class="chart-card">
+              <h3>Sentiment Snapshot</h3>
+              <p class="chart-subtitle">Sparrow sentiment mix</p>
+              <svg id="feedbackSentimentChart" viewBox="0 0 760 240"></svg>
+              <div id="feedbackSentimentInsight" class="chart-insight"></div>
+            </div>
+          </div>
+          <div class="table-wrap fit-table compact-report-table">
+            <table id="previewTable"></table>
+          </div>
+        </section>
+
+        <section id="sentimentcompare" class="view data-view sentiment-compare-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Sentiment Engine</p>
+              <h1>Sentiment Comparison</h1>
+            </div>
+            <button id="runSentimentCompare" class="button button-primary" type="button">Refresh WoW</button>
+          </div>
+          <p class="insight-text">Week-over-week Sparrow sentiment movement. This uses the completed analysis output and does not rerun sentiment classification.</p>
+          <div id="sentimentCompareMetricGrid" class="metric-grid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card medium"><h3>Positive Sentiment WoW</h3><p class="chart-subtitle">Week x positive share</p><svg id="sentimentComparePositiveChart" viewBox="0 0 760 260"></svg><div id="sentimentComparePositiveInsight" class="chart-insight"></div></div>
+            <div class="chart-card medium"><h3>Negative Sentiment WoW</h3><p class="chart-subtitle">Week x negative share</p><svg id="sentimentCompareNegativeChart" viewBox="0 0 760 260"></svg><div id="sentimentCompareNegativeInsight" class="chart-insight"></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row">
+              <div>
+                <h2>Week-over-Week Sentiment Table</h2>
+                <p id="sentimentCompareMeta" class="panel-meta">Run analysis to view weekly sentiment movement.</p>
+              </div>
+              <button class="button button-secondary" data-export-table="sentimentCompareTable" type="button">Export CSV</button>
+            </div>
+            <div class="table-wrap fit-table compact-report-table"><table id="sentimentCompareTable"></table></div>
+          </div>
+          <div class="panel sentiment-theme-panel">
+            <div class="panel-title-row">
+              <div>
+                <h2>Custom Theme Sentiment</h2>
+                <p id="sentimentThemeMeta" class="panel-meta">Build Theme Classification first, then choose themes to view sentiment WoW by theme.</p>
+              </div>
+            </div>
+            <div id="sentimentThemeSelector" class="theme-chip-list"></div>
+            <div class="dashboard-grid">
+              <div class="chart-card medium"><h3>Selected Theme Positive WoW</h3><p class="chart-subtitle">Rows where selected theme = Yes</p><svg id="sentimentThemePositiveChart" viewBox="0 0 760 260"></svg><div id="sentimentThemePositiveInsight" class="chart-insight"></div><div id="sentimentThemePositiveGuide" class="chart-read-guide"></div></div>
+              <div class="chart-card medium"><h3>Selected Theme Negative WoW</h3><p class="chart-subtitle">Rows where selected theme = Yes</p><svg id="sentimentThemeNegativeChart" viewBox="0 0 760 260"></svg><div id="sentimentThemeNegativeInsight" class="chart-insight"></div><div id="sentimentThemeNegativeGuide" class="chart-read-guide"></div></div>
+            </div>
+            <div class="table-wrap fit-table compact-report-table"><table id="sentimentThemeTable"></table></div>
+          </div>
+        </section>
+
+        <section id="agent" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Agent View</p><h1>Agent Dashboard</h1></div>
+            <div class="title-actions">
+              <label class="inline-select">Agent Name<select id="agentDashboardSelect"></select></label>
+              <button id="agentSummaryBtn" class="button button-secondary" type="button">Agent Summary</button>
+            </div>
+          </div>
+          <div class="metric-grid" id="agentMetricGrid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card wide"><h3>Agent CSAT trend</h3><svg id="agentNpsTrend" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card"><h3>Agent CSAT Gauge</h3><svg id="agentNpsGauge" viewBox="0 0 360 260"></svg></div>
+            <div class="chart-card medium"><h3>Agent Sentiment Mix</h3><div id="agentSentimentMix" class="smiley-row"></div></div>
+            <div class="chart-card medium"><h3>Agent CSAT Composition</h3><svg id="agentNpsComposition" viewBox="0 0 360 260"></svg></div>
+          </div>
+          <div class="table-wrap"><table id="agentTable"></table></div>
+        </section>
+
+        <section id="manager" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Manager View</p><h1>Manager Dashboard</h1></div>
+            <div class="title-actions">
+              <label class="inline-select">Manager Name<select id="managerDashboardSelect"></select></label>
+              <button id="managerSummaryBtn" class="button button-secondary" type="button">Manager Summary</button>
+            </div>
+          </div>
+          <div class="metric-grid" id="managerMetricGrid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card wide"><h3>Manager CSAT trend</h3><svg id="managerNpsTrend" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card"><h3>Manager CSAT Gauge</h3><svg id="managerNpsGauge" viewBox="0 0 360 260"></svg></div>
+            <div class="chart-card medium"><h3>Manager Sentiment Mix</h3><div id="managerSentimentMix" class="smiley-row"></div></div>
+            <div class="chart-card medium"><h3>Manager CSAT Composition</h3><svg id="managerNpsComposition" viewBox="0 0 360 260"></svg></div>
+          </div>
+          <div class="table-wrap"><table id="managerTable"></table></div>
+          <div class="panel manager-agent-panel">
+            <div class="panel-title-row">
+              <div>
+                <p class="eyebrow">Team Drill-Down</p>
+                <h2 id="managerAgentTitle">Agents Under Selected Manager</h2>
+              </div>
+              <p id="managerAgentCount" class="panel-meta">Select a manager to view agent-level detail.</p>
+            </div>
+            <div class="table-wrap compact-table fit-table"><table id="managerAgentTable"></table></div>
+          </div>
+        </section>
+
+        <section id="performancequestions" class="view data-view performance-questions-view">
+          <div id="performanceWorkbar" class="performance-workbar">
+            <label class="performance-lens-picker"><span>Lens</span><select id="performanceLensSelect" aria-label="Select performance lens">
+              <option value="overall">Overall Performance</option>
+              <option value="sentiment">Customer Sentiment</option>
+              <option value="themes">Theme Performance</option>
+              <option value="people">Agent Performance</option>
+              <option value="manager">Manager Performance</option>
+              <option value="quartile">Quartile Performance</option>
+              <option value="correlation">Correlation Performance</option>
+              <option value="other">Other Insights</option>
+            </select></label>
+            <div class="performance-context-bar">
+            <div id="performanceOverallControls" class="performance-overall-controls" aria-label="Master Lens shared date context">
+              <div>
+                <span>Previous Period</span>
+                <label>Start<select id="perfPreviousStart"><option value="">All dates</option></select></label>
+                <label>End<select id="perfPreviousEnd"><option value="">All dates</option></select></label>
+              </div>
+              <div>
+                <span>Current Period</span>
+                <label>Start<select id="perfCurrentStart"><option value="">All dates</option></select></label>
+                <label>End<select id="perfCurrentEnd"><option value="">All dates</option></select></label>
+              </div>
+              <div>
+                <span>Target</span>
+                <label>CSAT Goal<input id="perfTargetScore" type="number" min="0" max="100" step="0.1" value="85" /></label>
+              </div>
+              <div class="performance-week-control">
+                <span>Week Window</span>
+                <label>Week Starts<select id="perfWeekStartDay">
+                  <option value="1" selected>Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                  <option value="0">Sunday</option>
+                </select></label>
+                <label>Week Ends<select id="perfWeekEndDay">
+                  <option value="0" selected>Sunday</option>
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                </select></label>
+              </div>
+              <button id="perfApplyInputs" class="button button-primary" type="button">Refresh</button>
+            </div>
+            </div>
+          </div>
+          <section id="masterLensIntro" class="master-lens-intro" aria-label="Master Lens introduction">
+            <div class="master-lens-intro-matrix" aria-hidden="true">
+              <span>CSAT</span><span>COPC</span><span>Target</span><span>Signal</span><span>Action</span><span>Evidence</span><span>Watch</span><span>Trend</span>
+              <span>CSAT</span><span>COPC</span><span>Target</span><span>Signal</span><span>Action</span><span>Evidence</span><span>Watch</span><span>Trend</span>
+            </div>
+            <div class="master-lens-intro-card">
+              <div class="master-lens-launch-head">
+                <p class="eyebrow">COPC-aligned Master Lens</p>
+                <h1>Preparing CSAT Leadership Intelligence</h1>
+                <p>Loading an evidence-based readout for performance, sentiment, themes, agents, managers, quartiles, correlations, and action priorities.</p>
+              </div>
+              <div class="master-lens-launch-ring" aria-hidden="true">
+                <div class="master-lens-launch-ring-track"></div>
+                <div class="master-lens-launch-core">
+                  <strong>COPC</strong>
+                  <span>Assessment Ready</span>
+                </div>
+              </div>
+              <div class="master-lens-launch-pills" aria-label="Master Lens assessment pillars">
+                <div><strong>Define</strong><span>Metric, target, period</span></div>
+                <div><strong>Evidence</strong><span>Rows, trend, examples</span></div>
+                <div><strong>Decide</strong><span>Favorable, watch, action</span></div>
+              </div>
+              <div class="master-lens-bottom-menu">
+                <div class="master-lens-intro-actions">
+                  <button id="masterLensStart" class="button button-primary" type="button">Start Master Lens</button>
+                  <button id="masterLensSkipIntro" class="button button-secondary" type="button">Skip Intro</button>
+                </div>
+                <div class="master-lens-read-guide" aria-label="How to read the Master Lens report">
+                  <span>How to read</span>
+                  <ol>
+                    <li><b>Start with the final decision.</b> Favorable means the signal is healthy, Watch means monitor closely, and Action means review or intervene.</li>
+                    <li><b>Open each question.</b> Review the assessment cards, calculation logic, and evidence table supporting the answer.</li>
+                    <li><b>Inspect the source evidence.</b> Double-click cards or rows to see the exact data points, examples, and artifacts behind the conclusion.</li>
+                    <li><b>Check the comparison context.</b> Confirm the selected current period, previous period, target, and week window before interpreting movement.</li>
+                    <li><b>Validate confidence.</b> Review response volume, data completeness, and comparable periods before treating a signal as conclusive.</li>
+                    <li><b>Turn the signal into action.</b> Record the owner, due date, expected outcome, and follow-up review for any item requiring attention.</li>
+                    <li><b>Find where the signal is concentrated.</b> Compare agents, managers, themes, channels, and other available groups to identify where attention will have the greatest effect.</li>
+                    <li><b>Confirm the outcome.</b> Revisit the lens after the follow-up period and verify whether the action improved the result without weakening another measure.</li>
+                  </ol>
+                </div>
+                <div class="master-lens-copc-definition">
+                  <span>What is COPC?</span>
+                  <p>COPC is a customer-experience operations framework for consistent performance management. It connects clearly defined measures with reliable evidence, disciplined review, and accountable improvement actions.</p>
+                  <strong>What COPC-aligned means in this tool</strong>
+                  <ul>
+                    <li><b>Defined measures</b><small>Each lens explains the metric, classification logic, target, and period used.</small></li>
+                    <li><b>Comparable evidence</b><small>Current and previous periods are assessed using consistent calculation rules.</small></li>
+                    <li><b>Reliable conclusions</b><small>Volume, completeness, confidence, and supporting examples are shown for validation.</small></li>
+                    <li><b>Action-oriented review</b><small>Signals identify what is favorable, what needs watching, and where action is required.</small></li>
+                  </ul>
+                  <div class="master-lens-copc-note"><b>Important</b> This is an internal COPC assessment-readiness view. It supports evidence-based operational reviews but does not represent COPC certification.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <div id="performanceLensWorkspace" class="performance-lens-workspace">
+            <div id="performanceCopcQuestionList" class="performance-copc-question-list" aria-label="COPC-aligned CSAT questions"></div>
+            <section id="agentFocusQueuePanel" class="performance-copc-panel agent-focus-queue-panel" hidden></section>
+            <div id="performanceLensCards" class="metric-grid performance-lens-card-grid"></div>
+            <div class="panel performance-question-panel">
+              <div class="panel-title-row">
+                <div>
+                  <h2>Questions answered in this lens</h2>
+                  <p id="performanceLensQuestionMeta" class="panel-meta">Select a lens to view the leadership questions answered.</p>
+                </div>
+              </div>
+              <div id="performanceLensQuestions" class="performance-question-grid"></div>
+            </div>
+            <div class="panel performance-evidence-panel">
+              <div class="panel-title-row">
+                <div>
+                  <h2>Evidence table</h2>
+                  <p class="panel-meta">The table below shows the strongest data points used by this lens.</p>
+                </div>
+                <button class="button button-secondary" data-export-table="performanceLensTable" type="button">Export CSV</button>
+              </div>
+              <div class="table-wrap fit-table compact-table"><table id="performanceLensTable"></table></div>
+            </div>
+            <div class="dashboard-grid performance-lens-chart-grid">
+              <div class="chart-card medium">
+                <h3 id="performanceLensPrimaryTitle">Primary Trend</h3>
+                <p id="performanceLensPrimarySubtitle" class="chart-subtitle">Current lens movement</p>
+                <svg id="performanceLensPrimaryChart" viewBox="0 0 760 260"></svg>
+                <div id="performanceLensPrimaryInsight" class="chart-insight"></div>
+              </div>
+              <div class="chart-card medium">
+                <h3 id="performanceLensSecondaryTitle">Supporting Read</h3>
+                <p id="performanceLensSecondarySubtitle" class="chart-subtitle">Supporting signal</p>
+                <svg id="performanceLensSecondaryChart" viewBox="0 0 760 260"></svg>
+                <div id="performanceLensSecondaryInsight" class="chart-insight"></div>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        <section id="movingaverageslaunch" class="view data-view launch-page-view moving-averages-launch-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Performance Dashboard</p>
+              <h1>Moving Averages</h1>
+              <p class="section-subtitle">Daily, weekly, and monthly smoothed CSAT movement with clear score direction, volatility, and confidence reads.</p>
+            </div>
+          </div>
+          <section id="movingAverageLaunch" class="professional-launch" data-launch-panel="movingaverages" aria-label="Moving Averages launch">
+            <div class="professional-launch-card">
+              <div class="professional-launch-copy">
+                <p class="eyebrow">Moving Average Intelligence</p>
+                <h2>Smooth the noise. Read the direction.</h2>
+                <p>Open a leadership-ready view of daily, weekly, and monthly score movement with volatility, confidence, and volume context.</p>
+              </div>
+              <div class="professional-launch-orbit moving-average-visual" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <div class="professional-launch-core" aria-hidden="true">
+                <div class="professional-launch-ring"></div>
+                <strong>MA</strong>
+                <span>Trend Ready</span>
+              </div>
+              <div class="professional-launch-points">
+                <div><strong>Trend</strong><span>Smoothed CSAT movement</span></div>
+                <div><strong>Confidence</strong><span>Volume and volatility checks</span></div>
+                <div><strong>Action</strong><span>Strongest and weakest periods</span></div>
+              </div>
+              <div class="professional-launch-actions">
+                <button id="movingAverageStart" class="button button-primary" type="button">Launch Moving Averages</button>
+                <small>Best used after analysis completes with a valid date field.</small>
+              </div>
+            </div>
+          </section>
+        </section>
+        <section id="movingaverages" class="view data-view moving-averages-view">
+          <div id="movingAverageWorkspace" class="launch-workspace">
+          <div class="performance-context-bar moving-average-context-bar">
+            <div class="performance-overall-controls">
+              <div class="performance-week-control">
+                <span>Week Window</span>
+                <label>Week Starts
+                  <select id="movingWeekStartDay">
+                    <option value="0">Sunday</option>
+                    <option value="1" selected>Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </label>
+                <label>Week Ends
+                  <select id="movingWeekEndDay">
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6" selected>Saturday</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div id="movingAverageSummary" class="performance-lens-summary"></div>
+          </div>
+          <div id="movingAverageCards" class="metric-grid performance-lens-card-grid"></div>
+          <div class="panel moving-average-insight-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <h2>Moving average dashboard</h2>
+                <p id="movingAverageQuestionMeta">Smoothed score, gap, volume, strongest period, weakest period, and volatility.</p>
+              </div>
+            </div>
+            <div id="movingAverageQuestions" class="moving-average-dashboard-grid"></div>
+          </div>
+          <div class="chart-grid performance-chart-grid">
+            <div class="chart-card wide-chart-card expandable-chart-card">
+              <button type="button" class="chart-expand-btn" data-expand-chart="movingAveragePrimaryChart" title="Expand chart">?</button>
+              <h2 id="movingAveragePrimaryTitle">Moving Average Trend</h2>
+              <p id="movingAveragePrimarySubtitle" class="chart-subtitle">Smoothed CSAT movement</p>
+              <svg id="movingAveragePrimaryChart" class="chart-area" viewBox="0 0 760 260"></svg>
+              <div id="movingAveragePrimaryInsight" class="chart-insight"></div>
+            </div>
+            <div class="chart-card wide-chart-card expandable-chart-card">
+              <button type="button" class="chart-expand-btn" data-expand-chart="movingAverageSecondaryChart" title="Expand chart">?</button>
+              <h2 id="movingAverageSecondaryTitle">Period Volume</h2>
+              <p id="movingAverageSecondarySubtitle" class="chart-subtitle">Response volume by period</p>
+              <svg id="movingAverageSecondaryChart" class="chart-area" viewBox="0 0 760 260"></svg>
+              <div id="movingAverageSecondaryInsight" class="chart-insight"></div>
+            </div>
+          </div>
+          <div class="panel performance-evidence-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <h2>Moving average evidence</h2>
+                <p>Period, score, movement, confidence, and calculation artifacts used by the moving-average read.</p>
+              </div>
+            </div>
+            <div class="table-wrap compact-table">
+              <table id="movingAverageTable"></table>
+            </div>
+          </div>
+          </div>
+        </section>
+        <section id="quartilelaunch" class="view data-view launch-page-view quartile-launch-view">
+          <div class="section-title"><div><p class="eyebrow">Performance Segmentation</p><h1>Quartile Intelligence</h1></div></div>
+          <section id="quartileLaunch" class="professional-launch" data-launch-panel="quartile" aria-label="Quartile Performance launch">
+            <div class="professional-launch-card">
+              <div class="professional-launch-copy">
+                <p class="eyebrow">Quartile Performance</p>
+                <h2>See where performance concentrates.</h2>
+                <p>Split the population into Q1-Q4 performance bands so leaders can compare strength, coaching focus, spread, and movement.</p>
+              </div>
+              <div class="professional-launch-orbit quartile-orbit" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+              <div class="professional-launch-core" aria-hidden="true">
+                <div class="professional-launch-ring quartile-ring"></div>
+                <strong>Q1-Q4</strong>
+                <span>Segment Ready</span>
+              </div>
+              <div class="professional-launch-points">
+                <div><strong>Rank</strong><span>Best and weakest quartiles</span></div>
+                <div><strong>Spread</strong><span>Distance between bands</span></div>
+                <div><strong>Coach</strong><span>Agent and manager focus</span></div>
+              </div>
+              <div class="professional-launch-actions">
+                <button id="quartileStart" class="button button-primary" type="button">Launch Quartile Performance</button>
+                <small>Use filters after launch to isolate quartile, manager, agent, or search terms.</small>
+              </div>
+            </div>
+          </section>
+        </section>
+        <section id="quartile" class="view data-view quartile-dashboard">
+          <div id="quartileWorkspace" class="launch-workspace">
+          <div class="quartile-toolbar">
+            <div class="quartile-control">
+              <strong>Filter</strong>
+              <select id="quartileFilter">
+                <option value="">All Quartiles</option>
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+              </select>
+            </div>
+            <div class="quartile-control">
+              <strong>Manager</strong>
+              <select id="quartileManagerFilter"><option value="">All Managers</option></select>
+            </div>
+            <div class="quartile-control">
+              <strong>Agent</strong>
+              <select id="quartileAgentFilter"><option value="">All Agents</option></select>
+            </div>
+            <div class="quartile-control wide">
+              <strong>Search in Quartile</strong>
+              <input id="quartileSearch" type="search" placeholder="Search agent name or manager" />
+            </div>
+            <button id="clearQuartileFilters" class="button button-secondary" type="button">Clear</button>
+          </div>
+          <div id="quartileSummary" class="quartile-summary quartile-kpis">Run analysis to view quartile summary.</div>
+          <div class="dashboard-grid quartile-chart-grid">
+            <div class="chart-card"><h3>Average CSAT by Quartile</h3><p class="chart-subtitle">Quartile x Average CSAT</p><svg id="quartileAverageChart" viewBox="0 0 760 260"></svg><div id="quartileAverageInsight" class="chart-insight"></div></div>
+            <div class="chart-card"><h3>Game Changers by Quartile</h3><p class="chart-subtitle">Quartile x Game changer count</p><svg id="quartileCountChart" viewBox="0 0 760 260"></svg><div id="quartileCountInsight" class="chart-insight"></div></div>
+            <div class="chart-card"><h3>Quartile Spread</h3><p class="chart-subtitle">Quartile x Absolute CSAT distance</p><svg id="quartileSpreadChart" viewBox="0 0 760 260"></svg><div id="quartileSpreadInsight" class="chart-insight"></div></div>
+            <div class="chart-card full"><h3>4-Week Quartile Movement</h3><p class="chart-subtitle">Latest four weeks x Quartile Average CSAT</p><svg id="quartileWeeklyChart" viewBox="0 0 760 260"></svg><div id="quartileWeeklyInsight" class="chart-insight"></div></div>
+          </div>
+          <div class="table-wrap fit-table"><table id="quartileTable"></table></div>
+          </div>
+        </section>
+
+        <section id="statistics" class="view data-view">
+          <div class="section-title"><div><p class="eyebrow">Statistical Read</p><h1>Statistics</h1></div></div>
+          <div class="panel stats-controls">
+            <label>Data Level<select id="statsLevel"><option>Weekly</option><option>Agent</option></select></label>
+            <label>Metric A<select id="statsMetricA"></select></label>
+            <label>Metric B<select id="statsMetricB"></select></label>
+            <button id="runStatsBtn" class="button button-primary" type="button">Run Correlation</button>
+          </div>
+          <div id="statsMetricGrid" class="metric-grid stats-metric-grid"></div>
+          <div class="dashboard-grid stats-chart-grid">
+            <div class="chart-card medium"><h3 id="statsMetricATitle">Metric A Movement</h3><p id="statsMetricASubtitle" class="chart-subtitle">Selected level x Metric A</p><svg id="statsNpsTrend" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card medium"><h3 id="statsMetricBTitle">Metric B Movement</h3><p id="statsMetricBSubtitle" class="chart-subtitle">Selected level x Metric B</p><svg id="statsVolumeTrend" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card medium"><h3>Correlation Chart</h3><p id="statsCorrelationSubtitle" class="chart-subtitle">Metric A x Metric B</p><svg id="statsCorrelationChart" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card medium"><h3>Top Drivers</h3><p class="chart-subtitle">Primary driver x Mentions</p><svg id="statsDriverBars" viewBox="0 0 760 260"></svg></div>
+            <div class="panel stats-intelligence-card"><h2>Statistical Intelligence</h2><p id="statsIntelligenceText" class="insight-text">Run analysis to view statistical intelligence.</p></div>
+          </div>
+          <div class="panel"><h2>Correlation Readout</h2><p id="statsCorrelationText" class="insight-text">Choose two metrics to view correlation.</p></div>
+          <div class="dashboard-grid stats-grid">
+            <div class="panel stats-panel"><h2>Weekly Trend</h2><div class="table-wrap"><table id="weeklyTable"></table></div></div>
+            <div class="panel stats-panel"><h2>Driver Summary</h2><div class="table-wrap"><table id="reasonTable"></table></div></div>
+          </div>
+        </section>
+
+        <section id="customstatslaunch" class="view data-view launch-page-view custom-statistics-launch-view">
+          <section id="customStatsLaunch" class="professional-launch" data-launch-panel="customstats" aria-label="Custom Statistics launch">
+            <div class="professional-launch-card">
+              <div class="professional-launch-copy">
+                <p class="eyebrow">Statistics Studio</p>
+                <h2>Build Statistics your way...</h2>
+                <p>Run single-column, dual-column, and multi-column statistics using full backend calculations while keeping browser visuals smooth.</p>
+              </div>
+              <div class="professional-launch-orbit stats-orbit" aria-hidden="true">
+                <span>� 82.4</span><span>s 6.1</span><span>r .72</span><span>p .03</span>
+                <span>Q1 74</span><span>Q3 91</span><span>n 70K</span><span>CI 95%</span>
+                <span>? +4.8</span><span>z 1.9</span><span>IQR 17</span><span>R� .58</span>
+              </div>
+              <div class="professional-launch-core" aria-hidden="true">
+                <div class="professional-launch-ring stats-ring"></div>
+                <strong>S</strong>
+                <span>Analysis Ready</span>
+              </div>
+              <div class="professional-launch-points">
+                <div><strong>Single</strong><span>Distribution, outliers, Pareto</span></div>
+                <div><strong>Dual</strong><span>Correlation and gaps</span></div>
+                <div><strong>Multi</strong><span>Drivers and matrices</span></div>
+              </div>
+              <div class="professional-launch-actions">
+                <button id="customStatsStart" class="button button-primary" type="button">Launch Custom Statistics</button>
+                <small>Calculations use the full dataset; tables and charts stay bounded for browser performance.</small>
+              </div>
+            </div>
+          </section>
+        </section>
+        <section id="customstats" class="view data-view custom-statistics-view">
+          <div id="customStatsWorkspace" class="launch-workspace">
+          <p class="insight-text">Run single-column, dual-column, and multi-column statistics on the analyzed CSAT dataset, dashboard summaries, and available dimensions.</p>
+          <div class="custom-stats-tabs">
+            <button id="customStatsSingleTab" class="active" type="button" data-custom-stats-tab="single">1. Single Column</button>
+            <button id="customStatsDualTab" type="button" data-custom-stats-tab="dual">2. Dual Column</button>
+            <button id="customStatsMultiTab" type="button" data-custom-stats-tab="multi">3. Multi Column</button>
+          </div>
+          <div class="custom-stats-layout">
+            <aside class="custom-stats-config">
+              <h2>Configure Analysis</h2>
+              <p id="customStatsMeta">Run analysis to load statistics-ready rows.</p>
+              <label>Data Source<select id="customStatsSource"></select></label>
+              <label>Analysis Type<select id="customStatsType"></select></label>
+              <div id="customStatsControls" class="custom-stats-controls"></div>
+              <button id="customStatsRun" class="button button-primary wide" type="button">Run Analysis</button>
+              <small>Tip: Multi Level Correlation compares the same metric relationship across weekly, agent, manager, LOB/Stream, wave, and tenure cuts where data is available.</small>
+            </aside>
+            <main class="custom-stats-output">
+              <div id="customStatsSummary" class="metric-grid stats-metric-grid"></div>
+              <div id="customStatsExplain" class="custom-stats-explain">
+                <div>
+                  <p class="eyebrow">Plain English Read</p>
+                  <h2>Select an analysis and click Run Analysis</h2>
+                  <p>We will translate the statistics into a quick business-friendly read.</p>
+                </div>
+              </div>
+              <div class="panel custom-stats-table-panel"><h2>Statistics Output</h2><p id="customStatsTableHelp" class="panel-meta">Result table appears here after you run analysis.</p><div class="table-wrap fit-table compact-table"><table id="customStatsTable"></table></div></div>
+              <div class="dashboard-grid stats-chart-grid">
+                <div class="chart-card medium expandable-chart-card"><button class="chart-expand-button" type="button" data-expand-chart="customStatsChart" title="Expand chart" aria-label="Expand chart">?</button><h3 id="customStatsChartTitle">Statistical View</h3><p id="customStatsChartSubtitle" class="chart-subtitle">Select an analysis type</p><svg id="customStatsChart" viewBox="0 0 760 620"></svg></div>
+                <div class="chart-card medium expandable-chart-card"><button class="chart-expand-button" type="button" data-expand-chart="customStatsSecondChart" title="Expand chart" aria-label="Expand chart">?</button><h3>Relationship / Distribution</h3><p id="customStatsSecondSubtitle" class="chart-subtitle">Generated from selected fields</p><svg id="customStatsSecondChart" viewBox="0 0 760 620"></svg></div>
+              </div>
+            </main>
+          </div>
+          </div>
+        </section>
+
+        <section id="columnexplorer" class="view data-view column-explorer-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Column Explorer</p>
+              <h1>Data dictionary and column coverage</h1>
+            </div>
+          </div>
+          <p class="insight-text column-explorer-lede">Review all base sheet columns, lookup sheet columns, mapped fields, output fields, and analysis-ready columns in one place.</p>
+          <div id="columnExplorerCards" class="metric-grid stats-metric-grid"></div>
+          <div class="column-explorer-command-panel">
+            <div class="column-search-box">
+              <span class="column-search-icon" aria-hidden="true">?</span>
+              <input id="columnExplorerSearch" type="search" placeholder="Search any column, role, type, or sample value..." autocomplete="off" />
+            </div>
+            <div class="column-explorer-filters">
+              <label>Source<select id="columnExplorerSource"><option>All</option><option>Base Sheet</option><option>Lookup Sheet</option><option>Analysis Output</option></select></label>
+              <label>Type<select id="columnExplorerType"><option>All</option><option>Number</option><option>Category</option><option>Text</option><option>Date/Time</option><option>Blank</option><option>Unknown</option></select></label>
+              <label>Role<select id="columnExplorerRole"><option>All</option><option>Mapped Only</option><option>Available</option><option>In Analysis Output</option></select></label>
+              <button id="columnExplorerReset" class="button button-secondary" type="button">Clear</button>
+            </div>
+            <div class="column-explorer-quick-chips">
+              <button type="button" data-column-chip="score">Score</button>
+              <button type="button" data-column-chip="agent">Agent</button>
+              <button type="button" data-column-chip="manager">Manager</button>
+              <button type="button" data-column-chip="lob">LOB / Stream</button>
+              <button type="button" data-column-chip="date">Date</button>
+              <button type="button" data-column-chip="tenure">Tenure</button>
+            </div>
+            <p id="columnExplorerResultText" class="column-explorer-result-text">Search by column name to find fields quickly.</p>
+          </div>
+          <div class="panel column-explorer-panel column-explorer-search-panel">
+            <div class="panel-title-row"><div><h2>Search Results</h2><p class="panel-meta">Fast view across base, lookup, and generated output columns</p></div><button class="button button-secondary" data-export-table="columnExplorerSearchTable" type="button">Export CSV</button></div>
+            <div class="table-wrap fit-table compact-table column-explorer-table-wrap column-explorer-search-wrap"><table id="columnExplorerSearchTable"></table></div>
+          </div>
+          <div class="column-explorer-grid">
+            <div class="panel column-explorer-panel">
+              <div class="panel-title-row"><div><h2>Base Sheet Columns</h2><p class="panel-meta">Survey file fields and setup roles</p></div><button class="button button-secondary" data-export-table="baseColumnExplorerTable" type="button">Export CSV</button></div>
+              <div class="table-wrap fit-table compact-table column-explorer-table-wrap"><table id="baseColumnExplorerTable"></table></div>
+            </div>
+            <div class="panel column-explorer-panel">
+              <div class="panel-title-row"><div><h2>Lookup Sheet Columns</h2><p class="panel-meta">Optional workforce and dimension fields</p></div><button class="button button-secondary" data-export-table="lookupColumnExplorerTable" type="button">Export CSV</button></div>
+              <div class="table-wrap fit-table compact-table column-explorer-table-wrap"><table id="lookupColumnExplorerTable"></table></div>
+            </div>
+          </div>
+          <div class="panel column-explorer-panel column-explorer-output-panel">
+            <div class="panel-title-row"><div><h2>Analysis Output Columns</h2><p class="panel-meta">Fields generated after CSAT, sentiment, theme, and dimension processing</p></div><button class="button button-secondary" data-export-table="analysisColumnExplorerTable" type="button">Export CSV</button></div>
+            <div class="table-wrap fit-table compact-table column-explorer-table-wrap column-explorer-output-wrap"><table id="analysisColumnExplorerTable"></table></div>
+          </div>
+        </section>
+
+        <section id="theme" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Owl Classification</p><h1>Theme Classification</h1></div>
+            <button class="button button-secondary" data-download="vulture" type="button">Export CSV</button>
+          </div>
+          <p class="insight-text">Row-level Owl output with primary, secondary, tertiary drivers, people/process/tech sentiment, issue type, impact, and resolution status.</p>
+          <div class="table-wrap fit-table compact-report-table"><table id="themeTable"></table></div>
+        </section>
+
+        <section id="themebuilder" class="view data-view theme-builder-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Build Theme Classification</p>
+              <h1>Custom theme builder</h1>
+            </div>
+            <div class="title-actions">
+              <button id="themeBuilderDiscover" class="button button-primary" type="button">1. Discover Themes</button>
+              <button id="themeBuilderRun" class="button button-secondary" type="button">2. Build Classification</button>
+              <button id="themeBuilderExport" class="button button-secondary" type="button">3. Export CSV</button>
+            </div>
+          </div>
+          <p class="insight-text">Create account-specific theme categories from the Current CSAT verbatims, edit the category list, then classify each row as Yes, No, or NA for every selected category.</p>
+          <div class="theme-builder-grid">
+            <article class="panel">
+              <div class="panel-title-row">
+                <div>
+                  <h2>1. Source and discovery</h2>
+                  <p id="themeBuilderSource" class="panel-meta">Run analysis first to load verbatims.</p>
+                </div>
+              </div>
+              <div class="form-grid theme-builder-controls">
+                <label>Theme Analysis Field<select id="themeBuilderTextField"></select></label>
+                <label>Discover With<select id="themeBuilderDiscoveryMode">
+                  <option value="local">Local Rules</option>
+                  <option value="ollama:qwen2.5:7b-instruct">Qwen 7B Instruct</option>
+                  <option value="ollama:llama3.2:latest">Llama 3.2</option>
+                  <option value="ollama:qwen2.5:14b-instruct">Qwen 14B Instruct</option>
+                  <option value="openai">OpenAI API</option>
+                  <option value="claude">Claude API</option>
+                </select></label>
+                <label>Classify With<select id="themeBuilderClassifyMode">
+                  <option value="local">Local Rules</option>
+                  <option value="ollama:qwen2.5:7b-instruct">Qwen 7B Instruct</option>
+                  <option value="ollama:llama3.2:latest">Llama 3.2</option>
+                  <option value="ollama:qwen2.5:14b-instruct">Qwen 14B Instruct</option>
+                  <option value="openai">OpenAI API</option>
+                  <option value="claude">Claude API</option>
+                </select></label>
+                <label>Sample Size<input id="themeBuilderSample" type="number" min="10" max="2000" step="10" value="120" /></label>
+                <label>Max Categories<input id="themeBuilderMax" type="number" min="3" max="30" step="1" value="12" /></label>
+              </div>
+              <div id="themeBuilderApiKeys" class="form-grid theme-builder-api hidden">
+                <label id="themeBuilderOpenAiKeyWrap">OpenAI API Key<input id="themeBuilderOpenAiKey" type="password" autocomplete="off" placeholder="sk-..." /></label>
+                <label id="themeBuilderClaudeKeyWrap">Claude API Key<input id="themeBuilderClaudeKey" type="password" autocomplete="off" placeholder="sk-ant-..." /></label>
+              </div>
+              <div id="themeBuilderStats" class="metric-grid theme-builder-stats"></div>
+              <div class="theme-builder-add">
+                <input id="themeBuilderNewName" placeholder="Add custom category, e.g. Long Wait, Billing, Refund" />
+                <button id="themeBuilderAdd" class="button button-secondary" type="button">Add</button>
+              </div>
+              <div id="themeBuilderChips" class="theme-chip-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-title-row">
+                <div>
+                  <h2>2. Test one verbatim</h2>
+                  <p class="panel-meta">Preview the Yes / No / NA mapping before building the full table.</p>
+                </div>
+              </div>
+              <textarea id="themeBuilderTestText" class="theme-test-text" rows="7" placeholder="Paste or select a verbatim to test category classification."></textarea>
+              <div class="theme-builder-actions">
+                <button id="themeBuilderLoadSample" class="button button-secondary" type="button">Load Sample Verbatim</button>
+                <button id="themeBuilderTest" class="button button-primary" type="button">Test</button>
+              </div>
+              <div id="themeBuilderTestResult" class="theme-test-result">Test results will appear here.</div>
+            </article>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row">
+              <div>
+                <h2>3. Built classification output</h2>
+                <p id="themeBuilderOutputMeta" class="panel-meta">No custom classification has been built yet.</p>
+              </div>
+            </div>
+            <div class="table-wrap fit-table compact-report-table"><table id="themeBuilderTable"></table></div>
+          </div>
+        </section>
+
+        <section id="themecompare" class="view data-view theme-compare-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Theme Intelligence</p>
+              <h1>Theme Comparison</h1>
+            </div>
+            <button id="runThemeCompare" class="button button-primary" type="button">Compare Themes</button>
+          </div>
+          <p class="insight-text">Compare already-built Theme Builder classifications across two date periods. This does not rerun model classification.</p>
+          <div class="panel theme-compare-controls">
+            <label>Date Field<select id="themeCompareDateField"></select></label>
+            <label>Current Start<input id="themeCompareCurrentStart" type="date" /></label>
+            <label>Current End<input id="themeCompareCurrentEnd" type="date" /></label>
+            <label>Previous Start<input id="themeComparePreviousStart" type="date" /></label>
+            <label>Previous End<input id="themeComparePreviousEnd" type="date" /></label>
+          </div>
+          <div id="themeCompareMetricGrid" class="metric-grid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card medium"><h3>Fastest Rising Themes</h3><p class="chart-subtitle">Current Yes count minus previous Yes count</p><svg id="themeCompareRisingChart" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card medium"><h3>Most Reduced Themes</h3><p class="chart-subtitle">Largest reduction in Yes count</p><svg id="themeCompareReducedChart" viewBox="0 0 760 260"></svg></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row">
+              <div>
+                <h2>Theme Movement Table</h2>
+                <p id="themeCompareMeta" class="panel-meta">Build theme classification first, then select two periods.</p>
+              </div>
+              <button class="button button-secondary" data-export-table="themeCompareTable" type="button">Export CSV</button>
+            </div>
+            <div class="table-wrap fit-table compact-report-table"><table id="themeCompareTable"></table></div>
+          </div>
+        </section>
+
+        <section id="wave" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Cohort Intelligence</p><h1>Wave Intelligence</h1></div>
+            <button class="button button-secondary" data-export-table="waveTable" type="button">Export CSV</button>
+          </div>
+          <div id="waveMetricGrid" class="metric-grid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card medium"><h3>Wave CSAT Ranking</h3><p class="chart-subtitle">Wave x CSAT</p><svg id="waveNpsChart" viewBox="0 0 760 260"></svg><div id="waveNpsInsight" class="chart-insight"></div></div>
+            <div class="chart-card medium"><h3>Wave Response Mix</h3><p class="chart-subtitle">Satisfied, Neutral, Dissatisfied</p><svg id="waveMixChart" viewBox="0 0 760 260"></svg><div id="waveMixInsight" class="chart-insight"></div></div>
+            <div class="chart-card medium"><h3>Wave Negative Share</h3><p class="chart-subtitle">Wave x Negative sentiment</p><svg id="waveNegativeChart" viewBox="0 0 760 260"></svg><div id="waveNegativeInsight" class="chart-insight"></div></div>
+            <div class="chart-card medium"><h3>Wave Neutral Risk</h3><p class="chart-subtitle">Wave x hidden risk volume</p><svg id="waveSilentChart" viewBox="0 0 760 260"></svg><div id="waveSilentInsight" class="chart-insight"></div></div>
+          </div>
+          <div class="table-wrap fit-table compact-table"><table id="waveTable"></table></div>
+        </section>
+
+        <section id="tenure" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Lifecycle Intelligence</p><h1>Tenure Intelligence</h1></div>
+            <button class="button button-secondary" data-export-table="tenureTable" type="button">Export CSV</button>
+          </div>
+          <div id="tenureMetricGrid" class="metric-grid"></div>
+          <div class="dashboard-grid">
+            <div class="chart-card medium"><h3>Tenure CSAT Ranking</h3><p class="chart-subtitle">Tenure x CSAT</p><svg id="tenureNpsChart" viewBox="0 0 760 260"></svg><div id="tenureNpsInsight" class="chart-insight"></div></div>
+            <div class="chart-card medium"><h3>Tenure Response Mix</h3><p class="chart-subtitle">Satisfied, Neutral, Dissatisfied</p><svg id="tenureMixChart" viewBox="0 0 760 260"></svg><div id="tenureMixInsight" class="chart-insight"></div></div>
+            <div class="chart-card medium"><h3>Tenure Negative Share</h3><p class="chart-subtitle">Tenure x Negative sentiment</p><svg id="tenureNegativeChart" viewBox="0 0 760 260"></svg><div id="tenureNegativeInsight" class="chart-insight"></div></div>
+            <div class="chart-card medium"><h3>Tenure Neutral Risk</h3><p class="chart-subtitle">Tenure x hidden risk volume</p><svg id="tenureSilentChart" viewBox="0 0 760 260"></svg><div id="tenureSilentInsight" class="chart-insight"></div></div>
+          </div>
+          <div class="table-wrap fit-table compact-table"><table id="tenureTable"></table></div>
+        </section>
+
+        <section id="customdims" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Flexible Reporting</p><h1>Custom Dimensions <span id="customDimensionCount">(0)</span></h1></div>
+          </div>
+          <p class="insight-text">Select additional raw or lookup fields in Setup to generate CSAT, sentiment, and risk views dynamically.</p>
+          <div id="customDimensionContainer" class="dynamic-dimension-stack"></div>
+        </section>
+
+        <section id="operations" class="view data-view">
+          <div class="section-title"><div><p class="eyebrow">Operational Signals</p><h1>Operations</h1></div></div>
+          <div class="table-wrap"><table id="operationsTable"></table></div>
+        </section>
+
+        <section id="rootcause" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Cloud-Based CSAT Diagnostics</p><h1>Word Cloud Intelligence</h1></div>
+            <label class="inline-select">Signal
+              <select id="rootCauseSignal">
+                <option value="Dissatisfied">Dissatisfied</option>
+                <option value="Neutral">Neutral</option>
+                <option value="Satisfied">Satisfied</option>
+              </select>
+            </label>
+          </div>
+          <div class="panel root-cause-advisory-panel">
+            <div class="panel-title-row">
+              <div>
+                <p class="eyebrow">Intelligence Summary</p>
+                <h2>What the cloud is telling us</h2>
+              </div>
+            </div>
+            <div id="rootCauseInsightCards" class="root-cause-insight-grid"></div>
+          </div>
+          <div class="dashboard-grid root-cause-cloud-grid">
+            <div class="chart-card medium">
+              <h3>Word Cloud</h3>
+              <p class="chart-subtitle">Most common words in selected feedback</p>
+              <svg id="rootCauseWordCloud" viewBox="0 0 760 300"></svg>
+            </div>
+            <div class="chart-card medium">
+              <h3>Two-Word Cloud</h3>
+              <p class="chart-subtitle">Common two-word phrases in selected feedback</p>
+              <svg id="rootCausePhraseCloud" viewBox="0 0 760 300"></svg>
+            </div>
+          </div>
+          <div class="metric-grid root-cause-impact-grid" id="rootCauseImpactCards"></div>
+          <div class="panel root-cause-impact-panel">
+            <div class="panel-title-row">
+              <div>
+                <p class="eyebrow">Cloud Impact</p>
+                <h2>How Cloud Terms Are Moving Overall CSAT</h2>
+              </div>
+            </div>
+            <div class="table-wrap fit-table compact-table"><table id="rootCauseImpactTable"></table></div>
+          </div>
+          <div class="dashboard-grid word-intel-chart-grid">
+            <div class="chart-card medium">
+              <h3>Term Impact Trend</h3>
+              <p class="chart-subtitle">Week x records for the strongest cloud term</p>
+              <svg id="cloudTrendChart" viewBox="0 0 760 260"></svg>
+              <div id="cloudTrendInsight" class="chart-insight"></div>
+            </div>
+            <div class="chart-card medium">
+              <h3>Severity Ranking</h3>
+              <p class="chart-subtitle">Frequency x CSAT gap x signal concentration</p>
+              <svg id="cloudSeverityChart" viewBox="0 0 760 260"></svg>
+              <div id="cloudSeverityInsight" class="chart-insight"></div>
+            </div>
+            <div class="chart-card medium">
+              <h3>Agent Concentration</h3>
+              <p class="chart-subtitle">Top term concentration by agent</p>
+              <svg id="cloudAgentChart" viewBox="0 0 760 260"></svg>
+              <div id="cloudAgentInsight" class="chart-insight"></div>
+            </div>
+            <div class="chart-card medium">
+              <h3>Manager Concentration</h3>
+              <p class="chart-subtitle">Top term concentration by manager</p>
+              <svg id="cloudManagerChart" viewBox="0 0 760 260"></svg>
+              <div id="cloudManagerInsight" class="chart-insight"></div>
+            </div>
+          </div>
+          <div class="dashboard-grid word-intel-table-grid">
+            <div class="panel">
+              <div class="panel-title-row"><h2>CSAT Recovery Opportunity</h2></div>
+              <div class="table-wrap fit-table compact-table"><table id="cloudOpportunityTable"></table></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title-row"><h2>Phrase Pair Root Cause</h2></div>
+              <div class="table-wrap fit-table compact-table"><table id="cloudPhrasePairTable"></table></div>
+            </div>
+          </div>
+          <div class="table-wrap"><table id="rootCauseTable"></table></div>
+        </section>
+
+        <section id="Satisfieddna" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Advocacy Intelligence</p><h1>Satisfied DNA</h1></div>
+          </div>
+          <div class="metric-grid Satisfied-dna-grid" id="SatisfiedDnaCards"></div>
+          <div class="dashboard-grid Satisfied-dna-chart-grid">
+            <div class="chart-card medium">
+              <h3>Satisfied DNA Words</h3>
+              <p class="chart-subtitle">Most repeated Satisfied language</p>
+              <svg id="SatisfiedWordChart" viewBox="0 0 760 260"></svg>
+              <div id="SatisfiedWordInsight" class="chart-insight"></div>
+            </div>
+            <div class="chart-card medium">
+              <h3>Satisfied Phrase Patterns</h3>
+              <p class="chart-subtitle">Two-word phrases associated with Satisfied</p>
+              <svg id="SatisfiedPhraseChart" viewBox="0 0 760 260"></svg>
+              <div id="SatisfiedPhraseInsight" class="chart-insight"></div>
+            </div>
+            <div class="chart-card medium">
+              <h3>Agent Advocacy Makers</h3>
+              <p class="chart-subtitle">Agents with Satisfied mentions</p>
+              <svg id="SatisfiedAgentChart" viewBox="0 0 760 260"></svg>
+              <div id="SatisfiedAgentInsight" class="chart-insight"></div>
+            </div>
+            <div class="chart-card medium">
+              <h3>Manager Advocacy Makers</h3>
+              <p class="chart-subtitle">Managers/TLs with Satisfied mentions</p>
+              <svg id="SatisfiedManagerChart" viewBox="0 0 760 260"></svg>
+              <div id="SatisfiedManagerInsight" class="chart-insight"></div>
+            </div>
+            <div class="chart-card full">
+              <h3>Satisfied Momentum</h3>
+              <p class="chart-subtitle">Weekly Satisfied verbatim volume</p>
+              <svg id="SatisfiedTrendChart" viewBox="0 0 760 260"></svg>
+              <div id="SatisfiedTrendInsight" class="chart-insight"></div>
+            </div>
+          </div>
+          <div class="dashboard-grid Satisfied-dna-table-grid">
+            <div class="panel">
+              <div class="panel-title-row"><h2>Top Satisfied Phrases</h2></div>
+              <div class="table-wrap fit-table compact-table"><table id="SatisfiedPhraseTable"></table></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title-row"><h2>Satisfied Replication Playbook</h2></div>
+              <div class="table-wrap fit-table compact-table"><table id="SatisfiedPlaybookTable"></table></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="gap" class="view data-view">
+          <div class="section-title"><div><p class="eyebrow">Opportunity Sizing</p><h1>Gap & Opportunity</h1></div></div>
+          <div class="table-wrap"><table id="gapTable"></table></div>
+        </section>
+
+        <section id="detail" class="view data-view">
+          <div class="section-title"><div><p class="eyebrow">Narrative Intelligence</p><h1>Detailed Insight</h1></div></div>
+          <div class="panel"><p id="detailedInsightText" class="insight-text">Run analysis to populate detailed insight.</p></div>
+        </section>
+
+        <section id="churn" class="view data-view">
+          <div class="section-title"><div><p class="eyebrow">Risk View</p><h1>Churn Risk Assessment</h1></div></div>
+          <div class="table-wrap"><table id="churnTable"></table></div>
+        </section>
+
+        <section id="analysis" class="view data-view">
+          <div class="section-title"><div><p class="eyebrow">Movement Analysis</p><h1>Analysis</h1></div></div>
+          <div class="analysis-stack">
+            <div class="panel">
+              <div class="panel-title-row">
+                <div>
+                  <h2>Date Range Comparison</h2>
+                  <p class="panel-meta">Select two periods, then analyze movement across CSAT, agents, managers, sentiment, and volatility.</p>
+                </div>
+              </div>
+              <div class="comparison-controls">
+                <label>Current Start<input id="compareCurrentStart" type="date" /></label>
+                <label>Current End<input id="compareCurrentEnd" type="date" /></label>
+                <label>Compare Start<input id="comparePreviousStart" type="date" /></label>
+                <label>Compare End<input id="comparePreviousEnd" type="date" /></label>
+              </div>
+              <div class="analysis-action-row">
+                <button id="runCompareBtn" class="button button-primary analyze-button" type="button">Analyze</button>
+                <button class="button button-secondary" data-export-table="analysisCompareTable" type="button">Export CSV</button>
+              </div>
+              <div class="dashboard-grid analysis-chart-grid">
+                <div class="chart-card medium"><h3>CSAT movement</h3><p class="chart-subtitle">Previous vs current period</p><svg id="analysisNpsChart" viewBox="0 0 760 260"></svg><div id="analysisNpsInsight" class="chart-insight"></div></div>
+                <div class="chart-card medium"><h3>Response Mix</h3><p class="chart-subtitle">Satisfied, Neutral, Dissatisfied</p><svg id="analysisMixChart" viewBox="0 0 760 260"></svg><div id="analysisMixInsight" class="chart-insight"></div></div>
+                <div class="chart-card medium"><h3>Sentiment Shift</h3><p class="chart-subtitle">Positive, neutral, negative share</p><svg id="analysisSentimentChart" viewBox="0 0 760 260"></svg><div id="analysisSentimentInsight" class="chart-insight"></div></div>
+                <div class="chart-card medium"><h3>Biggest Manager Movement</h3><p class="chart-subtitle">Largest CSAT changes</p><svg id="analysisManagerChart" viewBox="0 0 760 260"></svg><div id="analysisManagerInsight" class="chart-insight"></div></div>
+              </div>
+              <div class="table-wrap compact-table fit-table"><table id="analysisCompareTable"></table></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title-row"><h2>Comparison Summary</h2><button class="button button-secondary" data-export-table="analysisSummaryTable" type="button">Export CSV</button></div>
+              <div class="table-wrap compact-table fit-table"><table id="analysisSummaryTable"></table></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title-row"><h2>CSAT movement</h2><button class="button button-secondary" data-export-table="analysisTable" type="button">Export CSV</button></div>
+              <div class="table-wrap compact-table"><table id="analysisTable"></table></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title-row"><h2>Manager Movement</h2><button class="button button-secondary" data-export-table="analysisManagerTable" type="button">Export CSV</button></div>
+              <div class="table-wrap compact-table"><table id="analysisManagerTable"></table></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title-row"><h2>Agent Movement</h2><button class="button button-secondary" data-export-table="analysisAgentTable" type="button">Export CSV</button></div>
+              <div class="table-wrap compact-table"><table id="analysisAgentTable"></table></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title-row"><h2>Sentiment Movement</h2><button class="button button-secondary" data-export-table="analysisSentimentTable" type="button">Export CSV</button></div>
+              <div class="table-wrap compact-table"><table id="analysisSentimentTable"></table></div>
+            </div>
+            <div class="panel">
+              <div class="panel-title-row"><h2>Consistency & Volatility</h2><button class="button button-secondary" data-export-table="analysisConsistencyTable" type="button">Export CSV</button></div>
+              <div class="table-wrap compact-table fit-table"><table id="analysisConsistencyTable"></table></div>
+            </div>
+            <div class="panel">
+              <h2>Help & Formulas</h2>
+              <div class="table-wrap compact-table fit-table"><table id="analysisFormulaTable"></table></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="downloads" class="view data-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Outputs</p><h1>Select Content For Document</h1></div>
+            <div class="title-actions">
+              <button class="button button-primary" onclick="window.location.href='/api/export/excel'">Download Excel Output</button>
+              <button id="downloadExecutivePdfSummary" class="button button-primary" type="button">Executive PDF Summary</button>
+              <button id="downloadFaqPdf" class="button button-secondary" type="button">FAQ PDF</button>
+              <button id="downloadGenAiJson" class="button button-secondary" type="button">Export GenAI JSON</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row">
+              <div>
+                <p class="eyebrow">Document Builder</p>
+                <h2>Select dashboard tabs</h2>
+              </div>
+              <div class="title-actions">
+                <button id="selectAllPdfTabs" class="button button-secondary" type="button">Select All</button>
+                <button id="clearPdfTabs" class="button button-secondary" type="button">Clear</button>
+              </div>
+            </div>
+            <p class="insight-text">Choose the tabs to include. The executive report will include an index, reference sheets, visible charts, cards, tables, and insights for the selected tabs.</p>
+            <div class="download-select-grid pdf-tab-grid">
+              <label><input type="checkbox" data-pdf-tab="executive" checked /> Executive Dashboard</label>
+              <label><input type="checkbox" data-pdf-tab="alerts" checked /> Alert Badges</label>
+              <label><input type="checkbox" data-pdf-tab="agent" checked /> Agent Dashboard</label>
+              <label><input type="checkbox" data-pdf-tab="manager" checked /> Manager Dashboard</label>
+              <label><input type="checkbox" data-pdf-tab="performancequestions" checked /> Master Lens</label>
+              <label><input type="checkbox" data-pdf-tab="movingaverages" checked /> Moving Averages</label>
+              <label><input type="checkbox" data-pdf-tab="quartile" checked /> Quartile Intelligence</label>
+              <label><input type="checkbox" data-pdf-tab="statistics" checked /> Statistics</label>
+              <label><input type="checkbox" data-pdf-tab="customstats" checked /> Custom Statistics</label>
+              <label><input type="checkbox" data-pdf-tab="columnexplorer" checked /> Column Explorer</label>
+              <label><input type="checkbox" data-pdf-tab="feedback" checked /> Sentiment Intelligence</label>
+              <label><input type="checkbox" data-pdf-tab="sentimentcompare" checked /> Sentiment Comparison</label>
+              <label><input type="checkbox" data-pdf-tab="theme" checked /> Theme Classification</label>
+              <label><input type="checkbox" data-pdf-tab="themebuilder" checked /> Build Theme Classification</label>
+              <label><input type="checkbox" data-pdf-tab="themecompare" checked /> Theme Comparison</label>
+              <label><input type="checkbox" data-pdf-tab="wave" checked /> Wave Intelligence</label>
+              <label><input type="checkbox" data-pdf-tab="tenure" checked /> Tenure Intelligence</label>
+              <label><input type="checkbox" data-pdf-tab="operations" /> Operations</label>
+              <label><input type="checkbox" data-pdf-tab="rootcause" checked /> Word Cloud Intelligence</label>
+              <label><input type="checkbox" data-pdf-tab="Satisfieddna" checked /> Satisfied DNA</label>
+              <label><input type="checkbox" data-pdf-tab="gap" /> Gap & Opportunity</label>
+              <label><input type="checkbox" data-pdf-tab="detail" /> Detailed Insight</label>
+              <label><input type="checkbox" data-pdf-tab="churn" /> Churn Risk Assessment</label>
+              <label><input type="checkbox" data-pdf-tab="analysis" checked /> Compare</label>
+            </div>
+            <div class="download-action-row">
+              <button id="downloadPdfReport" class="button button-primary" type="button">Create Selected PDF Report</button>
+              <button id="downloadPptReport" class="button button-secondary" type="button">Download Selected PPT</button>
+              <button id="downloadReportWorkbook" class="button button-secondary" type="button">Download Selected Data Sheets</button>
+            </div>
+          </div>
+        </section>
+        <section id="boardpdf" class="view data-view pdf-builder-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Board Room PDF</p>
+              <h1>Executive Board Room Ready PDF</h1>
+            </div>
+            <span>Choose exactly what leadership should see.</span>
+          </div>
+          <div class="pdf-builder-shell">
+            <div class="panel pdf-builder-control">
+              <p class="eyebrow">PDF Builder</p>
+              <h2>Report content</h2>
+              <p class="insight-text">Select the sections to include. The output opens in a print-ready window where the user can save as PDF.</p>
+              <div class="pdf-builder-presets">
+                <button id="boardPdfRecommended" class="button button-secondary" type="button">Recommended</button>
+                <button id="boardPdfSelectAll" class="button button-secondary" type="button">Select All</button>
+                <button id="boardPdfClear" class="button button-secondary" type="button">Clear</button>
+              </div>
+              <div class="pdf-builder-branding">
+                <label>Header Title<input id="boardPdfHeaderTitle" value="CSAT Leadership Report" /></label>
+                <label>Account Name<input id="boardPdfAccountName" placeholder="e.g. Energy Australia" /></label>
+                <label>Prepared For<input id="boardPdfPreparedFor" value="Leadership Review" /></label>
+                <label>Footer Note<input id="boardPdfFooterNote" value="Confidential - Krestrel Analysis Suite Review" /></label>
+                <label>Home Page Image<input id="boardPdfHomeImage" type="file" accept="image/*" /></label>
+                <label>Separator Images<input id="boardPdfSeparatorImage" type="file" accept="image/*" multiple /></label>
+                <label class="pdf-builder-check"><input id="boardPdfIncludeHeaderFooter" type="checkbox" /> Show header and footer in PDF</label>
+              </div>
+              <div class="pdf-builder-actions">
+                <button id="createBoardRoomPdf" class="button button-primary pdf-builder-main-action" type="button">Create Board Room PDF</button>
+                <button id="createInteractiveHtml" class="button button-secondary pdf-builder-main-action interactive-html-action" type="button">Create Interactive HTML</button>
+              </div>
+              <div class="pdf-builder-note">For the cleanest PDF, turn off browser print Headers and footers in the print dialog. The app can add its own header/footer if selected above.</div>
+            </div>
+            <div class="panel pdf-builder-options">
+              <div class="pdf-builder-option-grid">
+                <label><input type="checkbox" data-board-pdf-tab="executive" checked /><span><strong>Executive Dashboard</strong><small>Headline CSAT, trends, drivers, sentiment</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="customdashboards" /><span><strong>Custom Dashboards</strong><small>User-built summary tables and custom views</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="executivelens" checked /><span><strong>Executive Lens</strong><small>Role-based leadership interpretation</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="alerts" /><span><strong>Alert Badges</strong><small>Operational risk flags and watch items</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="performancequestions" checked /><span><strong>Master Lens</strong><small>Leadership questions, trends, agents, managers, quartiles, correlation, and other insights</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="movingaverages" checked /><span><strong>Moving Averages</strong><small>Daily, weekly, and monthly smoothed score movement</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="agent" checked /><span><strong>Agent Dashboard</strong><small>Agent-level performance and coaching read</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="manager" checked /><span><strong>Manager Dashboard</strong><small>Manager/TL performance and team signal</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="quartile" checked /><span><strong>Quartile Intelligence</strong><small>Q1-Q4 spread and performance concentration</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="statistics" /><span><strong>Statistics</strong><small>Standard statistical reads and distributions</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="feedback" checked /><span><strong>Sentiment Intelligence</strong><small>Customer tone, mix, and verbatim signal</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="sentimentcompare" checked /><span><strong>Sentiment Comparison</strong><small>Week-over-week positive and negative movement</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="theme" /><span><strong>Theme Classification</strong><small>Theme-level feedback classification output</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="themebuilder" /><span><strong>Build Theme Classification</strong><small>Custom theme setup and theme builder output</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="themecompare" checked /><span><strong>Theme Comparison</strong><small>Custom theme movement across periods</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="wave" /><span><strong>Wave Intelligence</strong><small>Wave-level CSAT and response mix</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="tenure" /><span><strong>Tenure Intelligence</strong><small>Tenure-level CSAT and sentiment patterns</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="customdims" /><span><strong>Custom Dimensions</strong><small>User-defined dimension dashboards</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="operations" /><span><strong>Operations</strong><small>Operational volume and performance signals</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="rootcause" checked /><span><strong>Word Cloud Intelligence</strong><small>Top repeated customer language signals</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="Satisfieddna" /><span><strong>Satisfied DNA</strong><small>Satisfied customer language and advocacy patterns</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="gap" /><span><strong>Gap & Opportunity</strong><small>Performance gaps and improvement opportunities</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="detail" /><span><strong>Detailed Insight</strong><small>Detailed drill-down and supporting analysis</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="churn" /><span><strong>Churn Risk Assessment</strong><small>Risk signals and churn-related indicators</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="customstats" /><span><strong>Custom Statistics</strong><small>Selected statistical analysis studio output</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="columnexplorer" /><span><strong>Column Explorer</strong><small>Data dictionary and column coverage</small></span></label>
+                <label><input type="checkbox" data-board-pdf-tab="analysis" checked /><span><strong>Compare</strong><small>Movement, consistency, and comparison tables</small></span></label>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="loading" class="loading hidden">
+      <div class="loading-card">
+        <span id="loadingKicker" class="loading-kicker">Working on it</span>
+        <strong id="loadingText">Processing...</strong>
+        <p id="loadingConversation" class="loading-conversation">I am preparing the next step.</p>
+        <span id="loadingPct" class="loading-pct">0.00%</span>
+        <div class="loading-meta">
+          <span id="loadingElapsed">Elapsed 00:00</span>
+          <span id="loadingRows">Preparing rows...</span>
+        </div>
+        <div id="loadingCaption" class="loading-caption">Everything is running locally on this system.</div>
+        <div id="loadingDetail" class="loading-detail"></div>
+        <div class="progress"><span id="progressBar"></span></div>
+        <div id="loadingSteps" class="loading-steps"></div>
+      </div>
+    </div>
+
+    <div id="feedbackModal" class="modal hidden">
+      <div class="modal-panel">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Sentiment Intelligence</p>
+            <h2>Review & Override</h2>
+          </div>
+          <button id="closeFeedbackModal" class="icon-button" type="button" title="Close">X</button>
+        </div>
+        <div class="modal-body">
+          <div class="feedback-verbatim" id="modalFeedbackText"></div>
+          <div class="override-grid">
+            <label>Sentiment<select id="overrideSentiment"><option></option><option>Positive</option><option>Neutral</option><option>Negative</option></select></label>
+            <label>Bucket Category<input id="overrideBucket" /></label>
+            <label>Primary Reason<input id="overrideReason" /></label>
+            <label>Theme Primary Driver<input id="overridePrimaryDriver" /></label>
+            <label>Theme Secondary Driver<input id="overrideSecondaryDriver" /></label>
+            <label>Theme Tertiary Driver<input id="overrideTertiaryDriver" /></label>
+            <label>People Sentiment<select id="overridePeopleSentiment"><option></option><option>Positive</option><option>Neutral</option><option>Negative</option></select></label>
+            <label>Process Sentiment<select id="overrideProcessSentiment"><option></option><option>Positive</option><option>Neutral</option><option>Negative</option></select></label>
+            <label>Tech Sentiment<select id="overrideTechSentiment"><option></option><option>Positive</option><option>Neutral</option><option>Negative</option></select></label>
+            <label>Issue Type<input id="overrideIssueType" /></label>
+            <label>Customer Impact<input id="overrideCustomerImpact" /></label>
+            <label>Resolution Status<input id="overrideResolutionStatus" /></label>
+            <label class="override-wide">Override Notes<textarea id="overrideNotes" rows="3"></textarea></label>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="prevFeedback" class="button" type="button">Back</button>
+          <button id="nextFeedback" class="button" type="button">Next</button>
+          <span id="overrideStatus"></span>
+          <button id="cancelFeedbackOverride" class="button" type="button">Cancel</button>
+          <button id="saveFeedbackOverride" class="button button-primary" type="button">Save Override</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="themeBuilderModal" class="modal hidden">
+      <div class="modal-panel modal-panel-wide">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Build Theme Classification</p>
+            <h2>Review & Override Themes</h2>
+            <p id="themeBuilderModalMeta" class="modal-subtitle"></p>
+          </div>
+          <button id="closeThemeBuilderModal" class="icon-button" type="button" title="Close">X</button>
+        </div>
+        <div class="modal-body">
+          <div class="feedback-verbatim" id="themeBuilderModalText"></div>
+          <div id="themeBuilderOverrideGrid" class="override-grid theme-builder-override-grid"></div>
+        </div>
+        <div class="modal-actions">
+          <button id="prevThemeBuilderRow" class="button" type="button">Back</button>
+          <button id="nextThemeBuilderRow" class="button" type="button">Next</button>
+          <span id="themeBuilderOverrideStatus"></span>
+          <button id="cancelThemeBuilderOverride" class="button" type="button">Cancel</button>
+          <button id="saveThemeBuilderOverride" class="button button-primary" type="button">Save Override</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="artifactModal" class="modal hidden">
+      <div class="modal-panel modal-panel-wide">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Artifact Detail</p>
+            <h2 id="artifactTitle">Detail</h2>
+            <p id="artifactSubtitle" class="modal-subtitle"></p>
+          </div>
+          <button id="closeArtifactModal" class="icon-button" type="button" title="Close">X</button>
+        </div>
+        <div class="modal-body">
+          <div class="artifact-toolbar">
+            <input id="artifactSearch" type="search" placeholder="Search artifact rows" />
+            <button id="artifactDownload" class="button button-secondary" type="button">Download CSV</button>
+          </div>
+          <div class="table-wrap artifact-table-wrap">
+            <table id="artifactTable"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="summaryModal" class="modal hidden">
+      <div class="modal-panel">
+        <div class="modal-head">
+          <div class="summary-brand-head">
+            <span class="summary-brand-logo logo-text" aria-label="Krestrel Analysis Suite">KA</span>
+            <div>
+              <p class="eyebrow">Executive Summary</p>
+              <h2 id="summaryTitle">Summary</h2>
+              <p id="summarySubtitle" class="modal-subtitle"></p>
+            </div>
+          </div>
+          <div class="summary-modal-actions">
+            <button id="exportSummaryPdf" class="icon-button summary-pdf-button" type="button" title="Export this summary to PDF" aria-label="Export this summary to PDF">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 3h7l4 4v3" />
+                <path d="M14 3v5h5" />
+                <path d="M6 14h12v7H6z" />
+                <path d="M9 17h2.5M9 19h1.5M14 17h1.5a1.5 1.5 0 0 1 0 3H14z" />
+              </svg>
+            </button>
+            <button id="closeSummaryModal" class="icon-button" type="button" title="Close">X</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div id="summaryBody" class="summary-popup-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="dashboardGuideAvatar" class="dashboard-guide-avatar hidden" aria-live="polite">
+      <img class="dashboard-guide-person" src="assets/csat-guide-robot.png" alt="" aria-hidden="true">
+      <div class="dashboard-guide-bubble">
+        <span class="dashboard-guide-label">Signal Guide</span>
+        <p id="dashboardGuideText">Welcome to the dashboard.</p>
+        <div class="dashboard-guide-actions">
+          <button id="dashboardGuideNext" type="button">Next</button>
+          <button id="dashboardGuideClose" type="button">Skip</button>
+        </div>
+      </div>
+    </aside>
+    <script>
+      (function () {
+        const resultAliases = {};
+        const allowed = new Set(["setuphome", "setup", "datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout", "columnexplorer", "executive", "executivelens", "customdims", "analysis", "feedback", "performancequestions", "agent", "manager", "customdashboards"]);
+        const aliases = { movingaverages: "movingaverageslaunch", quartile: "quartilelaunch", customstats: "customstatslaunch" };
+        const view = new URLSearchParams(window.location.search).get("view") || "";
+        if (!allowed.has(view)) return;
+        const resolvedView = resultAliases[view] || view;
+        document.body.classList.remove("csat-onboarding-active", "csat-stage-upload", "csat-stage-success", "csat-stage-coverage", "csat-stage-lookup", "csat-stage-mapping", "csat-stage-analysis", "csat-stage-complete", "csat-stage-story");
+        document.querySelectorAll(".view").forEach((node) => node.classList.remove("active"));
+        document.getElementById(resolvedView)?.classList.add("active");
+        document.querySelectorAll(".nav-item").forEach((node) => node.classList.remove("active"));
+        const navView = aliases[view] || view;
+        const button = document.querySelector(`.nav-item[data-view="${navView}"]`) || document.querySelector(`.nav-item[data-view="${resolvedView}"]`);
+        if (button) {
+          button.classList.add("active");
+          const section = button.closest(".nav-section");
+          section?.classList.add("open");
+          section?.querySelector(".nav-section-toggle")?.setAttribute("aria-expanded", "true");
+        }
+        document.querySelector(`.top-view-button[data-view="${resolvedView}"]`)?.classList.add("active");
+        if (resolvedView === "executive") {
+          document.getElementById("executive")?.classList.add("dashboard-loading");
+          document.getElementById("executiveDashboardLoader")?.classList.remove("hidden");
+          const status = document.getElementById("analysisStatus");
+          if (status) status.textContent = "Preparing dashboard data...";
+        }
+      }());
+    </script>
+  <script src="app.js?v=20260705-period-performance-v78"></script>
+      <script src="/auth.js?v=20260621-auth-handoff-v1"></script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

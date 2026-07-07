@@ -1,0 +1,948 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Krestrel Analysis Suite</title>
+    <style>
+      :root {
+        --deep: #003d4a;
+        --deep-2: #004d58;
+        --teal: #1bd7d2;
+        --teal-2: #009ca1;
+        --gold: #ffc400;
+        --ink: #06233a;
+        --muted: #587086;
+        --card: rgba(242, 253, 253, .88);
+        --line: rgba(197, 236, 239, .72);
+        --shadow: 0 28px 78px rgba(0, 38, 48, .28);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: white;
+        background:
+          radial-gradient(circle at 11% 17%, rgba(27, 215, 210, .20), transparent 26%),
+          radial-gradient(circle at 88% 78%, rgba(255, 196, 0, .10), transparent 28%),
+          linear-gradient(135deg, #002e39 0%, #003f49 48%, #002934 100%);
+        overflow-x: hidden;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(90deg, rgba(27, 215, 210, .055) 1px, transparent 1px),
+          linear-gradient(rgba(27, 215, 210, .045) 1px, transparent 1px);
+        background-size: 64px 64px;
+        mask-image: linear-gradient(to bottom, rgba(0,0,0,.30), transparent 72%);
+      }
+      a { color: inherit; text-decoration: none; }
+      .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
+      .topbar {
+        position: relative;
+        z-index: 5;
+        height: 72px;
+        border-bottom: 1px solid rgba(27, 215, 210, .34);
+      }
+      .topbar-inner {
+        width: min(1280px, calc(100% - 112px));
+        height: 100%;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 22px;
+      }
+      .brand { display: flex; align-items: center; gap: 16px; min-width: 0; }
+      .brand-lockup {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: inline-grid;
+        place-items: center;
+        color: #002f3a;
+        font-weight: 900;
+        letter-spacing: 0;
+        background:
+          radial-gradient(circle at 75% 22%, rgba(255, 196, 0, .95) 0 9%, transparent 10%),
+          linear-gradient(135deg, #e9ffff 0%, #1bd7d2 58%, #009ca1 100%);
+        box-shadow: 0 12px 30px rgba(27, 215, 210, .22), inset 0 0 0 1px rgba(255,255,255,.45);
+      }
+      .brand-name {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+        color: #f1ffff;
+      }
+      .brand-name strong {
+        font-size: 19px;
+        line-height: 1;
+        letter-spacing: .02em;
+        white-space: nowrap;
+      }
+      .brand-name small {
+        color: rgba(231, 251, 251, .72);
+        font-size: 10px;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .brand-line { width: 1px; height: 32px; background: rgba(27, 215, 210, .46); }
+      .brand-title { letter-spacing: .19em; text-transform: uppercase; font-size: 12px; color: #e7fbfb; white-space: nowrap; }
+      .top-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+      .status-pill {
+        border: 1px solid rgba(27, 215, 210, .45);
+        color: #eaffff;
+        border-radius: 999px;
+        padding: 8px 13px;
+        font-size: 12px;
+        background: rgba(255,255,255,.06);
+      }
+      .setup-menu { position: relative; }
+      .setup-trigger {
+        min-height: 38px;
+        border: 1px solid rgba(27, 215, 210, .55);
+        border-radius: 999px;
+        padding: 0 15px;
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        color: #eaffff;
+        background: rgba(255,255,255,.075);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .setup-trigger::after { content: "⌄"; color: var(--teal); font-size: 14px; transform: translateY(-1px); }
+      .setup-dropdown {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 10px);
+        width: 240px;
+        padding: 8px;
+        border: 1px solid rgba(27, 215, 210, .45);
+        border-radius: 16px;
+        background: rgba(0, 54, 65, .96);
+        box-shadow: 0 22px 44px rgba(0, 20, 28, .32);
+        backdrop-filter: blur(14px);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-6px);
+        transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+        z-index: 30;
+      }
+      .setup-menu:hover .setup-dropdown,
+      .setup-menu:focus-within .setup-dropdown {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+      .setup-item {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 11px 12px;
+        border-radius: 12px;
+        color: #eaffff;
+      }
+      .setup-item:hover,
+      .setup-item:focus-visible { background: rgba(27, 215, 210, .13); outline: none; }
+      .setup-icon {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        background: rgba(27, 215, 210, .18);
+        color: var(--teal);
+        font-weight: 900;
+      }
+      .setup-copy strong { display: block; font-size: 13px; }
+      .setup-copy span { display: block; margin-top: 2px; color: rgba(234,255,255,.72); font-size: 11px; line-height: 1.3; }
+      main {
+        position: relative;
+        z-index: 1;
+        padding: 28px 0 30px;
+      }
+      .hero {
+        width: min(1280px, calc(100% - 112px));
+        margin: 0 auto;
+        display: grid;
+        gap: 22px;
+      }
+      .stage {
+        position: relative;
+        min-height: 445px;
+        overflow: hidden;
+        border: 1px solid rgba(207, 240, 242, .46);
+        border-radius: 34px;
+        box-shadow: var(--shadow);
+        background: linear-gradient(100deg, rgba(0, 56, 67, .96), rgba(0, 65, 75, .82));
+      }
+      .stage::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, rgba(0, 62, 73, .94) 0%, rgba(0, 64, 74, .72) 38%, rgba(0, 122, 124, .22) 63%, rgba(255,255,255,.08) 100%),
+          url("assets/suite-landing-team.jpg");
+        background-size: cover;
+        background-position: center;
+        opacity: .74;
+        filter: saturate(.92) contrast(1.04);
+      }
+      .stage::after {
+        content: "";
+        position: absolute;
+        width: 450px;
+        height: 450px;
+        left: -180px;
+        bottom: -220px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(27, 215, 210, .42), rgba(27, 215, 210, .08) 54%, transparent 72%);
+        animation: slowPulse 6s ease-in-out infinite;
+      }
+      .scan-line {
+        position: absolute;
+        z-index: 2;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(110deg, transparent 0%, transparent 42%, rgba(27,215,210,.12) 49%, transparent 56%, transparent 100%);
+        transform: translateX(-70%);
+        animation: scanAcross 7s ease-in-out infinite;
+      }
+      .signal-map {
+        position: absolute;
+        z-index: 2;
+        right: 40px;
+        top: 28px;
+        width: 150px;
+        height: 78px;
+        opacity: .72;
+        pointer-events: none;
+      }
+      .signal-map span {
+        position: absolute;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--teal);
+        box-shadow: 0 0 22px rgba(27,215,210,.72);
+        animation: signalPulse 2.6s ease-in-out infinite;
+      }
+      .signal-map span:nth-child(1) { left: 10px; top: 48px; }
+      .signal-map span:nth-child(2) { left: 70px; top: 18px; animation-delay: .35s; }
+      .signal-map span:nth-child(3) { right: 8px; top: 50px; animation-delay: .7s; }
+      .signal-map::before,
+      .signal-map::after {
+        content: "";
+        position: absolute;
+        height: 1px;
+        background: rgba(209,255,255,.28);
+        transform-origin: left center;
+      }
+      .signal-map::before { width: 78px; left: 18px; top: 50px; transform: rotate(-24deg); }
+      .signal-map::after { width: 78px; left: 76px; top: 24px; transform: rotate(24deg); }
+      .hero-content {
+        position: relative;
+        z-index: 3;
+        min-height: 445px;
+        display: grid;
+        grid-template-columns: minmax(360px, .95fr) minmax(420px, .78fr);
+        align-items: center;
+        gap: 34px;
+        padding: 38px 50px;
+      }
+      .copy { max-width: 590px; animation: riseIn .7s ease both; }
+      .eyebrow {
+        margin: 0 0 12px;
+        color: var(--teal);
+        font-size: 12px;
+        letter-spacing: .22em;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+      h1 {
+        margin: 0;
+        max-width: 560px;
+        font-size: clamp(34px, 4vw, 54px);
+        line-height: .98;
+        letter-spacing: -0.03em;
+        font-weight: 300;
+        color: white;
+      }
+      .lead {
+        max-width: 560px;
+        margin: 16px 0 0;
+        color: rgba(236, 253, 253, .92);
+        font-size: 15.5px;
+        line-height: 1.55;
+      }
+      .team-badge {
+        width: fit-content;
+        margin-top: 18px;
+        border: 1px solid rgba(27,215,210,.52);
+        border-radius: 999px;
+        padding: 9px 14px;
+        color: #efffff;
+        background: rgba(0,61,74,.42);
+        backdrop-filter: blur(10px);
+        font-size: 12px;
+        letter-spacing: .13em;
+        text-transform: uppercase;
+      }
+      .data-orbit {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px;
+        margin-top: 20px;
+      }
+      .data-pill {
+        min-width: 86px;
+        border: 1px solid rgba(198,255,255,.30);
+        border-radius: 999px;
+        padding: 8px 12px;
+        color: rgba(238,255,255,.88);
+        background: rgba(0,61,74,.42);
+        backdrop-filter: blur(12px);
+        font-size: 12px;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+        animation: dataFloat 3.8s ease-in-out infinite;
+      }
+      .data-pill:nth-child(2) { animation-delay: .45s; }
+      .data-pill:nth-child(3) { animation-delay: .9s; }
+      .insight-panel {
+        justify-self: end;
+        width: min(430px, 100%);
+        border: 1px solid rgba(230, 255, 255, .38);
+        border-radius: 28px;
+        padding: 22px 26px;
+        color: white;
+        background: linear-gradient(145deg, rgba(0, 55, 66, .74), rgba(0, 79, 86, .50));
+        box-shadow: 0 24px 70px rgba(0,0,0,.18);
+        backdrop-filter: blur(16px);
+        animation: panelIn .76s ease both .12s;
+      }
+      .insight-panel h2 { margin: 0 0 12px; font-size: 24px; line-height: 1.12; font-weight: 300; }
+      .insight { padding: 11px 0; border-top: 1px solid rgba(220,255,255,.18); }
+      .insight strong { display: block; font-size: 15px; margin-bottom: 5px; color: white; }
+      .insight span { color: rgba(230, 250, 250, .82); line-height: 1.35; font-size: 13px; }
+      .tools-wrap {
+        position: relative;
+        z-index: 3;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .tool-card {
+        position: relative;
+        min-height: 205px;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 13px;
+        overflow: hidden;
+        padding: 22px;
+        border: 1px solid rgba(199, 235, 238, .76);
+        border-radius: 24px;
+        background: linear-gradient(145deg, rgba(255,255,255,.92), rgba(229,247,248,.84));
+        color: var(--ink);
+        box-shadow: 0 20px 58px rgba(0, 52, 64, .18);
+        backdrop-filter: blur(14px);
+        transform: translateY(12px);
+        opacity: 0;
+        animation: cardIn .62s ease forwards;
+      }
+      .tool-card:nth-child(2) { animation-delay: .08s; }
+      .tool-card:nth-child(3) { animation-delay: .16s; }
+      .tool-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(120deg, rgba(255,255,255,.42), transparent 38%, rgba(27,215,210,.08));
+        pointer-events: none;
+      }
+      .tool-card::after {
+        content: "";
+        position: absolute;
+        right: -28px;
+        top: -28px;
+        width: 94px;
+        height: 94px;
+        border-radius: 50%;
+        background: rgba(27, 215, 210, .18);
+        animation: cornerPulse 3.8s ease-in-out infinite;
+      }
+      .tool-card:hover { transform: translateY(-3px); transition: transform .18s ease; }
+      .tool-head { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+      .tool-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 16px;
+        display: grid;
+        place-items: center;
+        color: white;
+        background: linear-gradient(135deg, #14d6d0, #006f78);
+        box-shadow: 0 18px 34px rgba(0, 139, 145, .22);
+        animation: iconBreathe 4s ease-in-out infinite;
+      }
+      .tool-card:nth-child(2) .tool-icon { animation-delay: .35s; }
+      .tool-card:nth-child(3) .tool-icon { animation-delay: .7s; }
+      .tool-icon svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+      .tool-number { color: #008c91; font-size: 13px; letter-spacing: .16em; font-weight: 800; }
+      .tool-card h2 { position: relative; z-index: 1; margin: 0 0 7px; font-size: 22px; line-height: 1.12; font-weight: 650; }
+      .tool-card p { position: relative; z-index: 1; margin: 0; color: #516a80; font-size: 13.5px; line-height: 1.45; }
+      .open-btn {
+        position: relative;
+        z-index: 1;
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border-radius: 999px;
+        color: white;
+        background: linear-gradient(90deg, #008c91, #003d5b);
+        font-size: 13.5px;
+        font-weight: 750;
+        box-shadow: 0 14px 30px rgba(0, 76, 91, .20);
+      }
+      .open-btn::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
+        transform: translateX(-120%);
+        animation: buttonSheen 4.8s ease-in-out infinite;
+      }
+      .prelaunch {
+        position: fixed;
+        inset: 0;
+        z-index: 1000001;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(27,215,210,.22), transparent 25%),
+          radial-gradient(circle at 82% 72%, rgba(255,196,0,.10), transparent 27%),
+          linear-gradient(135deg, #002f3a, #004654);
+        color: white;
+        transition: opacity .4s ease, transform .4s ease;
+      }
+      .prelaunch::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, rgba(27,215,210,.04) 1px, transparent 1px),
+          linear-gradient(rgba(27,215,210,.035) 1px, transparent 1px);
+        background-size: 72px 72px;
+        opacity: .55;
+      }
+      .prelaunch::after {
+        content: "";
+        position: absolute;
+        width: 520px;
+        height: 520px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(27,215,210,.34), rgba(27,215,210,.06) 58%, transparent 72%);
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        animation: prelaunchGlow 4.2s ease-in-out infinite;
+      }
+      .prelaunch.done { opacity: 0; transform: scale(1.02); pointer-events: none; }
+      .prelaunch-matrix {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+        opacity: .74;
+        z-index: 1;
+        mask-image: linear-gradient(to bottom, transparent 0%, #000 9%, #000 91%, transparent 100%);
+      }
+      .prelaunch-matrix span {
+        position: absolute;
+        top: -18%;
+        min-width: 42px;
+        text-align: center;
+        color: rgba(151,247,244,.40);
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 13px;
+        letter-spacing: .08em;
+        text-shadow: 0 0 18px rgba(27,215,210,.30);
+        animation: numberDrift linear infinite;
+      }
+      .prelaunch-matrix span:nth-child(3n) { color: rgba(255,196,0,.34); }
+      .prelaunch-matrix span:nth-child(4n) { opacity: .50; font-size: 11px; }
+      .prelaunch-matrix span:nth-child(5n) { color: rgba(230,255,255,.46); font-size: 15px; }
+      .prelaunch-card {
+        position: relative;
+        z-index: 3;
+        width: min(800px, 90vw);
+        border: 1px solid rgba(190,245,246,.42);
+        border-radius: 30px;
+        padding: 36px;
+        background: linear-gradient(145deg, rgba(0,76,86,.72), rgba(0,54,66,.62));
+        box-shadow: 0 34px 98px rgba(0,0,0,.34);
+        backdrop-filter: blur(18px);
+        text-align: center;
+        overflow: hidden;
+      }
+      .prelaunch-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(110deg, transparent 0%, transparent 39%, rgba(255,255,255,.12) 48%, transparent 58%, transparent 100%);
+        transform: translateX(-85%);
+        animation: prelaunchScan 2.6s ease-in-out infinite;
+      }
+      .prelaunch-kicker { position: relative; z-index: 1; color: var(--teal); letter-spacing: .22em; text-transform: uppercase; font-size: 12px; font-weight: 800; }
+      .prelaunch-card h2 { position: relative; z-index: 1; margin: 12px 0 10px; font-size: 32px; font-weight: 350; }
+      .prelaunch-team {
+        position: relative;
+        z-index: 1;
+        width: fit-content;
+        margin: 0 auto 22px;
+        border: 1px solid rgba(27,215,210,.54);
+        border-radius: 999px;
+        padding: 8px 14px;
+        color: #f2ffff;
+        background: rgba(0,62,74,.44);
+        font-size: 11px;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        animation: teamSignal 2.8s ease-in-out infinite;
+      }
+      .prelaunch-tools { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+      .prelaunch-tool {
+        min-height: 116px;
+        border: 1px solid rgba(197,248,248,.28);
+        border-radius: 22px;
+        display: grid;
+        place-items: center;
+        gap: 8px;
+        background: rgba(255,255,255,.07);
+        animation: featurePulse 1.35s ease-in-out infinite;
+      }
+      .prelaunch-tool:nth-child(2) { animation-delay: .16s; }
+      .prelaunch-tool:nth-child(3) { animation-delay: .32s; }
+      .prelaunch-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 15px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, #18d4cf, #007f87);
+        box-shadow: 0 0 30px rgba(27,215,210,.28);
+      }
+      .footer {
+        position: relative;
+        z-index: 2;
+        width: min(1280px, calc(100% - 112px));
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 0 4px 24px;
+        color: rgba(222, 246, 247, .78);
+        font-size: 13px;
+      }
+      .landing-reveal { animation: landingReveal .55s ease both; }
+      .number-rain {
+        position: fixed;
+        top: 92px;
+        bottom: 32px;
+        width: max(80px, calc((100vw - 1280px) / 2 - 18px));
+        min-width: 72px;
+        pointer-events: none;
+        overflow: hidden;
+        opacity: .52;
+        z-index: 0;
+        mask-image: linear-gradient(to bottom, transparent 0%, #000 12%, #000 86%, transparent 100%);
+      }
+      .number-rain.left { left: 0; }
+      .number-rain.right { right: 0; }
+      .number-rain span {
+        position: absolute;
+        top: -12%;
+        display: inline-block;
+        min-width: 34px;
+        text-align: center;
+        color: rgba(151, 247, 244, .48);
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 12px;
+        letter-spacing: .08em;
+        text-shadow: 0 0 14px rgba(27, 215, 210, .28);
+        animation-name: numberDrift;
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+      }
+      .number-rain span:nth-child(3n) { color: rgba(255, 196, 0, .28); }
+      .number-rain span:nth-child(4n) { font-size: 10px; opacity: .72; }
+      .number-rain span:nth-child(5n) { font-size: 14px; opacity: .58; }
+      .matrix-glow {
+        position: fixed;
+        inset: 84px auto 32px 0;
+        width: max(110px, calc((100vw - 1280px) / 2));
+        pointer-events: none;
+        background: radial-gradient(circle at 30% 30%, rgba(27,215,210,.12), transparent 55%);
+        z-index: 0;
+      }
+      .matrix-glow.right {
+        left: auto;
+        right: 0;
+        background: radial-gradient(circle at 70% 35%, rgba(255,196,0,.10), transparent 55%);
+      }
+      @keyframes numberDrift {
+        0% { transform: translateY(-18vh); opacity: 0; }
+        10% { opacity: .9; }
+        85% { opacity: .72; }
+        100% { transform: translateY(105vh); opacity: 0; }
+      }
+      @keyframes riseIn { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      @keyframes panelIn { from { transform: translateY(20px) scale(.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+      @keyframes cardIn { to { transform: translateY(0); opacity: 1; } }
+      @keyframes cornerPulse { 0%,100% { transform: scale(1); opacity: .72; } 50% { transform: scale(1.14); opacity: 1; } }
+      @keyframes slowPulse { 0%,100% { transform: scale(1); opacity:.82; } 50% { transform: scale(1.08); opacity:.98; } }
+      @keyframes dataFloat { 0%, 100% { transform: translateY(0); border-color: rgba(198,255,255,.30); } 50% { transform: translateY(-7px); border-color: rgba(255,196,0,.62); } }
+      @keyframes scanAcross { 0%, 35% { transform: translateX(-80%); opacity: 0; } 50% { opacity: 1; } 75%, 100% { transform: translateX(80%); opacity: 0; } }
+      @keyframes iconBreathe { 0%, 100% { transform: translateY(0); box-shadow: 0 18px 34px rgba(0, 139, 145, .22); } 50% { transform: translateY(-4px); box-shadow: 0 22px 44px rgba(0, 195, 195, .34); } }
+      @keyframes buttonSheen { 0%, 55% { transform: translateX(-120%); } 72%, 100% { transform: translateX(120%); } }
+      @keyframes featurePulse { 0%, 100% { transform: translateY(0); border-color: rgba(197,248,248,.26); } 50% { transform: translateY(-6px); border-color: rgba(255,196,0,.72); } }
+      @keyframes prelaunchGlow { 0%, 100% { opacity: .70; transform: translate(-50%, -50%) scale(.96); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); } }
+      @keyframes prelaunchScan { 0%, 44% { transform: translateX(-90%); opacity: 0; } 62% { opacity: 1; } 100% { transform: translateX(90%); opacity: 0; } }
+      @keyframes teamSignal { 0%, 100% { box-shadow: 0 0 0 rgba(27,215,210,0); transform: translateY(0); } 50% { box-shadow: 0 0 28px rgba(27,215,210,.24); transform: translateY(-2px); } }
+      @keyframes signalPulse { 0%, 100% { transform: scale(.9); opacity: .72; } 50% { transform: scale(1.35); opacity: 1; } }
+      @keyframes landingReveal { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      @media (max-width: 1180px) {
+        .hero-content { grid-template-columns: 1fr; }
+        .insight-panel { justify-self: start; width: min(620px, 100%); }
+        .tools-wrap { grid-template-columns: 1fr; }
+      }
+      @media (max-width: 760px) {
+        .topbar { height: auto; padding: 16px 0; }
+        .topbar-inner, .hero, .footer { width: min(100% - 28px, 1280px); }
+        .topbar-inner { flex-direction: column; align-items: flex-start; }
+        .brand-lockup { gap: 10px; }
+        .brand-mark { width: 38px; height: 38px; border-radius: 11px; }
+        .brand-name strong { font-size: 16px; }
+        .brand-name small { display: none; }
+        .brand-line { display: none; }
+        main { padding-top: 16px; }
+        .stage { border-radius: 26px; }
+        .hero-content { min-height: auto; padding: 28px 22px; }
+        h1 { font-size: 37px; }
+        .signal-map { display: none; }
+        .prelaunch-tools { grid-template-columns: 1fr; }
+        .footer { flex-direction: column; }
+      }
+      .csat-handoff {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: grid;
+        place-items: center;
+        padding: 28px;
+        background:
+          radial-gradient(circle at 12% 18%, rgba(27,215,210,.18), transparent 28%),
+          radial-gradient(circle at 82% 74%, rgba(255,196,0,.10), transparent 30%),
+          linear-gradient(135deg, rgba(0,46,57,.98), rgba(0,63,73,.98) 48%, rgba(0,41,52,.98));
+        opacity: 0;
+        pointer-events: none;
+        transform: scale(1.01);
+        transition: opacity .28s ease, transform .28s ease;
+        overflow: hidden;
+      }
+      .csat-handoff.active {
+        opacity: 1;
+        pointer-events: auto;
+        transform: scale(1);
+      }
+      .csat-handoff::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, rgba(27, 215, 210, .055) 1px, transparent 1px),
+          linear-gradient(rgba(27, 215, 210, .045) 1px, transparent 1px);
+        background-size: 64px 64px;
+      }
+      .csat-handoff-matrix {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: .44;
+      }
+      .csat-handoff-matrix span {
+        position: absolute;
+        top: -10%;
+        color: rgba(27, 215, 210, .42);
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 13px;
+        font-weight: 700;
+        animation: numberDrift 8s linear infinite;
+      }
+      .csat-handoff-card {
+        position: relative;
+        z-index: 2;
+        width: min(900px, calc(100% - 24px));
+        min-height: 330px;
+        display: grid;
+        align-content: center;
+        padding: clamp(34px, 5vw, 62px);
+        border: 1px solid rgba(207, 240, 242, .50);
+        border-radius: 34px;
+        background:
+          linear-gradient(90deg, rgba(0, 62, 73, .94), rgba(0, 64, 74, .74), rgba(0, 122, 124, .26)),
+          url("assets/suite-landing-team.jpg") center / cover;
+        box-shadow: 0 34px 82px rgba(0, 31, 42, .42);
+        overflow: hidden;
+      }
+      .csat-handoff-card::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(110deg, transparent 0%, transparent 42%, rgba(27,215,210,.14) 49%, transparent 56%, transparent 100%);
+        animation: scanAcross 2.4s ease-in-out infinite;
+      }
+      .csat-handoff-card > * { position: relative; z-index: 1; }
+      .csat-handoff-card h2 {
+        margin: 0;
+        color: #fff;
+        font-size: clamp(46px, 7vw, 82px);
+        font-weight: 300;
+        letter-spacing: -.04em;
+      }
+      .csat-handoff-card p:not(.eyebrow) {
+        max-width: 660px;
+        margin: 16px 0 0;
+        color: rgba(236, 253, 253, .94);
+        font-size: 18px;
+        line-height: 1.55;
+      }
+      .handoff-progress {
+        width: min(360px, 100%);
+        height: 8px;
+        margin-top: 30px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.18);
+        overflow: hidden;
+      }
+      .handoff-progress span {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--teal), rgba(255,196,0,.85));
+        transform-origin: left center;
+        animation: handoffFill 1.65s ease forwards;
+      }
+      @keyframes handoffFill { from { transform: scaleX(.08); } to { transform: scaleX(1); } }
+    </style>
+  </head>
+  <body>
+    <div class="matrix-glow" aria-hidden="true"></div>
+    <div class="matrix-glow right" aria-hidden="true"></div>
+    <div class="number-rain left" id="matrixLeft" aria-hidden="true"></div>
+    <div class="number-rain right" id="matrixRight" aria-hidden="true"></div>
+<div class="prelaunch" id="suitePrelaunch" aria-label="Suite loading animation">
+      <div class="prelaunch-matrix" id="prelaunchMatrix" aria-hidden="true"></div>
+      <div class="prelaunch-card">
+        <div class="prelaunch-kicker">Preparing your suite</div>
+        <h2>Three intelligence workspaces, one secure start.</h2>
+        <div class="prelaunch-team">Customer Intelligence Team</div>
+        <div class="prelaunch-tools">
+          <div class="prelaunch-tool"><span class="prelaunch-icon">N</span><strong>NPS Analyzer</strong></div>
+          <div class="prelaunch-tool"><span class="prelaunch-icon">C</span><strong>CSAT Analyzer</strong></div>
+          <div class="prelaunch-tool"><span class="prelaunch-icon">S</span><strong>Sentiment Analyzer</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="shell landing-reveal">
+      <header class="topbar">
+        <div class="topbar-inner">
+          <div class="brand">
+            <span class="brand-lockup" aria-label="Krestrel Analysis Suite">
+              <span class="brand-mark" aria-hidden="true">KA</span>
+              <span class="brand-name"><strong>Krestrel</strong><small>Analysis Suite</small></span>
+            </span>
+            <span class="brand-line"></span>
+            <span class="brand-title">Krestrel Analysis Suite</span>
+          </div>
+          <div class="top-actions">
+            <span class="status-pill">Local-only analytics</span>
+            <span class="status-pill">Audit logging enabled</span>
+            <div class="setup-menu">
+              <button class="setup-trigger" type="button" aria-haspopup="true" aria-expanded="false">Setup</button>
+              <div class="setup-dropdown" role="menu" aria-label="Setup menu">
+                <a class="setup-item" role="menuitem" href="/apps/sparrow-training/index.html">
+                  <span class="setup-icon">S</span>
+                  <span class="setup-copy"><strong>Train Sparrow</strong><span>Open the local sentiment model training workspace.</span></span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="stage">
+            <div class="scan-line"></div>
+            <div class="signal-map" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="hero-content">
+              <div class="copy">
+                <p class="eyebrow">Krestrel Analysis Suite</p>
+                <h1>Turning customer feedback into operational clarity</h1>
+                <p class="lead">
+                  A secure leadership workspace for NPS, CSAT, and verbatim sentiment intelligence. Open the right analyzer, generate insights locally, and keep every UAT action traceable through audit logs.
+                </p>
+                <div class="team-badge">Customer Intelligence Team</div>
+                <div class="data-orbit" aria-hidden="true">
+                  <span class="data-pill">NPS</span>
+                  <span class="data-pill">CSAT</span>
+                  <span class="data-pill">Sentiment</span>
+                </div>
+              </div>
+
+              <aside class="insight-panel" aria-label="Suite highlights">
+                <h2>Built for secure customer intelligence</h2>
+                <div class="insight-list">
+                  <div class="insight"><strong>Local processing</strong><span>Analysis runs on this machine so customer feedback stays inside the suite.</span></div>
+                  <div class="insight"><strong>Leadership outputs</strong><span>Board-room reports, interactive HTML, lens cards, themes, and statistical views.</span></div>
+                  <div class="insight"><strong>Governed access</strong><span>User login and real-time audit logs are ready for IT review during UAT.</span></div>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <div class="tools-wrap" id="suite-tools" aria-label="Krestrel Analysis Suite tools">
+            <a class="tool-card" id="npsToolCard" href="/apps/nps-intelligence-hub/index.html?view=setuphome" data-handoff-label="NPS Analyzer" data-handoff-side="nps">
+              <div class="tool-head">
+                <span class="tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M8 15l2-4 3 2 3-6"/><path d="M8 18h8"/></svg></span>
+                <span class="tool-number">01</span>
+              </div>
+              <div>
+                <h2>NPS Analyzer</h2>
+                <p>Feedback intelligence for NPS health, themes, sentiment, executive lens, performance cards, and leadership-ready reporting.</p>
+              </div>
+              <span class="open-btn">Open NPS Analyzer</span>
+            </a>
+
+            <a class="tool-card" id="csatToolCard" href="/apps/csat-intelligence-hub/index.html?view=setuphome" data-handoff-label="CSAT Analyzer" data-handoff-side="csat">
+              <div class="tool-head">
+                <span class="tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16v11H4z"/><path d="M8 20h8"/><path d="M12 17v3"/><path d="M8 12s1.5-3 4-3 4 3 4 3-1.5 3-4 3-4-3-4-3z"/><circle cx="12" cy="12" r="1.3"/></svg></span>
+                <span class="tool-number">02</span>
+              </div>
+              <div>
+                <h2>CSAT Analyzer</h2>
+                <p>CSAT diagnostics with Master Lens, moving averages, agent and manager views, quartiles, themes, and board-room outputs.</p>
+              </div>
+              <span class="open-btn">Open CSAT Analyzer</span>
+            </a>
+
+            <a class="tool-card" href="apps/sentiment-analysis/index.html">
+              <div class="tool-head">
+                <span class="tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6h14v10H8l-3 3z"/><path d="M8 10h8"/><path d="M8 13h5"/></svg></span>
+                <span class="tool-number">03</span>
+              </div>
+              <div>
+                <h2>Sentiment Analyzer</h2>
+                <p>Focused verbatim intelligence for tone, positive and negative signals, repeated language, and customer emotion indicators.</p>
+              </div>
+              <span class="open-btn">Open Sentiment Analyzer</span>
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>Customer Intelligence Team</span>
+        <span>Secure local suite with audit logs</span>
+      </footer>
+    </div>
+
+    <div class="csat-handoff" id="csatHandoff" aria-live="polite" aria-hidden="true">
+      <div class="csat-handoff-matrix" id="csatHandoffMatrix" aria-hidden="true"></div>
+      <section class="csat-handoff-card">
+        <p class="eyebrow" id="handoffAnalyzerLabel">CSAT Analyzer</p>
+        <h2>Welcome.</h2>
+        <p id="handoffAnalyzerCopy">Let's get set with the configuration. I will open the guided setup, then walk you through the Base File, mapping, business rules, and analysis.</p>
+        <div class="handoff-progress"><span></span></div>
+      </section>
+    </div>
+
+    <script>
+      (() => {
+        const values = ["83", "91", "42", "7.8", "12", "64", "NPS", "CSAT", "0.86", "+3", "-1", "98"];
+        function seedMatrix(id, side) {
+          const host = document.getElementById(id);
+          if (!host || host.dataset.ready) return;
+          host.dataset.ready = "1";
+          const isPrelaunch = id === "prelaunchMatrix";
+          const count = isPrelaunch ? 92 : 30;
+          for (let i = 0; i < count; i += 1) {
+            const item = document.createElement("span");
+            item.textContent = values[(i * 5 + side.length) % values.length];
+            item.style.left = `${isPrelaunch ? ((i * 13) % 102) - 2 : 6 + ((i * 29) % 82)}%`;
+            item.style.animationDuration = `${isPrelaunch ? 7 + (i % 10) : 9 + (i % 9)}s`;
+            item.style.animationDelay = `${-(i * (isPrelaunch ? 0.38 : 0.62))}s`;
+            host.appendChild(item);
+          }
+        }
+        window.addEventListener("load", () => {
+          seedMatrix("matrixLeft", "left");
+          seedMatrix("matrixRight", "right");
+          seedMatrix("prelaunchMatrix", "suite");
+          seedMatrix("csatHandoffMatrix", "csat");
+        });
+      })();
+    </script>
+    <script>
+      window.addEventListener("load", () => {
+        const pre = document.getElementById("suitePrelaunch");
+        if (!pre) return;
+        setTimeout(() => pre.classList.add("done"), 1250);
+        setTimeout(() => pre.remove(), 1700);
+      });
+    </script>
+    <script>
+      (() => {
+        const cards = [document.getElementById("npsToolCard"), document.getElementById("csatToolCard")].filter(Boolean);
+        const overlay = document.getElementById("csatHandoff");
+        const label = document.getElementById("handoffAnalyzerLabel");
+        const copy = document.getElementById("handoffAnalyzerCopy");
+        if (!cards.length || !overlay) return;
+        cards.forEach((card) => {
+          card.addEventListener("click", (event) => {
+            event.preventDefault();
+            const analyzerLabel = card.dataset.handoffLabel || "Analyzer";
+            if (label) label.textContent = analyzerLabel;
+            if (copy) copy.textContent = `Let's get set with the configuration. I will open the guided ${analyzerLabel.replace(" Analyzer", "")} setup, then walk you through the Base File, mapping, business rules, and analysis.`;
+            overlay.setAttribute("aria-hidden", "false");
+            overlay.classList.add("active");
+            setTimeout(() => {
+              window.location.href = card.href;
+            }, 1850);
+          });
+        });
+      })();
+    </script>
+    <script src="/auth.js?v=20260617-landing-final"></script>
+  </body>
+</html>

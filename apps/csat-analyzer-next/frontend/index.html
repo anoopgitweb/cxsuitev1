@@ -1,0 +1,181 @@
+﻿<!doctype html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>CSAT Analysis</title>
+
+  <link rel="stylesheet" href="styles.css?v=20260629-active-csat-lens-parity-v1">
+
+</head>
+
+<body>
+
+  <div class="setup-matrix setup-matrix-left" aria-hidden="true"></div>
+
+  <div class="setup-matrix setup-matrix-right" aria-hidden="true"></div>
+
+  <main class="app-shell">
+
+    <header class="brand-bar">
+
+      <div class="brand-logo krestrel-logo" aria-label="Krestrel Analysis Suite"><span>KA</span><strong>Krestrel</strong></div>
+
+      <div class="brand-divider" aria-hidden="true"></div>
+
+      <div class="brand-title"><strong>CSAT Intelligence Hub</strong></div>
+
+      <div class="brand-team">Customer Intelligence Team</div>
+
+      <div class="analysis-top-actions hidden" id="analysisTopActions" aria-label="Completed analysis actions"></div>
+
+    </header>
+
+
+
+    <nav class="stage-rail" aria-label="Analysis steps" id="stageRail"></nav>
+
+
+
+    <section class="screen" id="screen">
+
+      <div class="screen-copy">
+
+        <span class="eyebrow" id="eyebrow">LET'S BEGIN</span>
+
+        <h1 id="title">Start with your Base File.</h1>
+
+        <p id="description">Upload the survey workbook that contains one row per customer response. I will read its structure locally and guide every decision from there.</p>
+
+      </div>
+
+      <div id="content"></div>
+
+    </section>
+
+  </main>
+
+
+
+  <dialog id="helpDialog">
+
+    <button class="dialog-close" id="helpClose" aria-label="Close">&times;</button>
+
+    <span class="eyebrow">HERE WHEN YOU NEED ME</span>
+
+    <h2 id="helpTitle">What is a Base File?</h2>
+
+    <p id="helpText">It is the main survey-response workbook. Ideally, each row represents one response and includes a score, response date, feedback text, and any business fields you want to compare.</p>
+
+  </dialog>
+
+
+
+  <dialog id="evidenceDialog" class="evidence-dialog">
+
+    <button class="dialog-close" id="evidenceClose" aria-label="Close">&times;</button>
+
+    <span class="eyebrow" id="evidenceStatus">SUPPORTING EVIDENCE</span>
+
+    <h2 id="evidenceTitle">Result details</h2>
+
+    <p id="evidenceAnswer"></p>
+
+    <div class="evidence-method"><span>Statistical method</span><strong id="evidenceMethod"></strong></div>
+
+    <div class="evidence-method"><span>Derived Result</span><strong id="evidenceDerived"></strong></div>
+
+    <div class="evidence-spec-grid">
+
+      <section><span>Logic from the Excel framework</span><p id="evidenceLogic"></p></section>
+
+      <section><span>Statistics to use</span><p id="evidenceStatistics"></p></section>
+
+      <section><span>Interpretation guardrail</span><p id="evidenceGuardrail"></p></section>
+
+    </div>
+
+    <div id="evidenceTable"></div>
+
+  </dialog>
+
+
+
+  <aside id="guideAvatar" class="guide-avatar" aria-live="polite">
+
+    <img class="guide-person" src="assets/csat-guide-robot.png" alt="" aria-hidden="true">
+
+    <div class="guide-bubble">
+
+      <span class="guide-label">Signal Guide</span>
+
+      <div id="guideText" class="guide-text">I will walk you through this analysis one step at a time.</div>
+
+    </div>
+
+  </aside>
+
+  <input id="baseInput" type="file" accept=".xlsx,.xls" hidden>
+
+  <input id="lookupInput" type="file" accept=".xlsx,.xls" hidden>
+
+  <script src="app.js?v=20260629-active-csat-lens-parity-v1"></script>
+
+  <script>
+
+    (() => {
+
+      const values = ["83", "91", "42", "7.8", "12", "64", "CSAT", "NPS", "0.86", "+3", "-1", "98"];
+
+      function seedMatrix(selector, offset) {
+
+        const host = document.querySelector(selector);
+
+        if (!host || host.dataset.ready) return;
+
+        host.dataset.ready = "1";
+
+        for (let i = 0; i < 34; i += 1) {
+
+          const item = document.createElement("span");
+
+          item.textContent = values[(i * 5 + offset) % values.length];
+
+          item.style.left = `${8 + ((i * 31) % 78)}%`;
+
+          item.style.animationDuration = `${8 + (i % 9)}s`;
+
+          item.style.animationDelay = `${-(i * 0.58)}s`;
+
+          host.appendChild(item);
+
+        }
+
+      }
+
+      window.addEventListener("load", () => {
+
+        seedMatrix(".setup-matrix-left", 1);
+
+        seedMatrix(".setup-matrix-right", 4);
+
+      });
+
+    })();
+
+  </script>
+
+</body>
+
+</html>
+
+
+
+
+
+

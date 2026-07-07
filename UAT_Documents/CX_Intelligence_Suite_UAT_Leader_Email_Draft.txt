@@ -1,0 +1,56 @@
+Subject: CX Intelligence Suite - UAT Launch for Account Testing
+
+Dear Leaders,
+
+We are starting the User Acceptance Testing (UAT) for the CX Intelligence Suite, our AI-enabled analyzer designed to help account teams review customer experience data and convert survey feedback into leadership-ready insights.
+
+The UAT will focus on validating whether the tool is ready for account-level use, especially the quality, clarity, and usefulness of the generated leadership question responses.
+
+Tool Name
+CX Intelligence Suite / NPS AI Analyzer
+
+UAT Package Being Shared
+For this UAT, we will share the tool as a ZIP file with the participating account teams. The ZIP package will include the application build and the required tester guidance documents.
+
+Attachments / Materials to be Shared
+1. CX Intelligence Suite application ZIP file
+2. Tester instruction PDF
+3. UAT tracker Excel file
+4. Screenshots showing the key tool screens and expected flow
+5. One-page teaser / overview for quick context
+
+Installation / Launch Instructions
+Testers will extract the ZIP file to their local machine and launch the tool using the provided startup file. The tester instruction PDF explains the full flow, including launch, file upload, lookup file upload, column mapping, business rule selection, analysis run, output review, and UAT tracker completion.
+
+UAT Timeline
+UAT Start Date: [Insert Start Date]
+UAT End Date: [Insert End Date]
+
+Participating Accounts
+North: Macys, Home Protect
+Domestic: Oppo
+East Zone: Sainsbury, Expedia
+West and G8: DELL, HP
+South: Adobe, Toronto Star, Walmart, Energy Australia, HSBC
+
+Total Accounts: 12
+
+What We Need Testers to Validate
+1. Whether the tool launches and runs successfully from the shared ZIP package.
+2. Whether data upload, mapping, and business rule selections are clear and usable.
+3. Whether the analysis outputs are accurate and understandable.
+4. Whether the 100 leadership question responses are clear, relevant, and useful for account leaders.
+5. Whether any response is ambiguous, statistically questionable, incomplete, or difficult to act on.
+6. Whether the UAT tracker captures issues, feedback, and sign-off clearly.
+
+Screenshots
+Screenshots will be included with the UAT package so testers can compare their experience with the expected tool flow. The screenshots should cover launch screen, upload/mapping screens, analysis stage, intelligence hub, and leadership question response view.
+
+Cloud / IT Security Update
+For UAT, the tool will be shared as a ZIP package for controlled testing. In parallel, we are working with the IT Security team to implement the solution on cloud. Once the tool is live, users will access it through a secured cloud-hosted link instead of running the local ZIP version.
+
+Request from Leaders
+Please nominate / confirm the testers from the listed accounts and ensure they complete testing within the UAT window. The completed UAT tracker should be returned at the end of testing so we can consolidate feedback, identify fixes, and decide readiness for the next rollout stage.
+
+Regards,
+[Your Name]

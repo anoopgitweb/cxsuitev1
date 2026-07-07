@@ -1,0 +1,11 @@
+{
+  "base_model_name": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+  "text_column": "text",
+  "label_column": "label",
+  "label_mapping": {
+    "negative": 0,
+    "neutral": 1,
+    "positive": 2
+  },
+  "eval_accuracy": 0.9642857142857143
+}

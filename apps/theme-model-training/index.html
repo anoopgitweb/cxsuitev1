@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Theme Model Training App</title>
+  <link rel="stylesheet" href="styles.css?v=6">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">Standalone Experiment</span>
+        <h1>Theme Model Training App</h1>
+        <p>Train a local theme classifier using labeled feedback and the downloaded MiniLM embedding model.</p>
+      </div>
+      <div class="status-pill" id="status">Ready</div>
+    </header>
+
+    <section class="panel">
+      <h2><span class="step-num">1</span>Upload Labeled Data</h2>
+      <label class="file-drop">
+        <input id="fileInput" type="file" accept=".csv,.xlsx,.xls,.xlsm">
+        <span>Choose CSV/XLSX</span>
+        <strong id="fileName">No file selected</strong>
+      </label>
+
+      <div class="field-grid">
+        <label>Model Name
+          <input id="modelName" type="text" value="Adobe Theme Model">
+        </label>
+        <label>Feedback Column
+          <select id="feedbackColumn"><option value="">Auto-detect after upload</option></select>
+        </label>
+        <label>Human Label Column
+          <select id="labelColumn"><option value="">Select label column</option></select>
+        </label>
+        <label>Human ACPT Column
+          <select id="acptColumn"><option value="">Optional</option></select>
+        </label>
+        <label>Human Resolution Status Column
+          <select id="resolutionColumn"><option value="">Optional</option></select>
+        </label>
+        <label>Max Training Rows
+          <input id="maxRows" type="number" min="100" step="100" value="5000">
+        </label>
+      </div>
+
+      <div class="button-row">
+        <button class="btn primary" id="trainBtn" type="button">Train Model</button>
+        <button class="btn" id="exportBtn" type="button" disabled>Export Training Excel</button>
+      </div>
+    </section>
+
+    <section class="metric-grid" id="metricGrid">
+      <article><span>Training Rows</span><strong>-</strong></article>
+      <article><span>Accuracy</span><strong>-</strong></article>
+      <article><span>Macro F1</span><strong>-</strong></article>
+      <article><span>Weighted F1</span><strong>-</strong></article>
+    </section>
+
+    <section class="panel">
+      <h2><span class="step-num">2</span>Technical Training Details</h2>
+      <div id="technicalDetails" class="details-grid empty-state">Train a model to view technical details.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="step-num">3</span>Theme Performance</h2>
+      <div id="reportTable" class="table-wrap empty-state">Train a model to view per-theme metrics.</div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="step-num">4</span>Test Trained Models</h2>
+      <div class="model-folder-row">
+        <label>Model Folder
+          <input id="modelFolder" type="text" value="models/theme_acpt_resolution_model">
+        </label>
+        <button class="btn" id="refreshModelsBtn" type="button">Retrieve Models</button>
+      </div>
+
+      <div class="compare-grid">
+        <label>Model 1
+          <select id="compareModel1"><option value="">Select model</option></select>
+        </label>
+        <label>Model 2
+          <select id="compareModel2"><option value="">Select model</option></select>
+        </label>
+        <label>Model 3
+          <select id="compareModel3"><option value="">Select model</option></select>
+        </label>
+      </div>
+
+      <label class="test-verbatim-label">Test Verbatim
+        <textarea id="testVerbatim" rows="4" placeholder="Paste one customer comment here..."></textarea>
+      </label>
+      <div class="button-row">
+        <button class="btn primary" id="testModelsBtn" type="button">Test Selected Models</button>
+      </div>
+      <div id="modelTestResults" class="table-wrap empty-state">Retrieve models, select up to three, then test one verbatim.</div>
+    </section>
+  </main>
+  <div class="loading-overlay" id="loadingOverlay" hidden>
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <h2>Training model...</h2>
+      <p id="loadingStep">Preparing labeled feedback.</p>
+      <div class="loading-bar"><span></span></div>
+    </div>
+  </div>
+  <script src="app.js?v=8"></script>
+</body>
+</html>

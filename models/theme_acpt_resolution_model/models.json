@@ -1,0 +1,45 @@
+[
+  {
+    "id": "new-model",
+    "name": "New Model",
+    "path": "models/theme_acpt_resolution_model/new-model.joblib",
+    "trainedAt": "2026-06-28T23:48:36",
+    "trainedRows": 300,
+    "labels": [
+      "Account",
+      "Agent",
+      "Billing",
+      "Communication",
+      "Contact",
+      "Documentation",
+      "Experience",
+      "Product",
+      "Resolution",
+      "Wait Time"
+    ],
+    "outputs": [
+      "Theme",
+      "ACPT",
+      "Resolution Status"
+    ],
+    "accuracy": 0.8833333333333333,
+    "macroF1": 0.8814285714285713,
+    "weightedF1": 0.8814285714285715
+  },
+  {
+    "id": "theme_classifier",
+    "name": "Theme_Classifier",
+    "path": "models/theme_acpt_resolution_model/theme_classifier.joblib",
+    "trainedAt": "",
+    "trainedRows": "",
+    "labels": [],
+    "outputs": [
+      "Theme",
+      "ACPT",
+      "Resolution Status"
+    ],
+    "accuracy": "",
+    "macroF1": "",
+    "weightedF1": ""
+  }
+]

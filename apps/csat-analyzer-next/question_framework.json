@@ -1,0 +1,352 @@
+[
+  {
+    "number": 1,
+    "question": "How has CSAT trended over the selected time period?",
+    "logic": "Aggregate CSAT by equal time periods such as week or month. Use rolling averages to smooth noise, then fit a regression trend line to determine whether the direction is upward, downward, or flat. Validate whether current-period movement is statistically meaningful before calling it improvement or decline.",
+    "statistics": "Mean by period, Median by period, Survey Count, Rolling Average, Standard Deviation, Trend Slope, R², 95% Confidence Interval, Period-over-Period Change, t-test or Mann-Whitney U Test",
+    "guardrail": "Say “trending up/down” only when the slope and/or period comparison is meaningful. Otherwise say performance is broadly stable."
+  },
+  {
+    "number": 2,
+    "question": "What is the overall CSAT performance during the selected period?",
+    "logic": "Summarize overall performance using both central tendency and uncertainty. Do not report only the average; include dispersion and reliability.",
+    "statistics": "Mean, Median, Standard Deviation, Variance, Minimum, Maximum, Range, Q1, Q3, IQR, Survey Count, Standard Error, 95% Confidence Interval",
+    "guardrail": "The overall CSAT is reliable only when sample size is adequate and confidence interval is reasonably narrow."
+  },
+  {
+    "number": 3,
+    "question": "Which managers are performing the best, and how statistically reliable are their results?",
+    "logic": "Rank managers by mean CSAT only after applying a minimum survey threshold. Use confidence intervals to determine whether apparent ranking differences are reliable.",
+    "statistics": "Manager Mean, Median, Survey Count, Standard Deviation, CV, Percentile Rank, 95% Confidence Interval, ANOVA or Kruskal-Wallis",
+    "guardrail": "Avoid ranking managers with low survey volume as definitive winners."
+  },
+  {
+    "number": 4,
+    "question": "Which agents are performing the best, and how statistically reliable are their results?",
+    "logic": "Rank agents by mean CSAT after applying sample-size thresholds. Compare confidence intervals to avoid misleading rankings from small samples.",
+    "statistics": "Agent Mean, Median, Survey Count, Standard Deviation, CV, Percentile Rank, 95% Confidence Interval",
+    "guardrail": "An agent with 5 perfect surveys should not automatically outrank an agent with 200 strong surveys."
+  },
+  {
+    "number": 5,
+    "question": "Which managers have shown the greatest statistically significant improvement over time?",
+    "logic": "Compare equal historical periods and measure both size and significance of change. Confirm that improvement is not caused by random variation.",
+    "statistics": "Previous Period Mean, Current Period Mean, Absolute Change, % Change, Trend Slope, Effect Size, p-value, 95% Confidence Interval",
+    "guardrail": "Call out improvement only when direction, size, and reliability align."
+  },
+  {
+    "number": 6,
+    "question": "Which managers have experienced the most significant decline over time?",
+    "logic": "Compare equal periods and detect sustained decline using trend and significance testing. Avoid treating one low period as a decline unless supported statistically.",
+    "statistics": "Previous Mean, Current Mean, Absolute Decline, % Decline, Trend Slope, Effect Size, p-value, Survey Count",
+    "guardrail": "Flag as decline when there is enough volume and a meaningful negative movement."
+  },
+  {
+    "number": 7,
+    "question": "Which agents have demonstrated the greatest improvement over the selected period?",
+    "logic": "Calculate each agent’s recent vs historical CSAT and validate with trend and effect size. Use minimum sample threshold for both periods.",
+    "statistics": "Previous Mean, Current Mean, Absolute Change, % Improvement, Trend Slope, Effect Size, p-value, Survey Count",
+    "guardrail": "Improvement must be sustained, not just one high-scoring survey."
+  },
+  {
+    "number": 8,
+    "question": "Which agents have experienced the greatest decline over the selected period?",
+    "logic": "Identify agents with negative movement across comparable periods, supported by sufficient survey count and statistical evidence.",
+    "statistics": "Previous Mean, Current Mean, % Decline, Trend Slope, Effect Size, p-value, 95% Confidence Interval",
+    "guardrail": "Use “needs review” rather than “poor performance” if sample is limited."
+  },
+  {
+    "number": 9,
+    "question": "Which managers have maintained the most consistent CSAT performance over time?",
+    "logic": "Measure stability separately from performance. A manager is consistent when CSAT variation is low across periods.",
+    "statistics": "Standard Deviation, Variance, CV, IQR, Rolling Standard Deviation, Control Limits",
+    "guardrail": "A high average is not the same as consistency; use variability metrics."
+  },
+  {
+    "number": 10,
+    "question": "Which managers exhibit the highest variability in CSAT performance?",
+    "logic": "Identify managers whose scores fluctuate more than peers or historical norms. Use variability and outlier measures.",
+    "statistics": "Standard Deviation, CV, Range, IQR, Outlier Count, Rolling SD",
+    "guardrail": "High volatility means inconsistent outcomes, not necessarily low performance."
+  },
+  {
+    "number": 11,
+    "question": "Which agents have maintained the most consistent CSAT performance?",
+    "logic": "Measure each agent’s score dispersion over time. Filter for adequate survey volume before judging consistency.",
+    "statistics": "Agent Standard Deviation, Variance, CV, IQR, Rolling SD, Survey Count",
+    "guardrail": "Consistency should not be calculated seriously for very low survey counts."
+  },
+  {
+    "number": 12,
+    "question": "Which agents exhibit the highest variability in CSAT performance?",
+    "logic": "Rank agents by dispersion metrics and identify those with frequent high-low swings.",
+    "statistics": "Standard Deviation, CV, Range, IQR, Outlier Count",
+    "guardrail": "Volatility is a coaching signal only when sample size is adequate."
+  },
+  {
+    "number": 13,
+    "question": "Which weeks or months recorded the highest and lowest CSAT, and were these differences statistically meaningful?",
+    "logic": "Aggregate CSAT by time period, rank periods, and compare top/bottom periods using confidence intervals or significance tests.",
+    "statistics": "Period Mean, Median, Survey Count, 95% Confidence Interval, Ranking, t-test or Mann-Whitney U",
+    "guardrail": "Do not overinterpret best/worst period if confidence intervals overlap heavily."
+  },
+  {
+    "number": 14,
+    "question": "Were there any statistically significant spikes or drops in CSAT during the selected period?",
+    "logic": "Compare each period against rolling/historical average and detect abnormal variation using outlier and process control methods.",
+    "statistics": "Z-score, IQR Outlier Detection, Rolling Mean, Rolling SD, Upper/Lower Control Limits",
+    "guardrail": "Label as spike/drop only when outside expected variation."
+  },
+  {
+    "number": 15,
+    "question": "Which managers consistently outperform the organizational average?",
+    "logic": "Compare each manager’s mean against the organizational mean across periods and validate whether the difference is reliable.",
+    "statistics": "Manager Mean, Organization Mean, Difference, Percentile Rank, 95% Confidence Interval, ANOVA/Post-hoc Tests",
+    "guardrail": "Outperformance should be consistent across time, not just one reporting period."
+  },
+  {
+    "number": 16,
+    "question": "Which agents consistently outperform the organizational average?",
+    "logic": "Compare each agent’s mean CSAT to the organizational average while accounting for survey count and uncertainty.",
+    "statistics": "Agent Mean, Organization Mean, Difference, Percentile Rank, 95% Confidence Interval",
+    "guardrail": "Use confidence-adjusted interpretation for low-volume agents."
+  },
+  {
+    "number": 17,
+    "question": "How is CSAT distributed across managers, and what does it reveal about overall performance?",
+    "logic": "Analyze the shape and spread of manager-level CSAT rather than relying only on averages.",
+    "statistics": "Manager Mean Distribution, Median, Quartiles, IQR, Standard Deviation, Skewness, Kurtosis",
+    "guardrail": "Distribution helps show whether performance is concentrated or uneven."
+  },
+  {
+    "number": 18,
+    "question": "How is CSAT distributed across agents, and are there any noticeable patterns or outliers?",
+    "logic": "Analyze agent-level CSAT distribution to identify concentration, spread, skew, and outliers.",
+    "statistics": "Agent Mean Distribution, Median, Quartiles, IQR, Standard Deviation, Skewness, Kurtosis, Outlier Count",
+    "guardrail": "Outliers need review but should not be treated as root cause without more data."
+  },
+  {
+    "number": 19,
+    "question": "Which managers have the most balanced team performance?",
+    "logic": "Within each manager, compare the variation among agent-level averages. Low spread indicates balanced performance.",
+    "statistics": "Team Mean, Agent Mean SD within Team, Team CV, Team Range, Team IQR",
+    "guardrail": "Balanced team means agents under the manager perform similarly."
+  },
+  {
+    "number": 20,
+    "question": "Which managers have the greatest variation in team performance?",
+    "logic": "Within each manager, measure the performance gap between agents and overall spread.",
+    "statistics": "Highest Agent Mean, Lowest Agent Mean, Range, SD, IQR, CV",
+    "guardrail": "Large gaps suggest uneven performance distribution, not necessarily manager causality."
+  },
+  {
+    "number": 21,
+    "question": "Who are the Top 10 performing agents based on statistically reliable performance?",
+    "logic": "Apply minimum sample threshold, rank agents by mean CSAT, and include confidence intervals to prevent misleading ranks.",
+    "statistics": "Mean, Survey Count, 95% Confidence Interval, Percentile Rank, Reliability Flag",
+    "guardrail": "Prefer confidence-adjusted ranking when sample sizes differ widely."
+  },
+  {
+    "number": 22,
+    "question": "Who are the Bottom 10 performing agents based on statistically reliable performance?",
+    "logic": "Identify agents with the lowest statistically reliable CSAT, considering sample size and uncertainty.",
+    "statistics": "Mean, Survey Count, 95% Confidence Interval, Percentile Rank, Reliability Flag",
+    "guardrail": "Low ranking should be shown as “requires review” when sample is small."
+  },
+  {
+    "number": 23,
+    "question": "Which agents have consistently improved month over month?",
+    "logic": "Calculate monthly means by agent and check whether slope is positive across multiple months, not just between two points.",
+    "statistics": "Monthly Mean, Trend Slope, R², Month-over-Month Change, Positive Period Count, Survey Count",
+    "guardrail": "Sustained trend requires multiple periods with adequate volume."
+  },
+  {
+    "number": 24,
+    "question": "Which agents should be prioritized for coaching based on statistically significant performance trends?",
+    "logic": "Prioritize agents with low mean CSAT, negative trend, high variability, or statistically significant decline. Do not infer the cause of low CSAT.",
+    "statistics": "Mean, Trend Slope, SD, Percentile Rank, Confidence Interval, Survey Count, Effect Size, p-value",
+    "guardrail": "Say “coaching priority based on CSAT pattern,” not “agent caused dissatisfaction.”"
+  },
+  {
+    "number": 25,
+    "question": "Which managers should be prioritized for performance improvement based on team performance trends?",
+    "logic": "Flag managers whose teams show low mean CSAT, negative trend, high variability, or many low-performing agents.",
+    "statistics": "Team Mean, Trend Slope, Team SD, Team Confidence Interval, Survey Count, % Agents Below Target",
+    "guardrail": "This identifies teams needing attention, not proven managerial cause."
+  },
+  {
+    "number": 26,
+    "question": "How many agents are currently performing above the CSAT target?",
+    "logic": "Compare each agent’s mean CSAT against the target after applying sample threshold. Summarize count and percentage.",
+    "statistics": "Agent Mean, Target, Count Above Target, % Above Target, Survey Count, Confidence Interval",
+    "guardrail": "Use target comparison only if a valid CSAT target is defined."
+  },
+  {
+    "number": 27,
+    "question": "How many agents are currently performing below the CSAT target?",
+    "logic": "Compare each agent’s mean CSAT against target and quantify below-target population.",
+    "statistics": "Agent Mean, Target, Count Below Target, % Below Target, Survey Count, Confidence Interval",
+    "guardrail": "Separate confirmed below-target from low-confidence below-target cases."
+  },
+  {
+    "number": 28,
+    "question": "Which manager has the highest proportion of high-performing agents?",
+    "logic": "For each manager, calculate the share of agents above target and compare proportions with team size context.",
+    "statistics": "% Agents Above Target, Count Above Target, Team Size, Confidence Interval for Proportion, Percentile Rank",
+    "guardrail": "A small team can show high percentage but lower reliability."
+  },
+  {
+    "number": 29,
+    "question": "What statistically significant changes have occurred compared to the previous reporting period?",
+    "logic": "Compare current and previous periods across overall, manager, and agent levels using equal windows and significance testing.",
+    "statistics": "Mean Difference, % Change, Effect Size, p-value, Confidence Interval, Trend Comparison, Survey Count",
+    "guardrail": "Report only changes that are both statistically and practically meaningful."
+  },
+  {
+    "number": 30,
+    "question": "What are the key statistically significant insights and recommendations from the current reporting period?",
+    "logic": "Summarize only insights supported by data: trend, significant changes, high/low performers, stability, volatility, outliers, and reliability.",
+    "statistics": "Overall Mean, Trend Slope, R², SD, Confidence Intervals, Effect Size, Outlier Count, Survey Count, Reliability Flags",
+    "guardrail": "Recommendations must be action-oriented but not causal unless supported by other data."
+  },
+  {
+    "number": 31,
+    "question": "Which managers have the highest confidence in their CSAT performance based on sample size?",
+    "logic": "Assess reliability of each manager’s CSAT estimate using sample size and confidence interval width.",
+    "statistics": "Survey Count, Standard Error, 95% Confidence Interval Width, SD, Reliability Score",
+    "guardrail": "High confidence means narrow uncertainty, not necessarily high CSAT."
+  },
+  {
+    "number": 32,
+    "question": "Which agents have results that may be unreliable due to low survey volume?",
+    "logic": "Flag agents whose sample size is below threshold or whose confidence intervals are too wide for reliable interpretation.",
+    "statistics": "Survey Count, Minimum Threshold, Standard Error, CI Width, Reliability Flag",
+    "guardrail": "These agents should be excluded or marked low-confidence in rankings."
+  },
+  {
+    "number": 33,
+    "question": "Which managers are consistently improving despite fluctuations in individual survey scores?",
+    "logic": "Use rolling averages and regression slope to identify upward direction even when individual scores vary.",
+    "statistics": "Rolling Mean, Trend Slope, R², Rolling SD, Period Means, p-value",
+    "guardrail": "Improving despite fluctuation means positive trend with manageable variability."
+  },
+  {
+    "number": 34,
+    "question": "Which agents have demonstrated sustained improvement over multiple reporting periods?",
+    "logic": "Identify agents with positive movement across several consecutive periods, supported by trend slope and adequate data.",
+    "statistics": "Monthly/Weekly Mean, Consecutive Positive Change Count, Trend Slope, R², Survey Count",
+    "guardrail": "Sustained improvement requires repeated positive periods, not one jump."
+  },
+  {
+    "number": 35,
+    "question": "Which managers have statistically stable performance despite changes in survey volume?",
+    "logic": "Evaluate whether manager CSAT remains within expected control limits even when survey counts vary.",
+    "statistics": "Period Mean, Survey Count by Period, Rolling SD, Control Limits, CV, CI Width",
+    "guardrail": "Stable means variation remains within expected statistical boundaries."
+  },
+  {
+    "number": 36,
+    "question": "Which agents have recently become performance outliers?",
+    "logic": "Compare recent agent CSAT against historical agent average and organizational distribution to detect new outliers.",
+    "statistics": "Recent Mean, Historical Mean, Z-score, Modified Z-score, IQR Rule, Outlier Flag",
+    "guardrail": "Recent outlier status should be validated with sample count."
+  },
+  {
+    "number": 37,
+    "question": "Which teams show the greatest performance consistency across all agents?",
+    "logic": "Measure variation of agent-level averages within each manager’s team and rank teams by lowest dispersion.",
+    "statistics": "Agent Mean SD within Team, Team CV, Team IQR, Range, Survey Count",
+    "guardrail": "Consistent team performance means low dispersion among agents."
+  },
+  {
+    "number": 38,
+    "question": "Which teams display unusually high variation that warrants further investigation?",
+    "logic": "Identify teams with within-team variation significantly higher than the organizational team variation benchmark.",
+    "statistics": "Team SD, Team CV, Team Range, Team IQR, Z-score of Team Variability",
+    "guardrail": "High variation suggests uneven team performance, not cause."
+  },
+  {
+    "number": 39,
+    "question": "Which managers have experienced the largest statistically significant performance shifts?",
+    "logic": "Compare manager current vs historical means and rank by absolute statistically significant movement.",
+    "statistics": "Current Mean, Historical Mean, Absolute Difference, Effect Size, p-value, CI, Trend Slope",
+    "guardrail": "Separate positive shifts and negative shifts for leadership clarity."
+  },
+  {
+    "number": 40,
+    "question": "Which agents are closest to crossing the target performance threshold?",
+    "logic": "Calculate the gap between each agent’s mean CSAT and target, then identify those within a narrow band above or below target.",
+    "statistics": "Agent Mean, Target Gap, Confidence Interval, Survey Count, Percentile Rank",
+    "guardrail": "Useful for near-target coaching or recognition; avoid overprecision if CI is wide."
+  },
+  {
+    "number": 41,
+    "question": "Which managers have maintained above-average CSAT throughout the reporting period?",
+    "logic": "Check whether each manager’s period-level CSAT remains above organizational average across multiple periods.",
+    "statistics": "Period Mean, Organization Mean by Period, % Periods Above Average, Survey Count, CI",
+    "guardrail": "Consistent above-average requires repeated performance across periods."
+  },
+  {
+    "number": 42,
+    "question": "Which agents have maintained above-average CSAT throughout the reporting period?",
+    "logic": "Check agent period-level CSAT against organizational average over time with sample threshold.",
+    "statistics": "Agent Period Mean, Org Period Mean, % Periods Above Average, Survey Count, CI",
+    "guardrail": "Exclude periods with too few surveys from consistency claims."
+  },
+  {
+    "number": 43,
+    "question": "Are the differences between managers statistically significant or likely due to random variation?",
+    "logic": "Compare multiple manager groups using an appropriate omnibus test, then use post-hoc comparisons where needed.",
+    "statistics": "ANOVA if assumptions hold, Kruskal-Wallis if non-normal, p-value, Effect Size, Post-hoc Tests, CI",
+    "guardrail": "If not significant, say differences may be random/noise."
+  },
+  {
+    "number": 44,
+    "question": "Are the differences between agents statistically significant or likely due to random variation?",
+    "logic": "Compare agent groups carefully, only for agents meeting sample thresholds, and avoid overtesting without correction.",
+    "statistics": "ANOVA/Kruskal-Wallis, p-value, Effect Size, Post-hoc Tests, Multiple Comparison Correction, CI",
+    "guardrail": "Use caution because many agents can create false positives."
+  },
+  {
+    "number": 45,
+    "question": "Which time periods demonstrated the highest overall performance stability?",
+    "logic": "Measure period-level variation and identify periods with low dispersion and reliable sample size.",
+    "statistics": "Period Mean, Period SD, CV, IQR, Survey Count, Control Limits",
+    "guardrail": "Stable periods have lower variation, not necessarily the highest mean."
+  },
+  {
+    "number": 46,
+    "question": "Which time periods exhibited the greatest performance volatility?",
+    "logic": "Identify periods with high dispersion, large swings, or many outlier scores.",
+    "statistics": "Period SD, CV, Range, IQR, Outlier Count, Rolling SD",
+    "guardrail": "Volatile periods need investigation but cause cannot be inferred from available fields."
+  },
+  {
+    "number": 47,
+    "question": "Are recent improvements part of a sustained trend or short-term fluctuations?",
+    "logic": "Compare recent movement against longer historical trend and rolling averages. Use trend slope and R² to separate sustained signal from noise.",
+    "statistics": "Recent Mean, Historical Mean, Rolling Average, Trend Slope, R², p-value, Control Limits",
+    "guardrail": "Call it sustained only when multiple periods support the same direction."
+  },
+  {
+    "number": 48,
+    "question": "Which agents have the highest confidence-adjusted performance rankings?",
+    "logic": "Rank agents using mean CSAT adjusted by uncertainty, such as lower confidence bound, to reward reliable high performance.",
+    "statistics": "Mean, Survey Count, Standard Error, 95% CI, Lower Confidence Bound, Percentile Rank",
+    "guardrail": "Confidence-adjusted ranking reduces small-sample bias."
+  },
+  {
+    "number": 49,
+    "question": "Which managers have the strongest combination of high performance and high consistency?",
+    "logic": "Create a composite view using high mean CSAT and low variability, while enforcing reliability thresholds.",
+    "statistics": "Manager Mean, SD, CV, Survey Count, Confidence Interval, Percentile Rank, Composite Score",
+    "guardrail": "Best managers should be both high-performing and stable."
+  },
+  {
+    "number": 50,
+    "question": "Based on the statistical analysis, what are the top priorities for leadership attention?",
+    "logic": "Prioritize areas with statistically reliable low performance, significant decline, high volatility, or large gaps. Weight insights by reliability and practical impact.",
+    "statistics": "Mean Gap vs Target, Trend Slope, Effect Size, p-value, SD/CV, Survey Count, Reliability Score",
+    "guardrail": "Priorities should be evidence-based and phrased as focus areas, not causes."
+  }
+]

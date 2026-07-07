@@ -1,0 +1,422 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sparrow Sentiment Training</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="loginView" class="login-shell">
+    <section class="login-brand-panel" aria-label="Krestrel Sparrow training sign-in brand panel">
+      <div class="login-brand-top">
+        <span>NPS Intelligence Hub</span>
+      </div>
+      <div class="login-brand-copy">
+        <p class="login-kicker">Sparrow Sentiment Training</p>
+        <h1>Governed model fine-tuning for customer feedback intelligence</h1>
+        <p>Secure training access for approved users managing labelled data, sentiment model quality, evaluation metrics, and controlled model output paths.</p>
+      </div>
+      <div class="login-assurance-row">
+        <span>Expert-led training</span>
+        <span>Local model artifacts</span>
+        <span>Quality review before publish</span>
+      </div>
+      <div class="sparrow-wordmark" aria-label="Sparrow"><span>Sparrow</span><small>Customer Intelligence Team</small></div>
+
+    </section>
+
+    <section class="login-auth-panel" aria-label="Sparrow training username sign in">
+      <div class="login-card">
+        <div class="login-logo-ribbon">
+          <span class="login-card-logo logo-text">KA</span>
+        </div>
+        <div class="login-card-intro">
+          <p class="auth-kicker">TRAINING INTERFACE</p>
+          <h2>Secure sign in</h2>
+          <p class="auth-helper">Authorized access for governed Sparrow sentiment model fine-tuning.</p>
+        </div>
+        <label>Username<input id="loginUser" autocomplete="username" placeholder="Enter username"></label>
+        <label>Password<input id="loginPass" type="password" autocomplete="current-password" placeholder="Enter password"></label>
+        <button id="loginBtn" class="primary-btn">Sign In</button>
+        <p id="loginError" class="error-text"></p>
+      </div>
+      <p class="login-footer-note">This model training system must be used only for authorized business purposes.</p>
+    </section>
+  </main>
+
+  <main id="appView" class="app-shell hidden">
+    <header class="topbar">
+      <div class="brand-row">
+        <span class="topbar-logo logo-text">KA</span>
+        <span class="brand-divider"></span>
+        <span class="hub-name">NPS Intelligence Hub</span>
+        <span class="training-title">Sparrow Sentiment Training</span>
+      </div>
+      <div class="top-actions">
+        <span class="status-pill">Admin: anoop</span>
+        <button id="downloadSummaryPdfTop" class="ghost-btn">Download Training Summary PDF</button>
+        <button id="logoutBtn" class="ghost-btn">Logout</button>
+      </div>
+    </header>
+
+    <section class="hero-card">
+      <div>
+        <p class="eyebrow">Model Objective</p>
+        <h2>Classify verbatim feedback into Positive, Neutral, and Negative sentiment</h2>
+        <p>Sparrow is the sentiment layer used by NPS Analyzer before Owl applies theme intelligence. This page documents the full training workflow and produces a deployable sentiment model path for the main toolkit.</p>
+      </div>
+      <div class="metric-strip">
+        <div><span id="rowCount">0</span><small>Rows</small></div>
+        <div><span id="readyRows">0</span><small>Ready</small></div>
+        <div><span id="readinessScore">0%</span><small>Readiness</small></div>
+      </div>
+    </section>
+
+    <nav class="workspace-tabs" aria-label="Sparrow training workspace tabs">
+      <button class="tab-btn active" type="button" data-tab="trainingTab">Training Console</button>
+      <button class="tab-btn" type="button" data-tab="detailedDataTab">Detailed Data</button>
+    </nav>
+
+    <section id="trainingTab" class="workflow-grid tab-panel active">
+      <article class="panel span-2">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Step 1</p>
+            <h3>Training Data</h3>
+          </div>
+          <input id="dataFile" type="file" accept=".csv,.txt,.tsv">
+        </div>
+        <p class="muted">Upload labelled historical feedback. CSV, TSV, and TXT previews are read directly in this HTML interface. Excel files can be converted to CSV before training.</p>
+        <div id="fileStatus" class="notice">No training file loaded.</div>
+        <div class="table-wrap">
+          <table id="previewTable"></table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 2</p>
+        <h3>Column Mapping</h3>
+        <label>Feedback / Verbatim Column<select id="textColumn"></select></label>
+        <label>Sentiment Label Column<select id="labelColumn"></select></label>
+        <label>Optional Record ID<select id="idColumn"></select></label>
+        <label>Optional Date / Wave<select id="dateColumn"></select></label>
+        <button id="validateMapping" class="primary-btn">Validate Mapping</button>
+        <div id="mappingStatus" class="notice">Map feedback and sentiment fields.</div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 3</p>
+        <h3>Dataset Intelligence</h3>
+        <div class="mini-grid">
+          <div><span id="positiveCount">0</span><small>Positive</small></div>
+          <div><span id="neutralCount">0</span><small>Neutral</small></div>
+          <div><span id="negativeCount">0</span><small>Negative</small></div>
+          <div><span id="missingCount">0</span><small>Missing Text</small></div>
+          <div><span id="duplicateCount">0</span><small>Duplicates</small></div>
+          <div><span id="avgLength">0</span><small>Avg Words</small></div>
+        </div>
+        <div id="qualityNotes" class="note-list"></div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 4</p>
+        <h3>Training Configuration</h3>
+        <label>Base Model<select id="baseModel"><option>Bundled Sparrow Production Model</option><option>distilroberta-base</option><option>roberta-base</option><option>microsoft/deberta-v3-small</option></select></label>
+        <div class="form-row">
+          <label>Epochs<input id="epochs" type="number" min="1" value="4"></label>
+          <label>Batch Size<input id="batchSize" type="number" min="1" value="16"></label>
+        </div>
+        <div class="form-row">
+          <label>Learning Rate<input id="learningRate" value="2e-5"></label>
+          <label>Validation Split<input id="validationSplit" value="20%"></label>
+        </div>
+        <div class="form-row">
+          <label>Max Length<input id="maxLength" type="number" value="192"></label>
+          <label>Random Seed<input id="seed" type="number" value="42"></label>
+        </div>
+        <label class="check-row"><input id="earlyStop" type="checkbox" checked> Enable early stopping</label>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 4A</p>
+        <h3>System Readiness</h3>
+        <div class="button-row compact-actions">
+          <button id="refreshStatus" class="ghost-btn">Refresh Status</button>
+          <button id="validateModel" class="ghost-btn">Validate Sparrow Model</button>
+        </div>
+        <div class="readiness-list" id="systemReadiness">
+          <div><span>Backend</span><strong id="backendStatus">Checking server connection</strong></div>
+          <div><span>Sparrow model</span><strong id="modelStatus">Checking bundled model</strong></div>
+          <div><span>Model path</span><strong id="modelPathStatus">models/sparrow_cnx_sentimentmodel</strong></div>
+          <div><span>Required files</span><strong id="artifactStatus">config, weights, tokenizer</strong></div>
+          <div><span>Training mode</span><strong id="trainingModeStatus">Live local fine-tuning through bundled Python</strong></div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 4B</p>
+        <h3>Model Technical Details</h3>
+        <div class="model-card-grid">
+          <div><small>Architecture</small><span>RobertaForSequenceClassification</span></div>
+          <div><small>Base Checkpoint</small><span>Bundled Sparrow model</span></div>
+          <div><small>Label Space</small><span>Negative, Neutral, Positive</span></div>
+          <div><small>Fine-tuning Optimizer</small><span>AdamW</span></div>
+          <div><small>Max Positions</small><span id="technicalMaxTokens">192</span></div>
+          <div><small>Device</small><span id="technicalDevice">CPU/GPU detected at runtime</span></div>
+          <div><small>Tokenizer</small><span>AutoTokenizer</span></div>
+          <div><small>Weight Format</small><span>safetensors / bin</span></div>
+        </div>
+        <details class="details-box">
+          <summary>Required model file inventory</summary>
+          <ul>
+            <li>config.json</li>
+            <li>model.safetensors or pytorch_model.bin</li>
+            <li>tokenizer.json</li>
+            <li>tokenizer_config.json</li>
+            <li>special_tokens_map.json</li>
+          </ul>
+        </details>
+      </article>
+
+      <article id="trainingRunPanel" class="panel">
+        <p class="eyebrow">Step 6</p>
+        <h3>Training Run</h3>
+        <button id="startTraining" class="primary-btn">Start Sparrow Training</button>
+        <div class="progress-shell"><div id="progressBar" class="progress-bar"></div></div>
+        <p id="progressText" class="muted">Waiting to start.</p>
+        <div class="training-telemetry-grid">
+          <div><small>Current Loss</small><span id="currentLoss">-</span></div>
+          <div><small>Rolling Loss</small><span id="rollingLoss">-</span></div>
+          <div><small>Learning Rate</small><span id="learningRateLive">-</span></div>
+          <div><small>Step</small><span id="trainingStep">-</span></div>
+          <div><small>Elapsed</small><span id="trainingElapsed">-</span></div>
+        </div>
+        <div id="trainingLog" class="log-box"></div>
+        <div class="button-row">
+          <button id="downloadLog" class="ghost-btn">Download Training Log</button>
+          <button id="downloadMetadata" class="ghost-btn">Download Metadata JSON</button>
+          <button id="clearLog" class="ghost-btn">Clear Log</button>
+        </div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 7</p>
+        <h3>Evaluation</h3>
+        <div class="mini-grid">
+          <div><span id="accuracyMetric">-</span><small>Accuracy</small></div>
+          <div><span id="macroMetric">-</span><small>Macro F1</small></div>
+          <div><span id="weightedMetric">-</span><small>Weighted F1</small></div>
+        </div>
+        <table class="matrix">
+          <tr><th></th><th>Positive</th><th>Neutral</th><th>Negative</th></tr>
+          <tr><th>Positive</th><td id="mpp">-</td><td id="mpn">-</td><td id="mpg">-</td></tr>
+          <tr><th>Neutral</th><td id="mnp">-</td><td id="mnn">-</td><td id="mng">-</td></tr>
+          <tr><th>Negative</th><td id="mgp">-</td><td id="mgn">-</td><td id="mgg">-</td></tr>
+        </table>
+      </article>
+
+      <article class="panel span-2">
+        <p class="eyebrow">Step 7A</p>
+        <h3>Training Charts & Diagnostics</h3>
+        <div class="chart-grid">
+          <div>
+            <h4>Batch Loss Curve</h4>
+            <div class="chart-scroll"><canvas id="lossCanvas" width="920" height="240"></canvas></div>
+            <p class="chart-help">Lower is better. Each point is one optimizer batch; spikes can happen when a harder batch is processed.</p>
+          </div>
+          <div>
+            <h4>Rolling Loss Trend</h4>
+            <div class="chart-scroll"><canvas id="trendCanvas" width="920" height="260"></canvas></div>
+            <p class="chart-help">Lower and smoother is better. This averages recent batches so the overall learning direction is easier to read.</p>
+          </div>
+          <div>
+            <h4>Confusion Heatmap</h4>
+            <canvas id="heatmapCanvas" width="760" height="300"></canvas>
+            <p class="chart-help">Rows are actual labels and columns are predicted labels. Strong diagonal values mean the model is separating classes well.</p>
+          </div>
+          <div>
+            <h4>Epoch Average Loss</h4>
+            <canvas id="epochCanvas" width="620" height="240"></canvas>
+            <p class="chart-help">Lower epoch average loss means each full pass through the training data improved model fit.</p>
+          </div>
+        </div>
+        <div class="table-wrap compact telemetry-table-wrap">
+          <table id="telemetryTable">
+            <thead><tr><th>Step</th><th>Epoch</th><th>Batch</th><th>Loss</th><th>Rolling Loss</th><th>Learning Rate</th><th>Grad Norm</th><th>Elapsed</th></tr></thead>
+            <tbody><tr><td colspan="8">Live batch telemetry will appear during training.</td></tr></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 8</p>
+        <h3>Sample Audit</h3>
+        <div class="mini-grid">
+          <div><span id="auditTotal">-</span><small>Audited Samples</small></div>
+          <div><span id="auditPass">-</span><small>Pass</small></div>
+          <div><span id="auditFail">-</span><small>Fail</small></div>
+        </div>
+        <div class="table-wrap compact">
+          <table id="sampleAuditTable">
+            <thead><tr><th>#</th><th>Split</th><th>Actual</th><th>Predicted</th><th>Result</th><th>Confidence</th></tr></thead>
+            <tbody><tr><td colspan="6">Run training to populate sample-level audit.</td></tr></tbody>
+          </table>
+        </div>
+        <button id="downloadFailed" class="ghost-btn">Download Failed Samples CSV</button>
+      </article>
+
+      <article class="panel span-2">
+        <p class="eyebrow">Step 8A</p>
+        <h3>Trained & Tested Verbatims</h3>
+        <div class="split-table-grid">
+          <div>
+            <h4>Trained Verbatims</h4>
+            <div class="table-wrap compact verbatim-table-wrap">
+              <table id="trainedVerbatimTable">
+                <thead><tr><th>#</th><th>Verbatim</th><th>Actual</th><th>Prediction</th><th>Confidence</th><th>Result</th></tr></thead>
+                <tbody><tr><td colspan="6">Run training to populate trained verbatim predictions.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h4>Tested Verbatims</h4>
+            <div class="table-wrap compact verbatim-table-wrap">
+              <table id="testedVerbatimTable">
+                <thead><tr><th>#</th><th>Verbatim</th><th>Actual</th><th>Prediction</th><th>Confidence</th><th>Result</th></tr></thead>
+                <tbody><tr><td colspan="6">Run training to populate tested verbatim predictions.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 9</p>
+        <h3>Quality Verdict</h3>
+        <div id="qualityVerdict" class="verdict-card">No verdict yet. Run training or load metadata.</div>
+        <div id="nextActions" class="note-list"></div>
+      </article>
+
+      <article id="modelOutputPanel" class="panel">
+        <p class="eyebrow">Step 5</p>
+        <h3>Model Output</h3>
+        <p class="muted">Edit the planned model folder below. Use an absolute path for a specific folder, or keep the bundled relative path.</p>
+        <div class="output-path-field">
+          <span>Output Folder Path</span>
+          <textarea id="outputPath" rows="2" autocomplete="off" spellcheck="false">models/sparrow_cnx_sentimentmodel_new</textarea>
+        </div>
+        <div class="button-row">
+          <button id="editOutputPath" class="ghost-btn" type="button">Edit Path</button>
+          <button id="copyPath" class="ghost-btn" type="button">Copy Model Path</button>
+          <button id="useBundledPath" class="ghost-btn" type="button">Use Recommended New Path</button>
+        </div>
+        <ul class="artifact-list">
+          <li>config.json</li>
+          <li>model.safetensors or pytorch_model.bin</li>
+          <li>tokenizer.json</li>
+          <li>tokenizer_config.json</li>
+          <li>training_metadata.json</li>
+          <li>label_schema.json</li>
+        </ul>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 10</p>
+        <h3>Training Run Summary</h3>
+        <div class="readiness-list run-summary-list">
+          <div><span>Dataset split</span><strong id="summarySplit">Not trained yet</strong></div>
+          <div><span>Hyperparameters</span><strong id="summaryHyperparams">Waiting for training configuration</strong></div>
+          <div><span>Environment</span><strong id="summaryEnvironment">Runtime detected when training starts</strong></div>
+          <div><span>Last metrics</span><strong id="summaryMetrics">No evaluation metrics yet</strong></div>
+          <div><span>Output path</span><strong id="summaryOutputPath">Set Step 5 before training</strong></div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 11</p>
+        <h3>Model Governance</h3>
+        <div class="readiness-list governance-list">
+          <div><span>Artifact validation</span><strong id="governanceArtifacts">New model artifacts are checked after training.</strong></div>
+          <div><span>Publishing rule</span><strong>Do not overwrite the bundled production Sparrow model until validation is approved.</strong></div>
+          <div><span>Rollback</span><strong>Existing output folders are backed up before replacement.</strong></div>
+          <div><span>Analyzer use</span><strong>Paste the new model path into NPS Analyzer Setup after approval.</strong></div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 12</p>
+        <h3>Test Prediction</h3>
+        <textarea id="testText" rows="5" placeholder="Paste a sample customer verbatim..."></textarea>
+        <button id="predictBtn" class="primary-btn">Predict Sentiment</button>
+        <div id="predictionResult" class="prediction-card">Prediction will appear here.</div>
+      </article>
+
+      <article class="panel span-2">
+        <p class="eyebrow">Step 13</p>
+        <h3>Deep Technical Internals</h3>
+        <div class="button-row">
+          <button id="showInternals" class="primary-btn">Show Current Internals</button>
+          <button id="compareRuns" class="ghost-btn">Compare Training Runs</button>
+          <button id="showGuide" class="ghost-btn">Training Guide</button>
+        </div>
+        <div class="metadata-tools">
+          <label>Load Previous Metadata<input id="previousMetadataFile" type="file" accept=".json"></label>
+          <label>Load New Metadata<input id="newMetadataFile" type="file" accept=".json"></label>
+          <button id="compareMetadataFiles" class="ghost-btn">Compare Metadata Files</button>
+        </div>
+        <pre id="internalsReport" class="report-box">Internals report will appear here.</pre>
+      </article>
+
+      <article class="panel span-2">
+        <p class="eyebrow">Step 14</p>
+        <h3>Full Sparrow Training Documentation</h3>
+        <div id="trainingDocumentation" class="doc-grid"></div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 15</p>
+        <h3>Publishing Checklist</h3>
+        <div id="publishingChecklist" class="checklist-list"></div>
+      </article>
+
+      <article class="panel">
+        <p class="eyebrow">Step 16</p>
+        <h3>Training Summary PDF</h3>
+        <p class="muted">The PDF includes the training workflow, dataset profile, configuration, quality checks, model artifacts, testing notes, internals, and publishing checklist.</p>
+        <button id="downloadSummaryPdf" class="primary-btn">Download Training Summary PDF</button>
+        <div id="summaryStatus" class="notice">Ready to generate a training summary.</div>
+      </article>
+    </section>
+
+    <section id="detailedDataTab" class="detailed-data-tab tab-panel hidden">
+      <article class="panel span-2">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Detailed Data</p>
+            <h3>Model Fine-Tuning Parameters</h3>
+          </div>
+          <label class="filter-label">Main Parameter
+            <select id="detailedDataFilter"></select>
+          </label>
+          <button id="downloadDetailedDataCsv" class="ghost-btn" type="button">Download CSV</button>
+        </div>
+        <p class="muted">These data points are extracted from the Model Fine Tuning document. Use the filter to review one main parameter at a time, or keep All Parameters selected for the full audit table.</p>
+        <div class="table-wrap detailed-data-wrap">
+          <table id="detailedDataTable">
+            <thead>
+              <tr><th>ID</th><th>Parameter Name</th><th>Sub Parameter</th><th>Description</th><th>Value</th><th>Comments</th></tr>
+            </thead>
+            <tbody><tr><td colspan="6">Detailed data is loading.</td></tr></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+  <script src="fine_tuning_data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
+
+

@@ -1,0 +1,301 @@
+﻿Case ID,Comment,Human Theme
+SAMPLE-0001,I need a phone number to speak with someone directly.,Contact / Callback Access
+SAMPLE-0002,Please arrange a callback because chat did not resolve this. I would like this improved.,Contact / Callback Access
+SAMPLE-0003,It was hard to reach a real support person. This affected my work.,Contact / Callback Access
+SAMPLE-0004,I wanted a direct contact number instead of waiting for email. Please review this.,Contact / Callback Access
+SAMPLE-0005,The callback option was missing when I needed urgent help. Overall this was important to me.,Contact / Callback Access
+SAMPLE-0006,I could not find a way to contact a human representative.,Contact / Callback Access
+SAMPLE-0007,Support should provide phone assistance for urgent issues. I would like this improved.,Contact / Callback Access
+SAMPLE-0008,The chat kept redirecting me and I needed someone to call. This affected my work.,Contact / Callback Access
+SAMPLE-0009,I prefer a live call because the issue is complicated. Please review this.,Contact / Callback Access
+SAMPLE-0010,There was no easy way to reach the right team. Overall this was important to me.,Contact / Callback Access
+SAMPLE-0011,I need a phone number to speak with someone directly.,Contact / Callback Access
+SAMPLE-0012,Please arrange a callback because chat did not resolve this. I would like this improved.,Contact / Callback Access
+SAMPLE-0013,It was hard to reach a real support person. This affected my work.,Contact / Callback Access
+SAMPLE-0014,I wanted a direct contact number instead of waiting for email. Please review this.,Contact / Callback Access
+SAMPLE-0015,The callback option was missing when I needed urgent help. Overall this was important to me.,Contact / Callback Access
+SAMPLE-0016,I could not find a way to contact a human representative.,Contact / Callback Access
+SAMPLE-0017,Support should provide phone assistance for urgent issues. I would like this improved.,Contact / Callback Access
+SAMPLE-0018,The chat kept redirecting me and I needed someone to call. This affected my work.,Contact / Callback Access
+SAMPLE-0019,I prefer a live call because the issue is complicated. Please review this.,Contact / Callback Access
+SAMPLE-0020,There was no easy way to reach the right team. Overall this was important to me.,Contact / Callback Access
+SAMPLE-0021,I need a phone number to speak with someone directly.,Contact / Callback Access
+SAMPLE-0022,Please arrange a callback because chat did not resolve this. I would like this improved.,Contact / Callback Access
+SAMPLE-0023,It was hard to reach a real support person. This affected my work.,Contact / Callback Access
+SAMPLE-0024,I wanted a direct contact number instead of waiting for email. Please review this.,Contact / Callback Access
+SAMPLE-0025,The callback option was missing when I needed urgent help. Overall this was important to me.,Contact / Callback Access
+SAMPLE-0026,I could not find a way to contact a human representative.,Contact / Callback Access
+SAMPLE-0027,Support should provide phone assistance for urgent issues. I would like this improved.,Contact / Callback Access
+SAMPLE-0028,The chat kept redirecting me and I needed someone to call. This affected my work.,Contact / Callback Access
+SAMPLE-0029,I prefer a live call because the issue is complicated. Please review this.,Contact / Callback Access
+SAMPLE-0030,There was no easy way to reach the right team. Overall this was important to me.,Contact / Callback Access
+SAMPLE-0031,The issue was closed but not actually resolved.,Resolution Effectiveness
+SAMPLE-0032,The agent fixed my problem completely. I would like this improved.,Resolution Effectiveness
+SAMPLE-0033,I still have the same problem after contacting support. This affected my work.,Resolution Effectiveness
+SAMPLE-0034,The solution provided did not work for me. Please review this.,Resolution Effectiveness
+SAMPLE-0035,My case was resolved after the second interaction. Overall this was important to me.,Resolution Effectiveness
+SAMPLE-0036,The answer solved the issue quickly.,Resolution Effectiveness
+SAMPLE-0037,I was told it was fixed but the error continues. I would like this improved.,Resolution Effectiveness
+SAMPLE-0038,The resolution was incomplete and I had to reopen the case. This affected my work.,Resolution Effectiveness
+SAMPLE-0039,The support team solved the problem in one session. Please review this.,Resolution Effectiveness
+SAMPLE-0040,The guidance did not address my actual concern. Overall this was important to me.,Resolution Effectiveness
+SAMPLE-0041,The issue was closed but not actually resolved.,Resolution Effectiveness
+SAMPLE-0042,The agent fixed my problem completely. I would like this improved.,Resolution Effectiveness
+SAMPLE-0043,I still have the same problem after contacting support. This affected my work.,Resolution Effectiveness
+SAMPLE-0044,The solution provided did not work for me. Please review this.,Resolution Effectiveness
+SAMPLE-0045,My case was resolved after the second interaction. Overall this was important to me.,Resolution Effectiveness
+SAMPLE-0046,The answer solved the issue quickly.,Resolution Effectiveness
+SAMPLE-0047,I was told it was fixed but the error continues. I would like this improved.,Resolution Effectiveness
+SAMPLE-0048,The resolution was incomplete and I had to reopen the case. This affected my work.,Resolution Effectiveness
+SAMPLE-0049,The support team solved the problem in one session. Please review this.,Resolution Effectiveness
+SAMPLE-0050,The guidance did not address my actual concern. Overall this was important to me.,Resolution Effectiveness
+SAMPLE-0051,The issue was closed but not actually resolved.,Resolution Effectiveness
+SAMPLE-0052,The agent fixed my problem completely. I would like this improved.,Resolution Effectiveness
+SAMPLE-0053,I still have the same problem after contacting support. This affected my work.,Resolution Effectiveness
+SAMPLE-0054,The solution provided did not work for me. Please review this.,Resolution Effectiveness
+SAMPLE-0055,My case was resolved after the second interaction. Overall this was important to me.,Resolution Effectiveness
+SAMPLE-0056,The answer solved the issue quickly.,Resolution Effectiveness
+SAMPLE-0057,I was told it was fixed but the error continues. I would like this improved.,Resolution Effectiveness
+SAMPLE-0058,The resolution was incomplete and I had to reopen the case. This affected my work.,Resolution Effectiveness
+SAMPLE-0059,The support team solved the problem in one session. Please review this.,Resolution Effectiveness
+SAMPLE-0060,The guidance did not address my actual concern. Overall this was important to me.,Resolution Effectiveness
+SAMPLE-0061,The agent was polite and listened carefully.,Agent Support Quality
+SAMPLE-0062,The representative seemed rushed and unhelpful. I would like this improved.,Agent Support Quality
+SAMPLE-0063,The support agent was knowledgeable about the product. This affected my work.,Agent Support Quality
+SAMPLE-0064,The advisor did not understand my question. Please review this.,Agent Support Quality
+SAMPLE-0065,The agent showed empathy and explained calmly. Overall this was important to me.,Agent Support Quality
+SAMPLE-0066,The person helping me was rude during the chat.,Agent Support Quality
+SAMPLE-0067,The representative was patient and professional. I would like this improved.,Agent Support Quality
+SAMPLE-0068,The agent kept repeating generic responses. This affected my work.,Agent Support Quality
+SAMPLE-0069,The support person was friendly and efficient. Please review this.,Agent Support Quality
+SAMPLE-0070,The agent did not take ownership of the issue. Overall this was important to me.,Agent Support Quality
+SAMPLE-0071,The agent was polite and listened carefully.,Agent Support Quality
+SAMPLE-0072,The representative seemed rushed and unhelpful. I would like this improved.,Agent Support Quality
+SAMPLE-0073,The support agent was knowledgeable about the product. This affected my work.,Agent Support Quality
+SAMPLE-0074,The advisor did not understand my question. Please review this.,Agent Support Quality
+SAMPLE-0075,The agent showed empathy and explained calmly. Overall this was important to me.,Agent Support Quality
+SAMPLE-0076,The person helping me was rude during the chat.,Agent Support Quality
+SAMPLE-0077,The representative was patient and professional. I would like this improved.,Agent Support Quality
+SAMPLE-0078,The agent kept repeating generic responses. This affected my work.,Agent Support Quality
+SAMPLE-0079,The support person was friendly and efficient. Please review this.,Agent Support Quality
+SAMPLE-0080,The agent did not take ownership of the issue. Overall this was important to me.,Agent Support Quality
+SAMPLE-0081,The agent was polite and listened carefully.,Agent Support Quality
+SAMPLE-0082,The representative seemed rushed and unhelpful. I would like this improved.,Agent Support Quality
+SAMPLE-0083,The support agent was knowledgeable about the product. This affected my work.,Agent Support Quality
+SAMPLE-0084,The advisor did not understand my question. Please review this.,Agent Support Quality
+SAMPLE-0085,The agent showed empathy and explained calmly. Overall this was important to me.,Agent Support Quality
+SAMPLE-0086,The person helping me was rude during the chat.,Agent Support Quality
+SAMPLE-0087,The representative was patient and professional. I would like this improved.,Agent Support Quality
+SAMPLE-0088,The agent kept repeating generic responses. This affected my work.,Agent Support Quality
+SAMPLE-0089,The support person was friendly and efficient. Please review this.,Agent Support Quality
+SAMPLE-0090,The agent did not take ownership of the issue. Overall this was important to me.,Agent Support Quality
+SAMPLE-0091,I waited too long before someone responded.,Wait Time / Delays
+SAMPLE-0092,The hold time was unacceptable. I would like this improved.,Wait Time / Delays
+SAMPLE-0093,It took several days to receive an update. This affected my work.,Wait Time / Delays
+SAMPLE-0094,The response was slower than expected. Please review this.,Wait Time / Delays
+SAMPLE-0095,I was stuck in the queue for a long time. Overall this was important to me.,Wait Time / Delays
+SAMPLE-0096,The delay in resolving my case was frustrating.,Wait Time / Delays
+SAMPLE-0097,Support took too much time to reply. I would like this improved.,Wait Time / Delays
+SAMPLE-0098,The waiting period between messages was very long. This affected my work.,Wait Time / Delays
+SAMPLE-0099,I expected faster service for this issue. Please review this.,Wait Time / Delays
+SAMPLE-0100,The case moved slowly with no clear timeline. Overall this was important to me.,Wait Time / Delays
+SAMPLE-0101,I waited too long before someone responded.,Wait Time / Delays
+SAMPLE-0102,The hold time was unacceptable. I would like this improved.,Wait Time / Delays
+SAMPLE-0103,It took several days to receive an update. This affected my work.,Wait Time / Delays
+SAMPLE-0104,The response was slower than expected. Please review this.,Wait Time / Delays
+SAMPLE-0105,I was stuck in the queue for a long time. Overall this was important to me.,Wait Time / Delays
+SAMPLE-0106,The delay in resolving my case was frustrating.,Wait Time / Delays
+SAMPLE-0107,Support took too much time to reply. I would like this improved.,Wait Time / Delays
+SAMPLE-0108,The waiting period between messages was very long. This affected my work.,Wait Time / Delays
+SAMPLE-0109,I expected faster service for this issue. Please review this.,Wait Time / Delays
+SAMPLE-0110,The case moved slowly with no clear timeline. Overall this was important to me.,Wait Time / Delays
+SAMPLE-0111,I waited too long before someone responded.,Wait Time / Delays
+SAMPLE-0112,The hold time was unacceptable. I would like this improved.,Wait Time / Delays
+SAMPLE-0113,It took several days to receive an update. This affected my work.,Wait Time / Delays
+SAMPLE-0114,The response was slower than expected. Please review this.,Wait Time / Delays
+SAMPLE-0115,I was stuck in the queue for a long time. Overall this was important to me.,Wait Time / Delays
+SAMPLE-0116,The delay in resolving my case was frustrating.,Wait Time / Delays
+SAMPLE-0117,Support took too much time to reply. I would like this improved.,Wait Time / Delays
+SAMPLE-0118,The waiting period between messages was very long. This affected my work.,Wait Time / Delays
+SAMPLE-0119,I expected faster service for this issue. Please review this.,Wait Time / Delays
+SAMPLE-0120,The case moved slowly with no clear timeline. Overall this was important to me.,Wait Time / Delays
+SAMPLE-0121,The application crashed when I tried to export the file.,Product / Technical Issue
+SAMPLE-0122,I cannot install the software on my laptop. I would like this improved.,Product / Technical Issue
+SAMPLE-0123,The website shows an error during login. This affected my work.,Product / Technical Issue
+SAMPLE-0124,The app freezes whenever I open the project. Please review this.,Product / Technical Issue
+SAMPLE-0125,The download failed multiple times. Overall this was important to me.,Product / Technical Issue
+SAMPLE-0126,There is a bug in the editing tool.,Product / Technical Issue
+SAMPLE-0127,The software is not syncing my files. I would like this improved.,Product / Technical Issue
+SAMPLE-0128,The license is active but the app says it is expired. This affected my work.,Product / Technical Issue
+SAMPLE-0129,The product keeps showing a system error. Please review this.,Product / Technical Issue
+SAMPLE-0130,The feature does not work after the latest update. Overall this was important to me.,Product / Technical Issue
+SAMPLE-0131,The application crashed when I tried to export the file.,Product / Technical Issue
+SAMPLE-0132,I cannot install the software on my laptop. I would like this improved.,Product / Technical Issue
+SAMPLE-0133,The website shows an error during login. This affected my work.,Product / Technical Issue
+SAMPLE-0134,The app freezes whenever I open the project. Please review this.,Product / Technical Issue
+SAMPLE-0135,The download failed multiple times. Overall this was important to me.,Product / Technical Issue
+SAMPLE-0136,There is a bug in the editing tool.,Product / Technical Issue
+SAMPLE-0137,The software is not syncing my files. I would like this improved.,Product / Technical Issue
+SAMPLE-0138,The license is active but the app says it is expired. This affected my work.,Product / Technical Issue
+SAMPLE-0139,The product keeps showing a system error. Please review this.,Product / Technical Issue
+SAMPLE-0140,The feature does not work after the latest update. Overall this was important to me.,Product / Technical Issue
+SAMPLE-0141,The application crashed when I tried to export the file.,Product / Technical Issue
+SAMPLE-0142,I cannot install the software on my laptop. I would like this improved.,Product / Technical Issue
+SAMPLE-0143,The website shows an error during login. This affected my work.,Product / Technical Issue
+SAMPLE-0144,The app freezes whenever I open the project. Please review this.,Product / Technical Issue
+SAMPLE-0145,The download failed multiple times. Overall this was important to me.,Product / Technical Issue
+SAMPLE-0146,There is a bug in the editing tool.,Product / Technical Issue
+SAMPLE-0147,The software is not syncing my files. I would like this improved.,Product / Technical Issue
+SAMPLE-0148,The license is active but the app says it is expired. This affected my work.,Product / Technical Issue
+SAMPLE-0149,The product keeps showing a system error. Please review this.,Product / Technical Issue
+SAMPLE-0150,The feature does not work after the latest update. Overall this was important to me.,Product / Technical Issue
+SAMPLE-0151,I was charged even after cancelling my subscription.,Billing / Subscription
+SAMPLE-0152,I need a refund for the incorrect charge. I would like this improved.,Billing / Subscription
+SAMPLE-0153,The annual plan is too expensive for my needs. This affected my work.,Billing / Subscription
+SAMPLE-0154,My invoice amount does not look correct. Please review this.,Billing / Subscription
+SAMPLE-0155,I want to switch from annual billing to monthly billing. Overall this was important to me.,Billing / Subscription
+SAMPLE-0156,The payment failed but money was deducted.,Billing / Subscription
+SAMPLE-0157,My subscription renewal happened without warning. I would like this improved.,Billing / Subscription
+SAMPLE-0158,I was billed twice for the same account. This affected my work.,Billing / Subscription
+SAMPLE-0159,The refund process is confusing and slow. Please review this.,Billing / Subscription
+SAMPLE-0160,I need help changing my plan price. Overall this was important to me.,Billing / Subscription
+SAMPLE-0161,I was charged even after cancelling my subscription.,Billing / Subscription
+SAMPLE-0162,I need a refund for the incorrect charge. I would like this improved.,Billing / Subscription
+SAMPLE-0163,The annual plan is too expensive for my needs. This affected my work.,Billing / Subscription
+SAMPLE-0164,My invoice amount does not look correct. Please review this.,Billing / Subscription
+SAMPLE-0165,I want to switch from annual billing to monthly billing. Overall this was important to me.,Billing / Subscription
+SAMPLE-0166,The payment failed but money was deducted.,Billing / Subscription
+SAMPLE-0167,My subscription renewal happened without warning. I would like this improved.,Billing / Subscription
+SAMPLE-0168,I was billed twice for the same account. This affected my work.,Billing / Subscription
+SAMPLE-0169,The refund process is confusing and slow. Please review this.,Billing / Subscription
+SAMPLE-0170,I need help changing my plan price. Overall this was important to me.,Billing / Subscription
+SAMPLE-0171,I was charged even after cancelling my subscription.,Billing / Subscription
+SAMPLE-0172,I need a refund for the incorrect charge. I would like this improved.,Billing / Subscription
+SAMPLE-0173,The annual plan is too expensive for my needs. This affected my work.,Billing / Subscription
+SAMPLE-0174,My invoice amount does not look correct. Please review this.,Billing / Subscription
+SAMPLE-0175,I want to switch from annual billing to monthly billing. Overall this was important to me.,Billing / Subscription
+SAMPLE-0176,The payment failed but money was deducted.,Billing / Subscription
+SAMPLE-0177,My subscription renewal happened without warning. I would like this improved.,Billing / Subscription
+SAMPLE-0178,I was billed twice for the same account. This affected my work.,Billing / Subscription
+SAMPLE-0179,The refund process is confusing and slow. Please review this.,Billing / Subscription
+SAMPLE-0180,I need help changing my plan price. Overall this was important to me.,Billing / Subscription
+SAMPLE-0181,I cannot log in to my account.,Account Access / Login
+SAMPLE-0182,The password reset link is not working. I would like this improved.,Account Access / Login
+SAMPLE-0183,My account is locked and I cannot access files. This affected my work.,Account Access / Login
+SAMPLE-0184,Verification code is not arriving in my email. Please review this.,Account Access / Login
+SAMPLE-0185,I am unable to sign in after changing my password. Overall this was important to me.,Account Access / Login
+SAMPLE-0186,The account access process is confusing.,Account Access / Login
+SAMPLE-0187,My profile shows the wrong email address. I would like this improved.,Account Access / Login
+SAMPLE-0188,Authentication failed even with the correct password. This affected my work.,Account Access / Login
+SAMPLE-0189,I need help recovering my account. Please review this.,Account Access / Login
+SAMPLE-0190,The login page keeps sending me in circles. Overall this was important to me.,Account Access / Login
+SAMPLE-0191,I cannot log in to my account.,Account Access / Login
+SAMPLE-0192,The password reset link is not working. I would like this improved.,Account Access / Login
+SAMPLE-0193,My account is locked and I cannot access files. This affected my work.,Account Access / Login
+SAMPLE-0194,Verification code is not arriving in my email. Please review this.,Account Access / Login
+SAMPLE-0195,I am unable to sign in after changing my password. Overall this was important to me.,Account Access / Login
+SAMPLE-0196,The account access process is confusing.,Account Access / Login
+SAMPLE-0197,My profile shows the wrong email address. I would like this improved.,Account Access / Login
+SAMPLE-0198,Authentication failed even with the correct password. This affected my work.,Account Access / Login
+SAMPLE-0199,I need help recovering my account. Please review this.,Account Access / Login
+SAMPLE-0200,The login page keeps sending me in circles. Overall this was important to me.,Account Access / Login
+SAMPLE-0201,I cannot log in to my account.,Account Access / Login
+SAMPLE-0202,The password reset link is not working. I would like this improved.,Account Access / Login
+SAMPLE-0203,My account is locked and I cannot access files. This affected my work.,Account Access / Login
+SAMPLE-0204,Verification code is not arriving in my email. Please review this.,Account Access / Login
+SAMPLE-0205,I am unable to sign in after changing my password. Overall this was important to me.,Account Access / Login
+SAMPLE-0206,The account access process is confusing.,Account Access / Login
+SAMPLE-0207,My profile shows the wrong email address. I would like this improved.,Account Access / Login
+SAMPLE-0208,Authentication failed even with the correct password. This affected my work.,Account Access / Login
+SAMPLE-0209,I need help recovering my account. Please review this.,Account Access / Login
+SAMPLE-0210,The login page keeps sending me in circles. Overall this was important to me.,Account Access / Login
+SAMPLE-0211,The instructions were not clear enough.,Communication Clarity
+SAMPLE-0212,The explanation was easy to understand. I would like this improved.,Communication Clarity
+SAMPLE-0213,I received confusing guidance from support. This affected my work.,Communication Clarity
+SAMPLE-0214,The agent explained each step clearly. Please review this.,Communication Clarity
+SAMPLE-0215,The email response did not answer my question. Overall this was important to me.,Communication Clarity
+SAMPLE-0216,The communication was vague and incomplete.,Communication Clarity
+SAMPLE-0217,I understood the solution because it was explained well. I would like this improved.,Communication Clarity
+SAMPLE-0218,The steps provided were hard to follow. This affected my work.,Communication Clarity
+SAMPLE-0219,Support should communicate next steps more clearly. Please review this.,Communication Clarity
+SAMPLE-0220,The message did not explain why the issue happened. Overall this was important to me.,Communication Clarity
+SAMPLE-0221,The instructions were not clear enough.,Communication Clarity
+SAMPLE-0222,The explanation was easy to understand. I would like this improved.,Communication Clarity
+SAMPLE-0223,I received confusing guidance from support. This affected my work.,Communication Clarity
+SAMPLE-0224,The agent explained each step clearly. Please review this.,Communication Clarity
+SAMPLE-0225,The email response did not answer my question. Overall this was important to me.,Communication Clarity
+SAMPLE-0226,The communication was vague and incomplete.,Communication Clarity
+SAMPLE-0227,I understood the solution because it was explained well. I would like this improved.,Communication Clarity
+SAMPLE-0228,The steps provided were hard to follow. This affected my work.,Communication Clarity
+SAMPLE-0229,Support should communicate next steps more clearly. Please review this.,Communication Clarity
+SAMPLE-0230,The message did not explain why the issue happened. Overall this was important to me.,Communication Clarity
+SAMPLE-0231,The instructions were not clear enough.,Communication Clarity
+SAMPLE-0232,The explanation was easy to understand. I would like this improved.,Communication Clarity
+SAMPLE-0233,I received confusing guidance from support. This affected my work.,Communication Clarity
+SAMPLE-0234,The agent explained each step clearly. Please review this.,Communication Clarity
+SAMPLE-0235,The email response did not answer my question. Overall this was important to me.,Communication Clarity
+SAMPLE-0236,The communication was vague and incomplete.,Communication Clarity
+SAMPLE-0237,I understood the solution because it was explained well. I would like this improved.,Communication Clarity
+SAMPLE-0238,The steps provided were hard to follow. This affected my work.,Communication Clarity
+SAMPLE-0239,Support should communicate next steps more clearly. Please review this.,Communication Clarity
+SAMPLE-0240,The message did not explain why the issue happened. Overall this was important to me.,Communication Clarity
+SAMPLE-0241,The help article did not match my issue.,Documentation / Self Service
+SAMPLE-0242,The knowledge base link was useful. I would like this improved.,Documentation / Self Service
+SAMPLE-0243,I could not find a relevant self-service guide. This affected my work.,Documentation / Self Service
+SAMPLE-0244,The tutorial helped me solve the problem myself. Please review this.,Documentation / Self Service
+SAMPLE-0245,The documentation is outdated for the current version. Overall this was important to me.,Documentation / Self Service
+SAMPLE-0246,The support portal was difficult to navigate.,Documentation / Self Service
+SAMPLE-0247,The guide was clear and saved time. I would like this improved.,Documentation / Self Service
+SAMPLE-0248,I need better online instructions for this feature. This affected my work.,Documentation / Self Service
+SAMPLE-0249,The article missed important troubleshooting steps. Please review this.,Documentation / Self Service
+SAMPLE-0250,The self-service content was not enough. Overall this was important to me.,Documentation / Self Service
+SAMPLE-0251,The help article did not match my issue.,Documentation / Self Service
+SAMPLE-0252,The knowledge base link was useful. I would like this improved.,Documentation / Self Service
+SAMPLE-0253,I could not find a relevant self-service guide. This affected my work.,Documentation / Self Service
+SAMPLE-0254,The tutorial helped me solve the problem myself. Please review this.,Documentation / Self Service
+SAMPLE-0255,The documentation is outdated for the current version. Overall this was important to me.,Documentation / Self Service
+SAMPLE-0256,The support portal was difficult to navigate.,Documentation / Self Service
+SAMPLE-0257,The guide was clear and saved time. I would like this improved.,Documentation / Self Service
+SAMPLE-0258,I need better online instructions for this feature. This affected my work.,Documentation / Self Service
+SAMPLE-0259,The article missed important troubleshooting steps. Please review this.,Documentation / Self Service
+SAMPLE-0260,The self-service content was not enough. Overall this was important to me.,Documentation / Self Service
+SAMPLE-0261,The help article did not match my issue.,Documentation / Self Service
+SAMPLE-0262,The knowledge base link was useful. I would like this improved.,Documentation / Self Service
+SAMPLE-0263,I could not find a relevant self-service guide. This affected my work.,Documentation / Self Service
+SAMPLE-0264,The tutorial helped me solve the problem myself. Please review this.,Documentation / Self Service
+SAMPLE-0265,The documentation is outdated for the current version. Overall this was important to me.,Documentation / Self Service
+SAMPLE-0266,The support portal was difficult to navigate.,Documentation / Self Service
+SAMPLE-0267,The guide was clear and saved time. I would like this improved.,Documentation / Self Service
+SAMPLE-0268,I need better online instructions for this feature. This affected my work.,Documentation / Self Service
+SAMPLE-0269,The article missed important troubleshooting steps. Please review this.,Documentation / Self Service
+SAMPLE-0270,The self-service content was not enough. Overall this was important to me.,Documentation / Self Service
+SAMPLE-0271,The service was quick and helpful.,Positive Experience
+SAMPLE-0272,I had a great support experience. I would like this improved.,Positive Experience
+SAMPLE-0273,Everything was resolved smoothly. This affected my work.,Positive Experience
+SAMPLE-0274,The agent was excellent and professional. Please review this.,Positive Experience
+SAMPLE-0275,I am happy with the quick response. Overall this was important to me.,Positive Experience
+SAMPLE-0276,The process was easy and convenient.,Positive Experience
+SAMPLE-0277,Support handled my request perfectly. I would like this improved.,Positive Experience
+SAMPLE-0278,The issue was resolved faster than expected. This affected my work.,Positive Experience
+SAMPLE-0279,I appreciate the helpful service. Please review this.,Positive Experience
+SAMPLE-0280,The overall experience was very good. Overall this was important to me.,Positive Experience
+SAMPLE-0281,The service was quick and helpful.,Positive Experience
+SAMPLE-0282,I had a great support experience. I would like this improved.,Positive Experience
+SAMPLE-0283,Everything was resolved smoothly. This affected my work.,Positive Experience
+SAMPLE-0284,The agent was excellent and professional. Please review this.,Positive Experience
+SAMPLE-0285,I am happy with the quick response. Overall this was important to me.,Positive Experience
+SAMPLE-0286,The process was easy and convenient.,Positive Experience
+SAMPLE-0287,Support handled my request perfectly. I would like this improved.,Positive Experience
+SAMPLE-0288,The issue was resolved faster than expected. This affected my work.,Positive Experience
+SAMPLE-0289,I appreciate the helpful service. Please review this.,Positive Experience
+SAMPLE-0290,The overall experience was very good. Overall this was important to me.,Positive Experience
+SAMPLE-0291,The service was quick and helpful.,Positive Experience
+SAMPLE-0292,I had a great support experience. I would like this improved.,Positive Experience
+SAMPLE-0293,Everything was resolved smoothly. This affected my work.,Positive Experience
+SAMPLE-0294,The agent was excellent and professional. Please review this.,Positive Experience
+SAMPLE-0295,I am happy with the quick response. Overall this was important to me.,Positive Experience
+SAMPLE-0296,The process was easy and convenient.,Positive Experience
+SAMPLE-0297,Support handled my request perfectly. I would like this improved.,Positive Experience
+SAMPLE-0298,The issue was resolved faster than expected. This affected my work.,Positive Experience
+SAMPLE-0299,I appreciate the helpful service. Please review this.,Positive Experience
+SAMPLE-0300,The overall experience was very good. Overall this was important to me.,Positive Experience
