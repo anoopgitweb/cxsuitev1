@@ -6063,73 +6063,79 @@ function renderDynamicDimensions(dimensions) {
     container.innerHTML = `<div class="panel"><p class="insight-text">No custom dimensions selected. Add Zone, City, Site, Product, Process, or any other field in Setup.</p></div>`;
     return;
   }
-  container.innerHTML = items.map((item, index) => `
+  state.customDimensionActiveIndex = Math.min(Number(state.customDimensionActiveIndex || 0), items.length - 1);
+  const activeItem = items[state.customDimensionActiveIndex] || items[0];
+  container.innerHTML = `
     <div class="panel dynamic-dimension-panel">
       <div class="section-title compact-title">
         <div>
-          <p class="eyebrow">Dynamic Dimension</p>
-          <h2>${escapeHtml(item.name)}</h2>
-          <p class="panel-meta">${Number((item.rows || []).length).toLocaleString()} segment${(item.rows || []).length === 1 ? "" : "s"} available</p>
+          <p class="eyebrow">Dimension Studio</p>
+          <h2 id="dynamicDimensionActiveTitle">${escapeHtml(activeItem.name)}</h2>
+          <p id="dynamicDimensionActiveMeta" class="panel-meta">${Number((activeItem.rows || []).length).toLocaleString()} segment${(activeItem.rows || []).length === 1 ? "" : "s"} available</p>
         </div>
         <div class="dimension-panel-actions">
-          <label class="inline-select">View
-            <select id="dynamicDimensionSelect${index}"></select>
+          <label class="inline-select">Dimension
+            <select id="customDimensionPicker"></select>
           </label>
-          <button class="button button-secondary" data-toggle-dimension="${index}" type="button">&lt;&gt; Expand</button>
-          <button class="button button-secondary" data-export-table="dynamicDimensionTable${index}" type="button">Export CSV</button>
+          <label class="inline-select">Segment
+            <select id="dynamicDimensionSelect0"></select>
+          </label>
+          <button id="customDimensionOpenChart" class="button button-secondary" type="button">Open Chart</button>
+          <button class="button button-secondary" data-export-table="dynamicDimensionTable0" type="button">Export CSV</button>
         </div>
       </div>
-      <div id="dynamicDimensionBody${index}" class="dynamic-dimension-body collapsed">
-        <div id="dynamicDimension${index}MetricGrid" class="metric-grid"></div>
+      <div id="dynamicDimensionBody0" class="dynamic-dimension-body">
+        <div id="dynamicDimension0MetricGrid" class="metric-grid"></div>
         <div class="dashboard-grid">
-          <div class="chart-card wide"><h3>${escapeHtml(item.name)} NPS Trend</h3><p class="chart-subtitle">Segment x NPS</p><svg id="dynamicDimension${index}NpsTrend" viewBox="0 0 760 260"></svg></div>
-          <div class="chart-card"><h3>${escapeHtml(item.name)} NPS Gauge</h3><svg id="dynamicDimension${index}NpsGauge" viewBox="0 0 360 260"></svg></div>
-          <div class="chart-card medium"><h3>${escapeHtml(item.name)} Sentiment Mix</h3><div id="dynamicDimension${index}SentimentMix" class="smiley-row"></div></div>
-          <div class="chart-card medium"><h3>${escapeHtml(item.name)} NPS Composition</h3><svg id="dynamicDimension${index}NpsComposition" viewBox="0 0 360 260"></svg></div>
-          <div class="chart-card medium"><h3>${escapeHtml(item.name)} NPS Ranking</h3><p class="chart-subtitle">Lowest segments first</p><svg id="dynamicDimension${index}NpsRanking" viewBox="0 0 760 260"></svg><div id="dynamicDimension${index}NpsInsight" class="chart-insight"></div></div>
-          <div class="chart-card medium"><h3>${escapeHtml(item.name)} Response Mix</h3><p class="chart-subtitle">Promoters, passives, detractors</p><svg id="dynamicDimension${index}MixChart" viewBox="0 0 760 260"></svg><div id="dynamicDimension${index}MixInsight" class="chart-insight"></div></div>
-          <div class="chart-card medium"><h3>${escapeHtml(item.name)} Negative Share</h3><p class="chart-subtitle">Segment x Negative sentiment</p><svg id="dynamicDimension${index}NegativeChart" viewBox="0 0 760 260"></svg><div id="dynamicDimension${index}NegativeInsight" class="chart-insight"></div></div>
-          <div class="chart-card medium"><h3>${escapeHtml(item.name)} Silent Detractors</h3><p class="chart-subtitle">Segment x hidden risk volume</p><svg id="dynamicDimension${index}SilentChart" viewBox="0 0 760 260"></svg><div id="dynamicDimension${index}SilentInsight" class="chart-insight"></div></div>
+          <div class="chart-card wide"><h3 id="dynamicDimension0TrendTitle">${escapeHtml(activeItem.name)} NPS Trend</h3><p class="chart-subtitle">Segment x NPS</p><svg id="dynamicDimension0NpsTrend" viewBox="0 0 760 260"></svg></div>
+          <div class="chart-card"><h3 id="dynamicDimension0GaugeTitle">${escapeHtml(activeItem.name)} NPS Gauge</h3><svg id="dynamicDimension0NpsGauge" viewBox="0 0 360 260"></svg></div>
+          <div class="chart-card medium"><h3 id="dynamicDimension0SentimentTitle">${escapeHtml(activeItem.name)} Sentiment Mix</h3><div id="dynamicDimension0SentimentMix" class="smiley-row"></div></div>
+          <div class="chart-card medium"><h3 id="dynamicDimension0CompositionTitle">${escapeHtml(activeItem.name)} NPS Composition</h3><svg id="dynamicDimension0NpsComposition" viewBox="0 0 360 260"></svg></div>
+          <div class="chart-card medium"><h3 id="dynamicDimension0RankingTitle">${escapeHtml(activeItem.name)} NPS Ranking</h3><p class="chart-subtitle">Lowest segments first</p><svg id="dynamicDimension0NpsRanking" viewBox="0 0 760 260"></svg><div id="dynamicDimension0NpsInsight" class="chart-insight"></div></div>
+          <div class="chart-card medium"><h3 id="dynamicDimension0MixTitle">${escapeHtml(activeItem.name)} Response Mix</h3><p class="chart-subtitle">Promoters, passives, detractors</p><svg id="dynamicDimension0MixChart" viewBox="0 0 760 260"></svg><div id="dynamicDimension0MixInsight" class="chart-insight"></div></div>
+          <div class="chart-card medium"><h3 id="dynamicDimension0NegativeTitle">${escapeHtml(activeItem.name)} Negative Share</h3><p class="chart-subtitle">Segment x Negative sentiment</p><svg id="dynamicDimension0NegativeChart" viewBox="0 0 760 260"></svg><div id="dynamicDimension0NegativeInsight" class="chart-insight"></div></div>
+          <div class="chart-card medium"><h3 id="dynamicDimension0SilentTitle">${escapeHtml(activeItem.name)} Silent Detractors</h3><p class="chart-subtitle">Segment x hidden risk volume</p><svg id="dynamicDimension0SilentChart" viewBox="0 0 760 260"></svg><div id="dynamicDimension0SilentInsight" class="chart-insight"></div></div>
         </div>
-        <div class="table-wrap fit-table compact-table"><table id="dynamicDimensionTable${index}"></table></div>
+        <div class="table-wrap fit-table compact-table"><table id="dynamicDimensionTable0"></table></div>
         <div class="custom-dimension-weekly-section">
           <div class="section-title compact-title">
             <div>
               <p class="eyebrow">Weekly Movement</p>
-              <h2>${escapeHtml(item.name)} weekly trend</h2>
-              <p id="dynamicDimension${index}WeeklyInsight" class="panel-meta">Weekly movement appears after analysis.</p>
+              <h2 id="dynamicDimension0WeeklyTitle">${escapeHtml(activeItem.name)} weekly trend</h2>
+              <p id="dynamicDimension0WeeklyInsight" class="panel-meta">Weekly movement appears after analysis.</p>
             </div>
           </div>
           <div class="dashboard-grid custom-dimension-weekly-grid">
-            <div class="chart-card medium"><h3>Weekly NPS Trend</h3><p class="chart-subtitle">Week x NPS</p><svg id="dynamicDimension${index}WeeklyNpsTrend" viewBox="0 0 760 260"></svg></div>
-            <div class="chart-card medium"><h3>Response Volume Trend</h3><p class="chart-subtitle">Week x responses</p><svg id="dynamicDimension${index}WeeklyVolumeTrend" viewBox="0 0 760 260"></svg></div>
-            <div class="chart-card medium"><h3>Sentiment Trend Over Time</h3><p class="chart-subtitle">Week x sentiment share</p><svg id="dynamicDimension${index}WeeklySentimentTrend" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card medium"><h3>Weekly NPS Trend</h3><p class="chart-subtitle">Week x NPS</p><svg id="dynamicDimension0WeeklyNpsTrend" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card medium"><h3>Response Volume Trend</h3><p class="chart-subtitle">Week x responses</p><svg id="dynamicDimension0WeeklyVolumeTrend" viewBox="0 0 760 260"></svg></div>
+            <div class="chart-card medium"><h3>Sentiment Trend Over Time</h3><p class="chart-subtitle">Week x sentiment share</p><svg id="dynamicDimension0WeeklySentimentTrend" viewBox="0 0 760 260"></svg></div>
           </div>
         </div>
       </div>
     </div>
-  `).join("");
-  items.forEach((item, index) => {
-    const select = $(`dynamicDimensionSelect${index}`);
-    if (select) {
-      const rows = item.rows || [];
-      select.innerHTML = [`<option value="__all">All ${escapeHtml(item.name)} Segments</option>`]
-        .concat(rows.map((row) => `<option value="${escapeHtml(row[item.name] || "")}">${escapeHtml(row[item.name] || "Unknown")}</option>`))
-        .join("");
-      select.onchange = () => renderCustomDimensionDashboard(item, index);
-    }
-    renderCustomDimensionDashboard(item, index);
-    renderAnyTable(`dynamicDimensionTable${index}`, item.rows || [], 12);
+  `;
+  const dimensionPicker = $("customDimensionPicker");
+  if (dimensionPicker) {
+    dimensionPicker.innerHTML = items.map((item, index) => `<option value="${index}">${escapeHtml(item.name)}</option>`).join("");
+    dimensionPicker.value = String(state.customDimensionActiveIndex || 0);
+    dimensionPicker.onchange = () => {
+      state.customDimensionActiveIndex = Number(dimensionPicker.value || 0);
+      renderDynamicDimensions(items);
+    };
+  }
+  const segmentSelect = $("dynamicDimensionSelect0");
+  if (segmentSelect) {
+    const rows = activeItem.rows || [];
+    segmentSelect.innerHTML = [`<option value="__all">All ${escapeHtml(activeItem.name)} Segments</option>`]
+      .concat(rows.map((row) => `<option value="${escapeHtml(row[activeItem.name] || "")}">${escapeHtml(row[activeItem.name] || "Unknown")}</option>`))
+      .join("");
+    segmentSelect.onchange = () => renderCustomDimensionDashboard(activeItem, 0);
+  }
+  $("customDimensionOpenChart")?.addEventListener("click", () => {
+    $("dynamicDimensionBody0")?.classList.remove("collapsed");
+    $("dynamicDimension0NpsTrend")?.closest(".chart-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
-  container.querySelectorAll("[data-toggle-dimension]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const index = button.dataset.toggleDimension;
-      const body = $(`dynamicDimensionBody${index}`);
-      if (!body) return;
-      const collapsed = body.classList.toggle("collapsed");
-      button.textContent = collapsed ? "<> Expand" : "<> Collapse";
-    });
-  });
+  renderCustomDimensionDashboard(activeItem, 0);
 }
 
 function feedbackRowsForDimension(item, selectedValue = "__all") {
@@ -6278,13 +6284,33 @@ function renderCustomDimensionDashboard(item, index) {
   const select = $(`dynamicDimensionSelect${index}`);
   const selectedValue = select?.value || "__all";
   const prefix = `dynamicDimension${index}`;
+  const title = item.name || "Dimension";
+  const segmentRows = selectedValue === "__all"
+    ? item.rows || []
+    : (item.rows || []).filter((row) => String(row[title] || "") === String(selectedValue));
+  if ($("dynamicDimensionActiveTitle")) $("dynamicDimensionActiveTitle").textContent = title;
+  if ($("dynamicDimensionActiveMeta")) $("dynamicDimensionActiveMeta").textContent = `${Number((item.rows || []).length).toLocaleString()} segment${(item.rows || []).length === 1 ? "" : "s"} available`;
+  [
+    ["TrendTitle", `${title} NPS Trend`],
+    ["GaugeTitle", `${title} NPS Gauge`],
+    ["SentimentTitle", `${title} Sentiment Mix`],
+    ["CompositionTitle", `${title} NPS Composition`],
+    ["RankingTitle", `${title} NPS Ranking`],
+    ["MixTitle", `${title} Response Mix`],
+    ["NegativeTitle", `${title} Negative Share`],
+    ["SilentTitle", `${title} Silent Detractors`],
+    ["WeeklyTitle", `${title} weekly trend`],
+  ].forEach(([suffix, text]) => {
+    const el = $(`${prefix}${suffix}`);
+    if (el) el.textContent = text;
+  });
   const snapshot = customDimensionSnapshot(item, selectedValue);
   renderDashboardSnapshot(prefix, snapshot, { type: "dynamic", value: selectedValue === "__all" ? item.name : selectedValue });
   renderDimensionDashboard({
-    label: item.name || "Dimension",
-    rows: item.rows || [],
+    label: title,
+    rows: segmentRows,
     cards: item.cards || [],
-    mappedColumn: item.name || "",
+    mappedColumn: title,
     tableId: `dynamicDimensionTable${index}`,
     npsChart: `${prefix}NpsRanking`,
     mixChart: `${prefix}MixChart`,
