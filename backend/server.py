@@ -1764,6 +1764,40 @@ def _excel_sheet_preview(payload: dict[str, Any]) -> dict[str, Any]:
         "previewRows": _safe_records(frame, 8),
     }
 
+def _uploaded_file_preview(payload: dict[str, Any]) -> dict[str, Any]:
+    kind = str(payload.get("kind") or "base").strip().lower()
+    page = max(1, int(_safe_float(payload.get("page"), 1)))
+    page_size = int(_safe_float(payload.get("pageSize"), 100))
+    page_size = min(max(page_size, 25), 500)
+    search = str(payload.get("search") or "").strip().lower()
+    with STATE_LOCK:
+        frame = STATE.lookup_df.copy() if kind == "lookup" else STATE.base_df.copy()
+        files = dict(STATE.files)
+    if frame.empty:
+        return {"ok": False, "error": f"Upload a {'Lookup' if kind == 'lookup' else 'Base'} File before previewing it."}
+    filtered = frame
+    if search:
+        text = frame.astype(str).agg(" ".join, axis=1).str.lower()
+        filtered = frame[text.str.contains(search, na=False)]
+    total_rows = int(len(filtered))
+    start = (page - 1) * page_size
+    end = start + page_size
+    visible = filtered.iloc[start:end]
+    return {
+        "ok": True,
+        "kind": kind,
+        "fileName": files.get(kind, ""),
+        "sheetName": files.get(f"{kind}_sheet", ""),
+        "rows": int(len(frame)),
+        "filteredRows": total_rows,
+        "page": page,
+        "pageSize": page_size,
+        "pageCount": max(1, math.ceil(total_rows / page_size)) if total_rows else 1,
+        "columns": [str(column) for column in frame.columns],
+        "columnCount": int(len(frame.columns)),
+        "previewRows": _safe_records(visible, max(len(visible), 1)),
+    }
+
 def _decode_tabular(payload: dict[str, Any]) -> pd.DataFrame:
     raw = payload.get("data", "")
     if "," in raw:
@@ -2418,10 +2452,17 @@ def _stat_number(value: Any) -> str:
     return f"{float(value):.1f}"
 
 
+def _stats_numeric_series(series: pd.Series) -> pd.Series:
+    values = pd.to_numeric(series, errors="coerce").dropna()
+    if values.empty:
+        return values.astype(float)
+    return values.astype(float)
+
+
 def _numeric_pairs(frame: pd.DataFrame, first: str, second: str) -> pd.DataFrame:
     if first not in frame.columns or second not in frame.columns:
         return pd.DataFrame(columns=[first, second])
-    pairs = pd.DataFrame({first: pd.to_numeric(frame[first], errors="coerce"), second: pd.to_numeric(frame[second], errors="coerce")})
+    pairs = pd.DataFrame({first: _stats_numeric_series(frame[first]), second: _stats_numeric_series(frame[second])})
     return pairs.dropna()
 
 
@@ -2439,7 +2480,7 @@ def _custom_statistics(payload: dict[str, Any]) -> dict[str, Any]:
     selected = columns or numeric_columns[:8]
     if analysis_type in {"desc", "outlier", "volatility"}:
         for column in selected:
-            values = pd.to_numeric(frame[column], errors="coerce").dropna()
+            values = _stats_numeric_series(frame[column])
             if values.empty:
                 continue
             q1, median_value, q3 = values.quantile([0.25, 0.5, 0.75]).tolist()
@@ -2475,7 +2516,7 @@ def _custom_statistics(payload: dict[str, Any]) -> dict[str, Any]:
             output.append(row)
         output.sort(key=lambda row: float(row.get("Average", 0)), reverse=True)
     elif analysis_type == "corrmatrix":
-        numeric = frame[selected].apply(pd.to_numeric, errors="coerce") if selected else pd.DataFrame()
+        numeric = frame[selected].apply(lambda column: _stats_numeric_series(column), axis=0) if selected else pd.DataFrame()
         matrix = numeric.corr()
         output = [{"Metric": column, **{other: (f"{matrix.loc[column, other]:.2f}" if not pd.isna(matrix.loc[column, other]) else "n/a") for other in selected}} for column in selected]
     elif analysis_type == "driver" and primary in frame.columns:
@@ -5847,6 +5888,11 @@ class NPSHandler(BaseHTTPRequestHandler):
             _audit_from_handler(self, session.get("username", "unknown") if session else "unknown", "EXPORT_EXCEL", "User exported Excel workbook.")
             self._export_excel()
             return
+        if parsed_path.path == "/api/export/raw-csv":
+            session = _session_from_handler(self)
+            _audit_from_handler(self, session.get("username", "unknown") if session else "unknown", "EXPORT_RAW_CSV", "User exported complete analyzed raw data as CSV.")
+            self._export_raw_csv()
+            return
         self._serve_static()
 
     def do_POST(self) -> None:
@@ -6094,6 +6140,10 @@ class NPSHandler(BaseHTTPRequestHandler):
                 return
             if self.path == "/api/upload/sheet-preview":
                 result = _excel_sheet_preview(_read_json(self))
+                _json_response(self, result, 200 if result.get("ok") else 400)
+                return
+            if self.path == "/api/uploaded-file-preview":
+                result = _uploaded_file_preview(_read_json(self))
                 _json_response(self, result, 200 if result.get("ok") else 400)
                 return
             if self.path == "/api/upload":
@@ -6387,6 +6437,23 @@ class NPSHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         self.send_header("Content-Disposition", "attachment; filename=NPSHTML_Analysis_Output.xlsx")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _export_raw_csv(self) -> None:
+        try:
+            if STATE.analyzed_df.empty:
+                _json_response(self, {"ok": False, "error": "Run analysis first."}, 400)
+                return
+            content = STATE.analyzed_df.to_csv(index=False).encode("utf-8-sig")
+        except Exception as exc:
+            traceback.print_exc()
+            _json_response(self, {"ok": False, "error": f"CSV export failed: {exc}"}, 500)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", "attachment; filename=Analysis_Raw_Data.csv")
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self.wfile.write(content)

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>NPS Dashboard</title>
-    <link rel="stylesheet" href="styles.css?v=20260705-period-performance-v78" />
+    <link rel="stylesheet" href="styles.css?v=20260710-owl-theme-results-v81" />
   </head>
   <body>
     <header class="topbar">
@@ -42,17 +42,6 @@
             <button class="nav-item active" data-view="setuphome" data-icon="settings">Setup Home</button>
             <button class="nav-item" data-view="setup" data-icon="settings">Setup</button>
             <button class="nav-item" data-view="columnexplorer" data-icon="document">Column Explorer</button>
-          </div>
-        </div>
-
-        <div class="nav-section">
-          <button class="nav-section-toggle" type="button" aria-expanded="false">
-            <span class="nav-section-icon" data-section-icon="downloads"></span>
-            <span><strong>Downloads and Outputs</strong><small>Board pack and GenAI files</small></span>
-          </button>
-          <div class="nav-section-body">
-            <button class="nav-item" data-view="boardpdf" data-icon="document">Board Room PDF</button>
-            <button id="genAiJsonOutput" class="nav-item" data-icon="document" type="button">Create Gen AI JSON</button>
           </div>
         </div>
 
@@ -119,8 +108,9 @@
             <span><strong>Theme Intelligence</strong><small>Owl themes and drivers</small></span>
           </button>
           <div class="nav-section-body">
-            <button class="nav-item" data-view="themebuilder" data-icon="target" type="button">Build Theme Classification</button>
-            <button class="nav-item" data-view="themecompare" data-icon="analysis" type="button">Theme Comparison</button>
+            <button class="nav-item" data-view="themesoverview" data-icon="dashboard" type="button">Owl Theme Results</button>
+            <button class="nav-item" data-view="themebuilder" data-icon="target" type="button">Customer Theme Builder</button>
+            <button class="nav-item" data-view="themecompare" data-icon="analysis" type="button">Customer Theme Classifier</button>
           </div>
         </div>
 
@@ -132,6 +122,7 @@
           <div class="nav-section-body">
             <button class="nav-item" data-view="wave" data-icon="wave">Wave Intelligence</button>
             <button class="nav-item" data-view="tenure" data-icon="tenure">Tenure Intelligence</button>
+            <button class="nav-item" data-view="dimensionlens" data-icon="analysis">Dimension Lens</button>
             <button class="nav-item" data-view="customdims" data-icon="dashboard">Custom Dimensions</button>
           </div>
         </div>
@@ -148,6 +139,18 @@
             <button class="nav-item" data-view="Promoterdna" data-icon="dna">Promoter DNA</button>
             <button class="nav-item" data-view="alerts" data-icon="alert">Alert Badges</button>
             <button class="nav-item" data-view="analysis" data-icon="analysis">Compare</button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="downloads"></span>
+            <span><strong>Downloads and Outputs</strong><small>Board pack and GenAI files</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="boardpdf" data-icon="document">Board Room PDF</button>
+            <button class="nav-item" data-view="rawdata" data-icon="downloads">Analysis Raw Data</button>
+            <button id="genAiJsonOutput" class="nav-item" data-icon="document" type="button">Create Gen AI JSON</button>
           </div>
         </div>
 
@@ -213,6 +216,13 @@
                 <button id="baseInfoButton" class="guided-info-button" type="button" title="Base File information" aria-label="Base File information">
                   <span>i</span>
                 </button>
+                <div class="setup-welcome-visual" aria-hidden="true">
+                  <div class="setup-visual-chart">
+                    <span></span><span></span><span></span>
+                  </div>
+                  <div class="setup-visual-line"></div>
+                  <div class="setup-visual-dot"></div>
+                </div>
               </div>
 
               <div class="setup-step-guide" aria-label="NPS setup progress">
@@ -241,6 +251,7 @@
                   <h3><span class="setup-step-number">1</span>Base File</h3>
                   <p>Required survey file with comment, score, agent, and date fields.</p>
                   <strong id="baseStatus">Pending</strong>
+                  <button id="previewBaseFile" class="button button-secondary file-preview-button" type="button" hidden>Preview File</button>
                 </div>
                 <label id="baseUploadButton" class="button button-primary upload-button">
                   <span id="baseUploadLabel">Upload Base File</span>
@@ -300,6 +311,7 @@
                     <h3><span class="setup-step-number">3</span>Lookup File</h3>
                     <p>Optional workforce/context file for manager, tenure, wave, or other cuts.</p>
                     <strong id="lookupStatus">Optional - not uploaded</strong>
+                    <button id="previewLookupFile" class="button button-secondary file-preview-button" type="button" hidden>Preview File</button>
                   </div>
                   <label id="lookupUploadButton" class="button button-primary upload-button">
                     <span id="lookupUploadLabel">Upload Lookup File</span>
@@ -762,6 +774,7 @@
                 </select>
               </label>
             </div>
+            <div id="resultDecisionFocusCards" class="decision-focus-grid"></div>
             <div class="decision-status-legend" aria-label="Decision status legend">
               <span><b class="decision-status-pill attention">Actionable</b> Needs follow-up or leadership review.</span>
               <span><b class="decision-status-pill monitor">Monitor</b> Watch the signal before acting.</span>
@@ -908,19 +921,33 @@
 
         <section id="themesoverview" class="view data-view">
           <div class="section-title">
-            <div><p class="eyebrow">Owl Intelligence</p><h1>Themes Overview</h1></div>
-            <button class="button button-secondary" data-export-table="themesOverviewTable" type="button">Export CSV</button>
+            <div>
+              <p class="eyebrow">Owl Theme Classification</p>
+              <h1>Owl Theme Results</h1>
+            </div>
           </div>
           <div id="themesOverviewMetricGrid" class="metric-grid"></div>
-          <div class="dashboard-grid">
-            <div class="chart-card full">
+          <div class="owl-results-chart-grid">
+            <div class="chart-card compact-chart">
               <h3>Top Themes</h3>
-              <div id="themesOverviewList" class="driver-list"></div>
+              <p class="panel-meta">Rows by Owl theme or primary driver.</p>
+              <svg id="owlThemeTopChart" viewBox="0 0 760 260"></svg>
+            </div>
+            <div class="chart-card compact-chart">
+              <h3>ACPT Ownership</h3>
+              <p class="panel-meta">Agent, customer, process, and technology ownership mix.</p>
+              <svg id="owlThemeAcptChart" viewBox="0 0 760 260"></svg>
+            </div>
+            <div class="chart-card compact-chart">
+              <h3>Resolution Status</h3>
+              <p class="panel-meta">Resolved and unresolved feedback signals.</p>
+              <svg id="owlThemeResolutionChart" viewBox="0 0 760 260"></svg>
             </div>
           </div>
           <div class="panel">
             <div class="panel-title-row">
               <div><h2>Theme Evidence</h2><p id="themesOverviewMeta" class="panel-meta">Run analysis with Owl or local theme output to populate this view.</p></div>
+              <button class="button button-secondary button-compact" data-export-table="themesOverviewTable" type="button">Export CSV</button>
             </div>
             <div class="table-wrap fit-table compact-report-table"><table id="themesOverviewTable"></table></div>
           </div>
@@ -1086,6 +1113,10 @@
             <div class="chart-card medium"><h3>Positive Sentiment WoW</h3><p class="chart-subtitle">Week x positive share</p><svg id="sentimentComparePositiveChart" viewBox="0 0 760 260"></svg><div id="sentimentComparePositiveInsight" class="chart-insight"></div></div>
             <div class="chart-card medium"><h3>Negative Sentiment WoW</h3><p class="chart-subtitle">Week x negative share</p><svg id="sentimentCompareNegativeChart" viewBox="0 0 760 260"></svg><div id="sentimentCompareNegativeInsight" class="chart-insight"></div></div>
           </div>
+          <div class="dashboard-grid sentiment-extra-grid">
+            <div class="chart-card medium"><h3>Net Sentiment Gap</h3><p class="chart-subtitle">Positive share minus negative share</p><svg id="sentimentCompareNetChart" viewBox="0 0 760 260"></svg><div id="sentimentCompareNetInsight" class="chart-insight"></div></div>
+            <div class="chart-card medium"><h3>Sentiment Response Volume</h3><p class="chart-subtitle">Week x classified rows</p><svg id="sentimentCompareVolumeChart" viewBox="0 0 760 260"></svg><div id="sentimentCompareVolumeInsight" class="chart-insight"></div></div>
+          </div>
           <div class="panel">
             <div class="panel-title-row">
               <div>
@@ -1103,7 +1134,7 @@
                 <p id="sentimentThemeMeta" class="panel-meta">Build Theme Classification first, then choose themes to view sentiment WoW by theme.</p>
               </div>
             </div>
-            <div id="sentimentThemeSelector" class="theme-chip-list"></div>
+            <div id="sentimentThemeSelector" class="sentiment-theme-selector"></div>
             <div class="dashboard-grid">
               <div class="chart-card medium"><h3>Selected Theme Positive WoW</h3><p class="chart-subtitle">Rows where selected theme = Yes</p><svg id="sentimentThemePositiveChart" viewBox="0 0 760 260"></svg><div id="sentimentThemePositiveInsight" class="chart-insight"></div><div id="sentimentThemePositiveGuide" class="chart-read-guide"></div></div>
               <div class="chart-card medium"><h3>Selected Theme Negative WoW</h3><p class="chart-subtitle">Rows where selected theme = Yes</p><svg id="sentimentThemeNegativeChart" viewBox="0 0 760 260"></svg><div id="sentimentThemeNegativeInsight" class="chart-insight"></div><div id="sentimentThemeNegativeGuide" class="chart-read-guide"></div></div>
@@ -1770,6 +1801,32 @@
           <div class="table-wrap fit-table compact-table"><table id="tenureTable"></table></div>
         </section>
 
+        <section id="dimensionlens" class="view data-view dimension-lens-view">
+          <div class="section-title">
+            <div><p class="eyebrow">Dimension Studio</p><h1>Dimension Lens <span id="dimensionLensCount">(0)</span></h1></div>
+            <button class="button button-secondary" data-export-table="dimensionLensTable" type="button">Export CSV</button>
+          </div>
+          <p id="dimensionLensMeta" class="insight-text">Run analysis with selected dimensions to generate the cross-dimension lens.</p>
+          <div class="panel dimension-lens-panel">
+            <div class="table-wrap fit-table compact-table dimension-lens-table-wrap"><table id="dimensionLensTable"></table></div>
+          </div>
+          <div class="panel dimension-pivot-panel">
+            <div class="dimension-pivot-head">
+              <div>
+                <p class="eyebrow">Multi Dimension Table</p>
+                <h2>Rows x Columns</h2>
+                <p id="dimensionPivotMeta" class="insight-text">Select two dimensions to compare score and volume.</p>
+              </div>
+              <div class="dimension-pivot-controls">
+                <label>Rows <select id="dimensionLensRowSelect"></select></label>
+                <label>Columns <select id="dimensionLensColumnSelect"></select></label>
+                <button class="button button-secondary" data-export-table="dimensionPivotTable" type="button">Export CSV</button>
+              </div>
+            </div>
+            <div class="table-wrap fit-table compact-table dimension-pivot-table-wrap"><table id="dimensionPivotTable"></table></div>
+          </div>
+        </section>
+
         <section id="customdims" class="view data-view">
           <div class="section-title">
             <div><p class="eyebrow">Flexible Reporting</p><h1>Custom Dimensions <span id="customDimensionCount">(0)</span></h1></div>
@@ -1983,6 +2040,50 @@
             <div class="panel">
               <h2>Help & Formulas</h2>
               <div class="table-wrap compact-table fit-table"><table id="analysisFormulaTable"></table></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="rawdata" class="view data-view raw-data-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Analysis Output</p>
+              <h1>Analysis Raw Data</h1>
+              <p class="section-subtitle">Download the complete analyzed output with every row and every generated column.</p>
+            </div>
+            <div class="title-actions">
+              <button id="downloadRawDataExcel" class="button button-primary" type="button">Download Excel</button>
+              <button id="downloadRawDataCsv" class="button button-secondary" type="button">Download CSV</button>
+            </div>
+          </div>
+          <div class="metric-grid raw-data-metrics">
+            <article class="metric-card">
+              <span>Analyzed Rows</span>
+              <strong id="rawDataRowCount">-</strong>
+              <small>Full backend analysis output</small>
+            </article>
+            <article class="metric-card">
+              <span>Output Columns</span>
+              <strong id="rawDataColumnCount">-</strong>
+              <small>Source, mapped, and generated fields</small>
+            </article>
+            <article class="metric-card">
+              <span>Export Scope</span>
+              <strong>Complete</strong>
+              <small>Not limited to dashboard preview rows</small>
+            </article>
+          </div>
+          <div class="panel raw-data-panel">
+            <div class="panel-title-row">
+              <div>
+                <p class="eyebrow">Download Options</p>
+                <h2>Complete analysis output</h2>
+              </div>
+            </div>
+            <p class="insight-text">Use Excel when you want a workbook with all analysis sheets. Use CSV when you need the full analyzed row-level output in a single flat file.</p>
+            <div class="raw-data-actions">
+              <button id="downloadRawDataExcelPanel" class="button button-primary" type="button">Download Excel</button>
+              <button id="downloadRawDataCsvPanel" class="button button-secondary" type="button">Download CSV</button>
             </div>
           </div>
         </section>
@@ -2211,6 +2312,41 @@
       </div>
     </div>
 
+    <div id="filePreviewModal" class="modal hidden">
+      <div class="modal-panel modal-panel-wide file-preview-modal-panel">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Workbook Preview</p>
+            <h2 id="filePreviewTitle">Uploaded file</h2>
+            <p id="filePreviewSubtitle" class="modal-subtitle"></p>
+          </div>
+          <button id="closeFilePreviewModal" class="icon-button" type="button" title="Close">X</button>
+        </div>
+        <div class="modal-body">
+          <div class="artifact-toolbar file-preview-toolbar">
+            <input id="filePreviewSearch" type="search" placeholder="Search all rows and columns" />
+            <label>Rows
+              <select id="filePreviewPageSize">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+              </select>
+            </label>
+            <span id="filePreviewCount" class="file-preview-count"></span>
+          </div>
+          <div class="table-wrap artifact-table-wrap file-preview-table-wrap">
+            <table id="filePreviewTable"></table>
+          </div>
+        </div>
+        <div class="modal-actions file-preview-actions">
+          <button id="filePreviewPrev" class="button" type="button">Back</button>
+          <span id="filePreviewPageStatus"></span>
+          <button id="filePreviewNext" class="button" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+
     <div id="summaryModal" class="modal hidden">
       <div class="modal-panel">
         <div class="modal-head">
@@ -2254,7 +2390,7 @@
     <script>
       (function () {
         const resultAliases = {};
-        const allowed = new Set(["setuphome", "setup", "datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout", "columnexplorer", "executive", "executivelens", "customdims", "analysis", "feedback", "performancequestions", "agent", "manager", "customdashboards"]);
+        const allowed = new Set(["setuphome", "setup", "datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout", "columnexplorer", "executive", "executivelens", "dimensionlens", "customdims", "analysis", "feedback", "performancequestions", "agent", "manager", "customdashboards"]);
         const aliases = { movingaverages: "movingaverageslaunch", quartile: "quartilelaunch", customstats: "customstatslaunch" };
         const view = new URLSearchParams(window.location.search).get("view") || "";
         if (!allowed.has(view)) return;
@@ -2280,7 +2416,7 @@
         }
       }());
     </script>
-  <script src="app.js?v=20260705-period-performance-v78"></script>
+  <script src="app.js?v=20260710-owl-theme-results-v81"></script>
       <script src="/auth.js?v=20260621-auth-handoff-v1"></script>
   </body>
 </html>

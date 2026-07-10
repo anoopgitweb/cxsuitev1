@@ -49,6 +49,7 @@
   summaryBuilder: { definitions: [] },
   summaryMetricDrafts: [{ id: "metric-1", name: "Tickets", calc: "count", field: "__none__", successValue: "" }],
   baseUploadComplete: false,
+  filePreview: { kind: "base", page: 1, pageSize: 100, search: "", pageCount: 1 },
   setupConfirmedSteps: {},
   setupReviewStep: 0,
   guidedInsightStack: [],
@@ -302,10 +303,10 @@ function openNavSectionForItem(button) {
 
 const ANALYSIS_REQUIRED_VIEWS = new Set([
   "datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout",
-  "executive", "executivelens", "agent", "manager", "customdashboards", "boardpdf", "downloads",
+  "executive", "executivelens", "agent", "manager", "customdashboards", "boardpdf", "rawdata", "downloads",
   "performancequestions", "movingaverageslaunch", "movingaverages", "quartilelaunch", "quartile", "statistics", "customstatslaunch", "customstats",
   "feedback", "sentimentcompare", "themebuilder", "themecompare",
-  "wave", "tenure", "customdims",
+  "wave", "tenure", "dimensionlens", "customdims",
   "themesoverview", "acptoverview", "rootcause", "Promoterdna", "alerts", "analysis",
 ]);
 
@@ -377,6 +378,8 @@ function activateView(viewId) {
   document.querySelector(`.top-view-button[data-view="${resolvedViewId}"]`)?.classList.add("active");
   view.classList.add("active");
   updateDashboardGuideForView(resolvedViewId);
+  if (resolvedViewId === "boardpdf") renderBoardPdfOptionCards();
+  if (resolvedViewId === "rawdata") renderAnalysisRawDataPage();
   if (resolvedViewId === "performancequestions") setMasterLensIntroVisible(true);
   workspace?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   requestAnimationFrame(() => {
@@ -418,6 +421,8 @@ const DASHBOARD_HANDOFF_VIEWS = new Set([
   "agent",
   "manager",
   "customdashboards",
+  "dimensionlens",
+  "rawdata",
 ]);
 
 function requestedDashboardHandoffView() {
@@ -495,6 +500,7 @@ function dashboardGuideMessageForView(viewId = "") {
     themecompare: `Theme Comparison shows how drivers or themes differ across groups. Use it to identify root-cause patterns behind score movement.`,
     wave: `Wave Intelligence compares reporting waves or periods. Use it when your business reviews are organized by launch, wave, batch, or campaign.`,
     tenure: `Tenure Intelligence checks whether experience changes by tenure band. Use it for new-hire, nesting, and maturity-pattern reviews.`,
+    dimensionlens: `Dimension Lens compares all selected dimensions in one table so you can see which fields matter most before drilling down.`,
     customdims: `Custom Dimensions lets you inspect other business fields such as site, channel, region, or queue. Use it when the question is outside agent or manager views.`,
     rootcause: `Word Cloud Intelligence highlights repeated language. Use it as a quick directional read, then validate important words with actual comments or themes.`,
     Satisfieddna: `Satisfied DNA highlights what stronger experiences have in common. Use it to find behaviors, channels, or themes associated with satisfied customers.`,
@@ -1237,13 +1243,31 @@ function pickFeedbackColumn(columns, guessed = "") {
   }) || "";
 }
 
+function dynamicDimensionUniqueCount(column, source) {
+  const profiles = source === "lookup" ? state.lookupColumnStats : state.baseColumnStats;
+  const profile = profiles?.[column] || {};
+  const unique = Number(profile.unique ?? profile.uniqueCount ?? profile["Unique Count"]);
+  if (Number.isFinite(unique)) return unique;
+  if (Array.isArray(profile.uniqueValues)) return profile.uniqueValues.length;
+  return NaN;
+}
+
+function isEligibleDynamicDimension(column) {
+  const inBase = normalizeColumnList(state.baseColumns).includes(column);
+  const inLookup = normalizeColumnList(state.lookupColumns).includes(column);
+  const counts = [];
+  if (inBase) counts.push(dynamicDimensionUniqueCount(column, "base"));
+  if (inLookup) counts.push(dynamicDimensionUniqueCount(column, "lookup"));
+  return counts.some((count) => Number.isFinite(count) && count > 0 && count <= 10);
+}
+
 function refreshDynamicDimensionPicker() {
   const select = $("dynamicDimensionSelect");
   if (!select) return;
   const baseColumns = normalizeColumnList(state.baseColumns);
   const lookupColumns = normalizeColumnList(state.lookupColumns);
   const columns = [...new Set([...baseColumns, ...lookupColumns])]
-    .filter((column) => column && !state.dynamicDimensions.includes(column));
+    .filter((column) => column && !state.dynamicDimensions.includes(column) && isEligibleDynamicDimension(column));
   setOptions(select, columns, "");
   renderDynamicDimensionChips();
 }
@@ -1440,6 +1464,70 @@ function setUploadComplete(kind, filename) {
   button.classList.add("uploaded");
   label.textContent = kind === "base" ? "Base File Uploaded" : "Lookup File Uploaded";
   button.title = filename;
+  const previewButton = kind === "base" ? $("previewBaseFile") : $("previewLookupFile");
+  if (previewButton) {
+    previewButton.hidden = false;
+    previewButton.textContent = `Preview ${kind === "base" ? "Base" : "Lookup"} File`;
+  }
+}
+
+async function loadUploadedFilePreview(options = {}) {
+  const current = state.filePreview || {};
+  const next = {
+    kind: options.kind || current.kind || "base",
+    page: Math.max(1, Number(options.page || current.page || 1)),
+    pageSize: Math.max(25, Number(options.pageSize || current.pageSize || 100)),
+    search: options.search ?? current.search ?? "",
+    pageCount: current.pageCount || 1,
+  };
+  state.filePreview = next;
+  const response = await fetch("/api/uploaded-file-preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(next),
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.ok) throw new Error(payload.error || "Could not preview the uploaded file.");
+  state.filePreview.page = Number(payload.page || next.page);
+  state.filePreview.pageCount = Number(payload.pageCount || 1);
+  const title = $("filePreviewTitle");
+  const subtitle = $("filePreviewSubtitle");
+  const count = $("filePreviewCount");
+  const pageStatus = $("filePreviewPageStatus");
+  if (title) title.textContent = `${next.kind === "lookup" ? "Lookup" : "Base"} File Preview`;
+  const sheet = payload.sheetName ? ` | Sheet: ${payload.sheetName}` : "";
+  if (subtitle) subtitle.textContent = `${payload.fileName || "Uploaded workbook"}${sheet} | ${formatCount(payload.rows)} rows | ${formatCount(payload.columnCount)} columns`;
+  if (count) count.textContent = `${formatCount(payload.filteredRows)} matching rows`;
+  if (pageStatus) pageStatus.textContent = `Page ${formatCount(payload.page)} of ${formatCount(payload.pageCount)}`;
+  const table = $("filePreviewTable");
+  if (table) table.dataset.displayLimit = String(payload.pageSize || 100);
+  renderAnyTable("filePreviewTable", payload.previewRows || [], Math.max(1, (payload.columns || []).length));
+  const prev = $("filePreviewPrev");
+  const nextButton = $("filePreviewNext");
+  if (prev) prev.disabled = Number(payload.page || 1) <= 1;
+  if (nextButton) nextButton.disabled = Number(payload.page || 1) >= Number(payload.pageCount || 1);
+}
+
+async function openUploadedFilePreview(kind = "base") {
+  state.filePreview = { kind, page: 1, pageSize: Number($("filePreviewPageSize")?.value || 100), search: $("filePreviewSearch")?.value || "", pageCount: 1 };
+  $("filePreviewModal")?.classList.remove("hidden");
+  await loadUploadedFilePreview(state.filePreview);
+}
+
+function wireUploadedFilePreview() {
+  $("previewBaseFile")?.addEventListener("click", () => openUploadedFilePreview("base").catch((err) => alert(err.message)));
+  $("previewLookupFile")?.addEventListener("click", () => openUploadedFilePreview("lookup").catch((err) => alert(err.message)));
+  $("closeFilePreviewModal")?.addEventListener("click", () => $("filePreviewModal")?.classList.add("hidden"));
+  $("filePreviewPrev")?.addEventListener("click", () => loadUploadedFilePreview({ page: Math.max(1, (state.filePreview?.page || 1) - 1) }).catch((err) => alert(err.message)));
+  $("filePreviewNext")?.addEventListener("click", () => loadUploadedFilePreview({ page: (state.filePreview?.page || 1) + 1 }).catch((err) => alert(err.message)));
+  $("filePreviewPageSize")?.addEventListener("change", (event) => loadUploadedFilePreview({ page: 1, pageSize: Number(event.target.value || 100) }).catch((err) => alert(err.message)));
+  let previewSearchTimer = null;
+  $("filePreviewSearch")?.addEventListener("input", (event) => {
+    if (previewSearchTimer) clearTimeout(previewSearchTimer);
+    previewSearchTimer = window.setTimeout(() => {
+      loadUploadedFilePreview({ page: 1, search: event.target.value || "" }).catch((err) => alert(err.message));
+    }, 350);
+  });
 }
 
 function baseFileSizeComment(rowCount) {
@@ -5010,6 +5098,46 @@ function npsDisplayCounts(summary = {}, counts = {}) {
   };
 }
 
+function interactiveAnalysisTotal(analysis = state.analysis || {}, summary = {}, counts = {}) {
+  const rows = analysis.feedbackTableRows || analysis.feedbackRows || analysis.preview || [];
+  return Number(
+    analysis.population?.rows
+    || analysis.population?.classifiedRows
+    || analysis.population?.totalRows
+    || analysis.outputCount
+    || analysis.totalRows
+    || summary.total
+    || summary.Total
+    || counts.Total
+    || counts.total
+    || counts.Responses
+    || rows.length
+    || 0
+  ) || 0;
+}
+
+function interactiveNpsCounts(summary = {}, counts = {}, total = 0) {
+  const visible = npsDisplayCounts(summary, counts);
+  const visibleTotal = visible.Promoter + visible.Passive + visible.Detractor;
+  if (!total || !visibleTotal || Math.abs(visibleTotal - total) <= 1) return visible;
+  const shareValues = [
+    summary.Promoter ?? summary.promoters ?? summary["Promoter %"],
+    summary.passives ?? summary.Passive ?? summary["Passive %"],
+    summary.detractors ?? summary.Detractor ?? summary["Detractor %"],
+  ].map((value) => Number(value));
+  const shareTotal = shareValues.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
+  if (shareValues.every(Number.isFinite) && shareTotal > 0) {
+    const values = roundedCountsFromShares(total, shareValues);
+    return { Total: total, Promoter: values[0] || 0, Passive: values[1] || 0, Detractor: values[2] || 0 };
+  }
+  const scaled = roundedCountsFromShares(total, [
+    (visible.Promoter / visibleTotal) * 100,
+    (visible.Passive / visibleTotal) * 100,
+    (visible.Detractor / visibleTotal) * 100,
+  ]);
+  return { Total: total, Promoter: scaled[0] || 0, Passive: scaled[1] || 0, Detractor: scaled[2] || 0 };
+}
+
 function metricLogicText(label, value, note, summary = {}, counts = {}, segmentSentiments = {}, intelligence = [], context = {}) {
   const analysis = state.analysis || {};
   const weekly = analysis.weekly || [];
@@ -5610,7 +5738,7 @@ function renderSentimentComparison() {
   if (!rows.length) {
     if (grid) grid.innerHTML = "";
     if (meta) meta.textContent = "Run analysis to view weekly sentiment movement.";
-    ["sentimentComparePositiveChart", "sentimentCompareNegativeChart"].forEach((id) => {
+    ["sentimentComparePositiveChart", "sentimentCompareNegativeChart", "sentimentCompareNetChart", "sentimentCompareVolumeChart"].forEach((id) => {
       if ($(id)) $(id).innerHTML = `<text x="380" y="130" text-anchor="middle" fill="#728399">Run analysis to view sentiment comparison.</text>`;
     });
     return;
@@ -5627,14 +5755,23 @@ function renderSentimentComparison() {
   }
   renderLineChart("sentimentComparePositiveChart", rows.map((row) => ({ Week: row.Week, Positive: row["Positive %"] })), "Positive", "Run analysis to view positive sentiment.", "#19a55b");
   renderLineChart("sentimentCompareNegativeChart", rows.map((row) => ({ Week: row.Week, Negative: row["Negative %"] })), "Negative", "Run analysis to view negative sentiment.", "#d94045");
+  const netRows = rows.map((row) => ({ Week: row.Week, "Net Sentiment": Number(row["Positive %"] || 0) - Number(row["Negative %"] || 0) }));
+  renderLineChart("sentimentCompareNetChart", netRows, "Net Sentiment", "Run analysis to view net sentiment.", "#006d86");
+  renderLineChart("sentimentCompareVolumeChart", rows.map((row) => ({ Week: row.Week, Responses: row.Responses })), "Responses", "Run analysis to view sentiment volume.", "#14b8a6", (value) => Number(value || 0).toLocaleString());
   if ($("sentimentComparePositiveInsight")) $("sentimentComparePositiveInsight").textContent = `Latest positive sentiment is ${formatMetric(latest["Positive %"] || 0)}%, moving ${formatMetric(latest["Positive WoW"] || 0)} pts week over week.`;
   if ($("sentimentCompareNegativeInsight")) $("sentimentCompareNegativeInsight").textContent = `Latest negative sentiment is ${formatMetric(latest["Negative %"] || 0)}%, moving ${formatMetric(latest["Negative WoW"] || 0)} pts week over week.`;
+  if ($("sentimentCompareNetInsight")) {
+    const latestNet = netRows[netRows.length - 1]?.["Net Sentiment"] || 0;
+    const prevNet = netRows[netRows.length - 2]?.["Net Sentiment"] || 0;
+    $("sentimentCompareNetInsight").textContent = `Latest net sentiment is ${formatMetric(latestNet)} pts, moving ${formatMetric(latestNet - prevNet)} pts week over week.`;
+  }
+  if ($("sentimentCompareVolumeInsight")) $("sentimentCompareVolumeInsight").textContent = `Latest sentiment volume is ${Number(latest.Responses || 0).toLocaleString()} rows, ${previous.Responses !== undefined ? `${Number(latest.Responses || 0) - Number(previous.Responses || 0)} vs previous week` : "latest available period"}.`;
   if (meta) meta.textContent = `${rows.length.toLocaleString()} weekly sentiment periods compared.`;
   renderSentimentThemeSelection();
 }
 
 function sentimentThemeColumns() {
-  return themeBuilderThemeColumns(state.themeBuilder.rows?.[0] || {});
+  return themeBuilderThemeColumns(themeBuilderJoinedRows()[0] || {});
 }
 
 function ensureSentimentThemeSelection() {
@@ -5648,9 +5785,9 @@ function ensureSentimentThemeSelection() {
 
 function selectedSentimentThemeRows() {
   ensureSentimentThemeSelection();
-  const selected = [...state.sentimentThemeSelection];
-  if (!selected.length) return [];
-  return themeBuilderJoinedRows().filter((row) => selected.some((column) => row[column] === "Yes"));
+  const selected = [...state.sentimentThemeSelection][0];
+  if (!selected) return [];
+  return themeBuilderJoinedRows().filter((row) => row[selected] === "Yes");
 }
 
 function weekLabelFromRow(row) {
@@ -5708,21 +5845,17 @@ function renderSentimentThemeSelection() {
     renderAnyTable("sentimentThemeTable", [], 10);
     return;
   }
-  selector.innerHTML = columns.map((column) => {
-    const label = column.replace(/^Theme:\s*/i, "");
-    const on = state.sentimentThemeSelection.has(column);
-    return `<span class="theme-builder-chip ${on ? "active" : ""}">
-      <button type="button" data-sentiment-theme="${escapeHtml(column)}">${on ? "On" : "Off"}</button>
-      <strong>${escapeHtml(label)}</strong>
-    </span>`;
-  }).join("");
-  selector.querySelectorAll("[data-sentiment-theme]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const column = button.dataset.sentimentTheme;
-      if (state.sentimentThemeSelection.has(column)) state.sentimentThemeSelection.delete(column);
-      else state.sentimentThemeSelection.add(column);
+  const active = [...state.sentimentThemeSelection][0] || columns[0];
+  selector.innerHTML = `
+    <label class="inline-select sentiment-theme-control">Theme
+      <select id="sentimentThemeSelect">
+        ${columns.map((column) => `<option value="${escapeHtml(column)}"${column === active ? " selected" : ""}>${escapeHtml(column.replace(/^Theme:\s*/i, ""))}</option>`).join("")}
+      </select>
+    </label>`;
+  selector.querySelector("#sentimentThemeSelect")?.addEventListener("change", (event) => {
+      state.sentimentThemeSelection.clear();
+      if (event.target.value) state.sentimentThemeSelection.add(event.target.value);
       renderSentimentThemeSelection();
-    });
   });
   const rows = sentimentThemeWowRows();
   renderAnyTable("sentimentThemeTable", rows, 10);
@@ -5731,19 +5864,19 @@ function renderSentimentThemeSelection() {
   renderLineChart("sentimentThemeNegativeChart", rows.map((row) => ({ Week: row.Week, Negative: row["Negative %"], Sample: row.Responses })), "Negative", "Select one or more themes.", "#d94045", percentLabel);
   const labels = [...state.sentimentThemeSelection].map((column) => column.replace(/^Theme:\s*/i, ""));
   const latest = rows[rows.length - 1] || {};
-  $("sentimentThemeMeta").textContent = labels.length ? `Selected themes: ${labels.join(", ")}. ${rows.length.toLocaleString()} weekly points found.` : "Select one or more custom themes.";
+  $("sentimentThemeMeta").textContent = labels.length ? `Selected theme: ${labels.join(", ")}. ${rows.length.toLocaleString()} weekly points found.` : "Select a custom theme.";
   if ($("sentimentThemePositiveInsight")) $("sentimentThemePositiveInsight").textContent = latest.Week ? `Latest selected-theme positive sentiment is ${percentLabel(latest["Positive %"])}.` : "No selected-theme rows found for weekly trend.";
   if ($("sentimentThemeNegativeInsight")) $("sentimentThemeNegativeInsight").textContent = latest.Week ? `Latest selected-theme negative sentiment is ${percentLabel(latest["Negative %"])}.` : "No selected-theme rows found for weekly trend.";
   const themeText = labels.length ? labels.join(", ") : "the selected theme";
   if ($("sentimentThemePositiveGuide")) {
     $("sentimentThemePositiveGuide").innerHTML = latest.Week
       ? `<strong>How to read this:</strong> Each point is the percentage of rows tagged <b>${escapeHtml(themeText)}</b> that were Positive in that week. The latest week, ${escapeHtml(String(latest.Week).slice(0, 10))}, is <b>${percentLabel(latest["Positive %"])}</b> positive across ${Number(latest.Responses || 0).toLocaleString()} matching row${Number(latest.Responses || 0) === 1 ? "" : "s"}.`
-      : `<strong>How to read this:</strong> Select one or more themes to see what share of matching rows were Positive each week.`;
+      : `<strong>How to read this:</strong> Select a theme to see what share of matching rows were Positive each week.`;
   }
   if ($("sentimentThemeNegativeGuide")) {
     $("sentimentThemeNegativeGuide").innerHTML = latest.Week
       ? `<strong>How to read this:</strong> Each point is the percentage of rows tagged <b>${escapeHtml(themeText)}</b> that were Negative in that week. The latest week, ${escapeHtml(String(latest.Week).slice(0, 10))}, is <b>${percentLabel(latest["Negative %"])}</b> negative across ${Number(latest.Responses || 0).toLocaleString()} matching row${Number(latest.Responses || 0) === 1 ? "" : "s"}.`
-      : `<strong>How to read this:</strong> Select one or more themes to see what share of matching rows were Negative each week.`;
+      : `<strong>How to read this:</strong> Select a theme to see what share of matching rows were Negative each week.`;
   }
 }
 
@@ -6018,6 +6151,193 @@ function dimensionCardsFromRows(rows, label) {
   ];
 }
 
+function dimensionLensRows(dimensions) {
+  return (dimensions || []).map((item) => {
+    const label = item.name || "Dimension";
+    const rows = item.rows || [];
+    const total = rows.reduce((sum, row) => sum + Number(row.Responses || 0), 0);
+    const totalDetractors = rows.reduce((sum, row) => sum + Number(row.Detractors || 0), 0);
+    const weightedScore = total
+      ? rows.reduce((sum, row) => sum + (Number(row.NPS || 0) * Number(row.Responses || 0)), 0) / total
+      : 0;
+    const best = [...rows].sort((a, b) => Number(b.NPS || 0) - Number(a.NPS || 0))[0] || {};
+    const worst = [...rows].sort((a, b) => Number(a.NPS || 0) - Number(b.NPS || 0))[0] || {};
+    const bestScore = Number(best.NPS || 0);
+    const worstScore = Number(worst.NPS || 0);
+    const gap = bestScore - worstScore;
+    const drag = Math.max(0, weightedScore - worstScore);
+    const worstDetractors = Number(worst.Detractors || 0);
+    const detractorConcentration = totalDetractors ? (worstDetractors / totalDetractors) * 100 : 0;
+    const matters = rows.length > 1 && total >= 30 && (gap >= 8 || detractorConcentration >= 25);
+    return {
+      Dimension: label,
+      Values: rows.length,
+      Best: best[label] ? `${best[label]} (${formatMetric(bestScore, 2)})` : "-",
+      Worst: worst[label] ? `${worst[label]} (${formatMetric(worstScore, 2)})` : "-",
+      Gap: formatMetric(gap, 2),
+      "Gap trend": gap >= 15 ? "Widening risk" : gap >= 5 ? "Watch" : "Tight",
+      Drag: `+${formatMetric(drag, 2)}`,
+      "Detr. conc.": totalDetractors ? `${formatMetric(detractorConcentration, 2)}%` : "0.00%",
+      "Matters?": matters ? "Yes" : "No",
+    };
+  }).sort((a, b) => Number.parseFloat(b.Gap || 0) - Number.parseFloat(a.Gap || 0));
+}
+
+function dimensionPivotSourceRows(rowDimension = "", columnDimension = "") {
+  const analysis = state.analysis || {};
+  const candidates = [
+    analysis.feedbackRows,
+    analysis.feedbackTableRows,
+    analysis.preview,
+    state.statsData?.analyzedRows,
+    state.statsData?.baseRows,
+  ].filter((rows) => Array.isArray(rows) && rows.length);
+  if (!rowDimension || !columnDimension) return candidates[0] || [];
+  const scored = candidates.map((rows) => {
+    const validBoth = rows.reduce((count, row) => {
+      const rowValue = dimensionPivotCellValue(row, rowDimension);
+      const columnValue = dimensionPivotCellValue(row, columnDimension);
+      return count + (rowValue !== "Unknown" && columnValue !== "Unknown" ? 1 : 0);
+    }, 0);
+    return { rows, validBoth };
+  }).sort((a, b) => b.validBoth - a.validBoth || b.rows.length - a.rows.length);
+  return (scored.find((item) => item.validBoth > 0) || scored[0])?.rows || [];
+}
+
+function dimensionPivotCellValue(row, column) {
+  const direct = row?.[column];
+  if (direct !== undefined && direct !== null && String(direct).trim() !== "") return String(direct).trim();
+  const wanted = String(column || "").toLowerCase();
+  const foundKey = Object.keys(row || {}).find((key) => String(key).toLowerCase() === wanted);
+  const value = foundKey ? row[foundKey] : "";
+  return value === undefined || value === null || String(value).trim() === "" ? "Unknown" : String(value).trim();
+}
+
+function dimensionPivotScore(rows) {
+  const total = rows.length;
+  if (!total) return { score: null, volume: 0 };
+
+  const npsCounts = rows.reduce((acc, row) => {
+    const type = String(row["NPS Type"] || row.NPS_Type || row.NPSType || "").toLowerCase();
+    if (type.includes("promoter")) acc.promoters += 1;
+    else if (type.includes("detractor")) acc.detractors += 1;
+    else if (type.includes("passive")) acc.passives += 1;
+    return acc;
+  }, { promoters: 0, passives: 0, detractors: 0 });
+  const npsTotal = npsCounts.promoters + npsCounts.passives + npsCounts.detractors;
+  if (npsTotal) {
+    return { score: ((npsCounts.promoters - npsCounts.detractors) / npsTotal) * 100, volume: npsTotal };
+  }
+
+  const csatCounts = rows.reduce((acc, row) => {
+    const type = String(row["Satisfaction Level"] || row["Satisfaction Status"] || row["CSAT Category"] || "").toLowerCase();
+    if (type.includes("satisfied") || type.includes("positive")) acc.satisfied += 1;
+    else if (type.includes("neutral")) acc.neutral += 1;
+    else if (type.includes("dissatisfied") || type.includes("negative")) acc.dissatisfied += 1;
+    return acc;
+  }, { satisfied: 0, neutral: 0, dissatisfied: 0 });
+  const csatTotal = csatCounts.satisfied + csatCounts.neutral + csatCounts.dissatisfied;
+  if (csatTotal) {
+    return { score: (csatCounts.satisfied / csatTotal) * 100, volume: csatTotal };
+  }
+
+  const scoreKeys = ["NPS", "NPS Score", "CSAT", "CSAT Score", "Score", "Rating"];
+  const values = rows.map((row) => {
+    const key = scoreKeys.find((item) => row?.[item] !== undefined && row?.[item] !== null && row?.[item] !== "");
+    return key ? Number(row[key]) : NaN;
+  }).filter(Number.isFinite);
+  if (values.length) {
+    return { score: values.reduce((sum, value) => sum + value, 0) / values.length, volume: values.length };
+  }
+
+  return { score: null, volume: total };
+}
+
+function dimensionPivotCell(metric) {
+  if (!metric || !metric.volume) return "-";
+  const score = Number.isFinite(Number(metric.score)) ? formatMetric(metric.score, 1) : "-";
+  return `${score} (${Number(metric.volume || 0).toLocaleString()})`;
+}
+
+function buildDimensionPivotRows(rowDimension, columnDimension) {
+  const rows = dimensionPivotSourceRows(rowDimension, columnDimension);
+  if (!rowDimension || !columnDimension || rowDimension === columnDimension || !rows.length) return [];
+  const rowValues = [...new Set(rows.map((row) => dimensionPivotCellValue(row, rowDimension)))].filter(Boolean);
+  const columnValues = [...new Set(rows.map((row) => dimensionPivotCellValue(row, columnDimension)))].filter(Boolean);
+  const rankedRows = rowValues
+    .map((value) => ({ value, volume: rows.filter((row) => dimensionPivotCellValue(row, rowDimension) === value).length }))
+    .sort((a, b) => b.volume - a.volume || String(a.value).localeCompare(String(b.value)))
+    .map((item) => item.value);
+  const rankedColumns = columnValues
+    .map((value) => ({ value, volume: rows.filter((row) => dimensionPivotCellValue(row, columnDimension) === value).length }))
+    .sort((a, b) => b.volume - a.volume || String(a.value).localeCompare(String(b.value)))
+    .map((item) => item.value);
+  const rowHeader = `${rowDimension} \\ ${columnDimension}`;
+  const body = rankedRows.map((rowValue) => {
+    const item = { [rowHeader]: rowValue };
+    rankedColumns.forEach((columnValue) => {
+      const subset = rows.filter((row) => dimensionPivotCellValue(row, rowDimension) === rowValue && dimensionPivotCellValue(row, columnDimension) === columnValue);
+      item[columnValue] = dimensionPivotCell(dimensionPivotScore(subset));
+    });
+    item["Row Total"] = dimensionPivotCell(dimensionPivotScore(rows.filter((row) => dimensionPivotCellValue(row, rowDimension) === rowValue)));
+    return item;
+  });
+  if (body.length) {
+    const totalRow = { [rowHeader]: "Col Total" };
+    rankedColumns.forEach((columnValue) => {
+      totalRow[columnValue] = dimensionPivotCell(dimensionPivotScore(rows.filter((row) => dimensionPivotCellValue(row, columnDimension) === columnValue)));
+    });
+    totalRow["Row Total"] = dimensionPivotCell(dimensionPivotScore(rows));
+    body.push(totalRow);
+  }
+  return body;
+}
+
+function populateDimensionPivotControls(dimensions) {
+  const rowSelect = $("dimensionLensRowSelect");
+  const columnSelect = $("dimensionLensColumnSelect");
+  if (!rowSelect || !columnSelect) return;
+  const names = (dimensions || []).map((item) => item.name).filter(Boolean);
+  const currentRow = rowSelect.value;
+  const currentColumn = columnSelect.value;
+  const options = names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  rowSelect.innerHTML = options;
+  columnSelect.innerHTML = options;
+  rowSelect.value = names.includes(currentRow) ? currentRow : (names[0] || "");
+  columnSelect.value = names.includes(currentColumn) ? currentColumn : (names.find((name) => name !== rowSelect.value) || names[1] || "");
+  rowSelect.onchange = renderDimensionPivotTable;
+  columnSelect.onchange = renderDimensionPivotTable;
+}
+
+function renderDimensionPivotTable() {
+  const rowDimension = $("dimensionLensRowSelect")?.value || "";
+  const columnDimension = $("dimensionLensColumnSelect")?.value || "";
+  const meta = $("dimensionPivotMeta");
+  const rows = buildDimensionPivotRows(rowDimension, columnDimension);
+  if (meta) {
+    meta.textContent = rows.length
+      ? `${rowDimension} by ${columnDimension}. Each cell shows score and volume.`
+      : rowDimension === columnDimension
+        ? "Choose two different dimensions to generate the table."
+        : "Run analysis with at least two dimensions to generate the table.";
+  }
+  renderAnyTable("dimensionPivotTable", rows, 100);
+}
+
+function renderDimensionLens(dimensions) {
+  const rows = dimensionLensRows(dimensions || []);
+  if ($("dimensionLensCount")) $("dimensionLensCount").textContent = `(${rows.length})`;
+  const meta = $("dimensionLensMeta");
+  if (meta) {
+    meta.textContent = rows.length
+      ? `${rows.length.toLocaleString()} dimensions compared by gap, drag, detractor concentration, and action value.`
+      : "Run analysis with selected dimensions to generate the cross-dimension lens.";
+  }
+  renderAnyTable("dimensionLensTable", rows, 100);
+  populateDimensionPivotControls(dimensions || []);
+  renderDimensionPivotTable();
+}
+
 function renderDimensionDashboard(config) {
   const rows = config.rows || [];
   if (config.cardId) renderDimensionCards(config.cardId, config.cards || [], `${config.label} Field`, config.mappedColumn || "");
@@ -6086,6 +6406,7 @@ function renderDynamicDimensions(dimensions) {
       </div>
       <div id="dynamicDimensionBody0" class="dynamic-dimension-body">
         <div id="dynamicDimension0MetricGrid" class="metric-grid"></div>
+        <div class="table-wrap fit-table compact-table"><table id="dynamicDimensionTable0"></table></div>
         <div class="dashboard-grid">
           <div class="chart-card wide"><h3 id="dynamicDimension0TrendTitle">${escapeHtml(activeItem.name)} NPS Trend</h3><p class="chart-subtitle">Segment x NPS</p><svg id="dynamicDimension0NpsTrend" viewBox="0 0 760 260"></svg></div>
           <div class="chart-card"><h3 id="dynamicDimension0GaugeTitle">${escapeHtml(activeItem.name)} NPS Gauge</h3><svg id="dynamicDimension0NpsGauge" viewBox="0 0 360 260"></svg></div>
@@ -6096,7 +6417,6 @@ function renderDynamicDimensions(dimensions) {
           <div class="chart-card medium"><h3 id="dynamicDimension0NegativeTitle">${escapeHtml(activeItem.name)} Negative Share</h3><p class="chart-subtitle">Segment x Negative sentiment</p><svg id="dynamicDimension0NegativeChart" viewBox="0 0 760 260"></svg><div id="dynamicDimension0NegativeInsight" class="chart-insight"></div></div>
           <div class="chart-card medium"><h3 id="dynamicDimension0SilentTitle">${escapeHtml(activeItem.name)} Silent Detractors</h3><p class="chart-subtitle">Segment x hidden risk volume</p><svg id="dynamicDimension0SilentChart" viewBox="0 0 760 260"></svg><div id="dynamicDimension0SilentInsight" class="chart-insight"></div></div>
         </div>
-        <div class="table-wrap fit-table compact-table"><table id="dynamicDimensionTable0"></table></div>
         <div class="custom-dimension-weekly-section">
           <div class="section-title compact-title">
             <div>
@@ -6280,6 +6600,24 @@ function renderDashboardSnapshot(prefix, snapshot = {}, context = {}) {
   renderSentiment(sentiment, `${prefix}SentimentMix`);
 }
 
+function customDimensionTableRows(rows, label) {
+  return (rows || []).map((row) => ({
+    [label]: row[label] ?? row.Dimension ?? "",
+    "NPS Score": Number(Number(row.NPS ?? row["NPS Score"] ?? 0).toFixed(2)),
+    Responses: Number(row.Responses || 0),
+    Promoters: Number(row.Promoters || 0),
+    Passives: Number(row.Passives || 0),
+    Detractors: Number(row.Detractors || 0),
+    Avg_Rating: Number(Number(row.Avg_Rating || 0).toFixed(2)),
+    Positive: Number(row.Positive || 0),
+    Neutral: Number(row.Neutral || 0),
+    Negative: Number(row.Negative || 0),
+    "Promoter %": Number(Number(row["Promoter %"] || 0).toFixed(2)),
+    "Negative %": Number(Number(row["Negative %"] || 0).toFixed(2)),
+    "Top Driver": row["Top Driver"] || "",
+  }));
+}
+
 function renderCustomDimensionDashboard(item, index) {
   const select = $(`dynamicDimensionSelect${index}`);
   const selectedValue = select?.value || "__all";
@@ -6321,6 +6659,7 @@ function renderCustomDimensionDashboard(item, index) {
     negativeInsight: `${prefix}NegativeInsight`,
     silentInsight: `${prefix}SilentInsight`,
   });
+  renderAnyTable(`dynamicDimensionTable${index}`, customDimensionTableRows(segmentRows, title), 10);
   renderCustomDimensionWeeklyCharts(item, index, selectedValue);
 }
 
@@ -6766,8 +7105,8 @@ function customStatsTotalForSource(name, rows) {
 function customStatsSourceLabel(name, rows) {
   const sample = Number(rows?.length || 0);
   const total = customStatsTotalForSource(name, rows);
-  if (total > sample) return `${name} (${sample.toLocaleString()} of ${total.toLocaleString()})`;
-  return `${name} (${sample.toLocaleString()})`;
+  if (total > sample) return `${name} (${total.toLocaleString()} rows)`;
+  return `${name} (${sample.toLocaleString()} rows)`;
 }
 
 function customStatsCoverageText(name, rows) {
@@ -6778,7 +7117,7 @@ function customStatsCoverageText(name, rows) {
     ? `Custom Range ${filter.start || "..."} to ${filter.end || "..."}`
     : (filter.mode || "All Time");
   return total > sample
-    ? `Working sample: ${sample.toLocaleString()} of ${total.toLocaleString()} rows. Date range: ${range}. Use date filters to narrow the analysis window.`
+    ? `Full source available: ${total.toLocaleString()} rows. Browser preview: ${sample.toLocaleString()} rows. Date range: ${range}. Python calculations use the full source.`
     : `Rows available: ${sample.toLocaleString()}. Date range: ${range}.`;
 }
 
@@ -9061,6 +9400,68 @@ function downloadRows(rows, filename) {
   triggerBlobDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), filename);
 }
 
+function cleanDownloadFilename(value, fallback, extension) {
+  const withoutExtension = String(value || fallback || "analysis_raw_data")
+    .replace(/\.[^.]+$/i, "")
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${withoutExtension || fallback}.${extension}`;
+}
+
+function rawDataRowCount() {
+  const counts = state.statsRowCounts || {};
+  const analysis = state.analysis || {};
+  return Number(
+    counts.analyzedRows
+    || analysis.summary?.total
+    || analysis.summary?.Total
+    || analysis.counts?.Total
+    || analysis.totalRows
+    || 0
+  );
+}
+
+function renderAnalysisRawDataPage() {
+  const rowCount = rawDataRowCount();
+  const columns = state.analysis?.columns || state.analysis?.analyzedColumns || Object.keys((state.analysis?.feedbackRows || state.analysis?.preview || [{}])[0] || {});
+  if ($("rawDataRowCount")) $("rawDataRowCount").textContent = rowCount ? rowCount.toLocaleString() : "-";
+  if ($("rawDataColumnCount")) $("rawDataColumnCount").textContent = Array.isArray(columns) && columns.length ? columns.length.toLocaleString() : "-";
+}
+
+async function downloadAnalysisRawData(format = "excel") {
+  if (!analysisHasDashboardData()) {
+    alert("Run or import an analysis before downloading raw analysis data.");
+    return;
+  }
+  const isCsv = format === "csv";
+  const defaultName = `NPS_Analysis_Raw_Data_${new Date().toISOString().slice(0, 10)}`;
+  const requestedName = prompt(`Save ${isCsv ? "CSV" : "Excel"} raw analysis as:`, defaultName);
+  if (requestedName === null) return;
+  const filename = cleanDownloadFilename(requestedName, defaultName, isCsv ? "csv" : "xlsx");
+  const endpoint = isCsv ? "/api/export/raw-csv" : "/api/export/excel";
+  const beforeUnload = warnBeforeExportClose;
+  try {
+    window.addEventListener("beforeunload", beforeUnload);
+    showExportProgress("Preparing the complete raw analysis output. Please keep this window open.", 18);
+    const response = await fetch(endpoint);
+    showExportProgress("Receiving the export file from the local analysis server...", 72);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({ error: "Raw data export failed." }));
+      throw new Error(payload.error || "Raw data export failed.");
+    }
+    const blob = await response.blob();
+    triggerBlobDownload(blob, filename);
+    showExportProgress(`Download started: ${filename}. Please check your browser Downloads folder.`, 100);
+    hideExportProgress(1200);
+  } catch (error) {
+    hideExportProgress();
+    alert(error.message || "Raw data export failed.");
+  } finally {
+    window.removeEventListener("beforeunload", beforeUnload);
+  }
+}
+
 function selectedCalendarConfig() {
   return {
     weekStartDay: $("setupWeekStartDay")?.value || "Monday",
@@ -9192,6 +9593,11 @@ function startNewAnalysisWorkspace() {
   state.guidedAnalysisComplete = false;
   state.setupCoverageChoice = "";
   ["baseStatus", "lookupStatus"].forEach((id) => { if ($(id)) $(id).textContent = id === "baseStatus" ? "Pending" : "Optional - not uploaded"; });
+  ["previewBaseFile", "previewLookupFile"].forEach((id) => { if ($(id)) $(id).hidden = true; });
+  if ($("baseUploadLabel")) $("baseUploadLabel").textContent = "Upload Base File";
+  if ($("lookupUploadLabel")) $("lookupUploadLabel").textContent = "Upload Lookup File";
+  $("baseUploadButton")?.classList.remove("uploaded");
+  $("lookupUploadButton")?.classList.remove("uploaded");
   state.guidedReleaseToApp = true;
   activateView("setup");
   showCoachTipSoon("baseUploadButton", "Start here. Upload the Base File, then I will guide you through lookup, mapping, business rules, model selection, and Run Analysis.", { key: "new-analysis-base-upload", position: "top", force: true, duration: 5200 });
@@ -10457,6 +10863,14 @@ async function downloadSelectedWorkbook() {
 }
 
 const PDF_TAB_TITLES = {
+  datasetsummary: "Data Set Summary",
+  performanceoverview: "Performance Overview",
+  executivesummary: "Executive Read",
+  decisionguide: "Decision Guide",
+  dimensions: "Dimensions",
+  results: "Results",
+  sentimentbriefing: "Sentiment Briefing",
+  insightsreadout: "Insights Readout",
   executive: "Executive Dashboard",
   customdashboards: "Custom Dashboards",
   executivelens: "Executive Lens",
@@ -10472,10 +10886,13 @@ const PDF_TAB_TITLES = {
   feedback: "Sentiment Intelligence",
   sentimentcompare: "Sentiment Comparison",
   theme: "Theme Classification",
+  themesoverview: "Themes Overview",
+  acptoverview: "ACPT",
   themebuilder: "Build Theme Classification",
   themecompare: "Theme Comparison",
   wave: "Wave Intelligence",
   tenure: "Tenure Intelligence",
+  dimensionlens: "Dimension Lens",
   customdims: "Custom Dimensions",
   operations: "Operations",
   rootcause: "Word Cloud Intelligence",
@@ -10504,6 +10921,14 @@ const BOARD_PDF_RECOMMENDED_TABS = [
 ];
 
 const BOARD_PDF_SECTION_GUIDES = {
+  datasetsummary: "Run-level source, analyzed row volume, mapped fields, generated outputs, and data coverage checks.",
+  performanceoverview: "Monthly and weekly trend performance, volume movement, period tables, and score direction.",
+  executivesummary: "Executive Read narrative summarizing coverage, target achievement, trend, consistency, AI insights, and recommended actions.",
+  decisionguide: "Decision checks with questions, analysis-backed responses, action status, and supporting detail.",
+  dimensions: "Generated dimension outputs, segment performance, volume share, target gaps, and opportunity signals.",
+  results: "Answered leadership questions and generated result rows from the completed analysis.",
+  sentimentbriefing: "Sentiment briefing cards, sentiment mix, customer tone, and priority VOC signals.",
+  insightsreadout: "Leadership-ready insights readout connecting trend, people, sentiment, and business actions.",
   executive: "Headline NPS, response mix, sentiment health, executive insight, and the overall performance story.",
   customdashboards: "User-built summary tables, custom dashboards, and configured business views.",
   executivelens: "Role-based leadership interpretation with focus areas, risks, and recommended next actions.",
@@ -10517,10 +10942,13 @@ const BOARD_PDF_SECTION_GUIDES = {
   feedback: "Sentiment mix, categorized verbatims, customer tone, and review-ready feedback records.",
   sentimentcompare: "Week-over-week sentiment movement and custom theme sentiment shifts where available.",
   theme: "Theme classification output, theme distribution, and the customer issue taxonomy.",
+  themesoverview: "Theme overview, theme distribution, dominant issue patterns, and customer topic concentration.",
+  acptoverview: "Agent, customer, process, and technology ownership view for drivers and operational accountability.",
   themebuilder: "Custom theme builder setup, matched records, and theme configuration output.",
   themecompare: "Theme movement across selected periods, changing customer issues, and emerging concentration.",
   wave: "Wave-level NPS, response mix, sentiment patterns, and comparison signals.",
   tenure: "Tenure-level NPS, sentiment, recovery pockets, and experience patterns.",
+  dimensionlens: "Cross-dimension opportunity summary comparing spread, drag, detractor concentration, and action value.",
   customdims: "User-defined dimension dashboards and flexible segment-level performance cuts.",
   operations: "Operational volume, performance, workload, and service delivery signals.",
   rootcause: "Word cloud and repeated customer language signals that help explain what customers are saying most.",
@@ -10532,6 +10960,37 @@ const BOARD_PDF_SECTION_GUIDES = {
   churn: "Churn risk indicators, risk concentration, and customer retention signals.",
   analysis: "Movement, consistency, comparison tables, and leadership-friendly performance change readouts.",
 };
+
+function boardPdfAvailableTabs() {
+  return Object.keys(PDF_TAB_TITLES)
+    .filter((tab, index, tabs) => tabs.indexOf(tab) === index)
+    .filter((tab) => Boolean($(tab)));
+}
+
+function boardPdfOptionCountLine(tab) {
+  const row = reportReferenceRows([tab])[0] || { cardCount: 0, chartCount: 0, tableCount: 0 };
+  return `${row.cardCount.toLocaleString()} cards | ${row.chartCount.toLocaleString()} visuals | ${row.tableCount.toLocaleString()} tables`;
+}
+
+function renderBoardPdfOptionCards() {
+  const grid = document.querySelector("#boardpdf .pdf-builder-option-grid");
+  if (!grid) return;
+  const existingChecked = new Set([...grid.querySelectorAll("[data-board-pdf-tab]:checked")].map((input) => input.dataset.boardPdfTab));
+  const tabs = boardPdfAvailableTabs();
+  grid.innerHTML = tabs.map((tab, index) => {
+    const checked = existingChecked.size ? existingChecked.has(tab) : BOARD_PDF_RECOMMENDED_TABS.includes(tab);
+    const guide = BOARD_PDF_SECTION_GUIDES[tab] || "Selected dashboard view with cards, visuals, tables, and leadership context.";
+    return `<label>
+      <input type="checkbox" data-board-pdf-tab="${escapeHtml(tab)}" ${checked ? "checked" : ""} />
+      <span>
+        <em>${String(index + 1).padStart(2, "0")}</em>
+        <strong>${escapeHtml(PDF_TAB_TITLES[tab] || tab)}</strong>
+        <small>${escapeHtml(guide)}</small>
+        <small class="pdf-builder-card-counts">${escapeHtml(boardPdfOptionCountLine(tab))}</small>
+      </span>
+    </label>`;
+  }).join("");
+}
 
 function selectedPdfTabs() {
   return [...document.querySelectorAll("[data-pdf-tab]:checked")]
@@ -11000,10 +11459,11 @@ function interactiveHtmlHome(tabs, references, options = {}) {
   const sentiment = state.analysis?.sentiment || {};
   const weekly = state.analysis?.weekly || [];
   const reasons = state.analysis?.reasons || [];
-  const total = Number(summary.total || counts.Total || 0);
+  const total = interactiveAnalysisTotal(state.analysis, summary, counts);
+  const displayCounts = interactiveNpsCounts(summary, counts, total);
   const score = Number(summary.nps ?? summary.NPS ?? summary.nps ?? 0);
-  const promoter = Number(counts.Promoter || counts.Promoter || 0);
-  const detractor = Number(counts.Detractor || counts.Detractor || 0);
+  const promoter = Number(displayCounts.Promoter || 0);
+  const detractor = Number(displayCounts.Detractor || 0);
   const positive = Number(sentiment.Positive || 0);
   const negative = Number(sentiment.Negative || 0);
   const bestWeek = weekly.length
@@ -11022,10 +11482,12 @@ function interactiveHtmlHome(tabs, references, options = {}) {
       <p class="interactive-subtitle">A leadership-ready interactive report for NPS health, customer sentiment, driver movement, people performance, and action planning.</p>
       <div class="interactive-hero-actions">
         <a href="#interactive-executive-read">Executive Read</a>
-        <a href="#interactive-index">Explore Views</a>
+        <a href="#interactive-executive-snapshot">Executive Snapshot</a>
+        <a href="#interactive-executive-signals-section">Executive Signals</a>
+        <a href="#interactive-index">Explore View</a>
       </div>
     </div>
-    <div class="interactive-news-card">
+    <div id="interactive-executive-signals" class="interactive-news-card">
       <h2>Latest insights</h2>
       <div><strong>NPS headline</strong><span>${formatMetric(score)} across ${total.toLocaleString()} analyzed responses.</span></div>
       <div><strong>Top driver</strong><span>${escapeHtml(topDriver)}</span></div>
@@ -11048,6 +11510,46 @@ function interactiveHtmlHome(tabs, references, options = {}) {
     <h2>Analysis views</h2>
     <div class="interactive-index-grid">
       ${references.map((row, index) => `<a href="#interactive-intro-${escapeHtml(row.tab)}"><span>${String(index + 1).padStart(2, "0")}</span><strong>${escapeHtml(row.title)}</strong><small>${row.cardCount} cards | ${row.chartCount} visuals | ${row.tableCount} tables</small></a>`).join("")}
+    </div>
+  </section>`;
+}
+
+function interactiveExecutiveSummaryReadHtml() {
+  const source = $("resultExecutiveSummaryBox");
+  if (!source || !source.textContent.trim()) return "";
+  return `<section class="interactive-executive-summary-read" aria-label="Executive Read from Analysis Results">
+    <p class="interactive-eyebrow">Analysis Results Executive Read</p>
+    <h2>Executive Read</h2>
+    <div class="interactive-executive-summary-body">${source.innerHTML}</div>
+  </section>`;
+}
+
+function interactiveExecutiveSignalsSectionHtml() {
+  const summary = state.analysis?.summary || {};
+  const counts = state.analysis?.counts || {};
+  const sentiment = state.analysis?.sentiment || {};
+  const weekly = state.analysis?.weekly || [];
+  const reasons = state.analysis?.reasons || [];
+  const total = interactiveAnalysisTotal(state.analysis, summary, counts);
+  const displayCounts = interactiveNpsCounts(summary, counts, total);
+  const score = Number(summary.nps ?? summary.NPS ?? 0);
+  const detractor = Number(displayCounts.Detractor || 0);
+  const positive = Number(sentiment.Positive || 0);
+  const negative = Number(sentiment.Negative || 0);
+  const bestWeek = weekly.length
+    ? [...weekly].sort((a, b) => Number(b.NPS ?? 0) - Number(a.NPS ?? 0))[0]
+    : null;
+  const topDriver = reasons[0]?.["Primary Reason"] || reasons[0]?.Reason || reasons[0]?.Driver || "Top driver will appear after driver analysis";
+  return `<section id="interactive-executive-signals-section" class="interactive-executive-read interactive-signals-section">
+    <div class="interactive-section-toolbar"><a class="interactive-section-top-link" href="#interactive-home">Move to top</a></div>
+    <p class="interactive-eyebrow">Executive Signals</p>
+    <h2>Latest insights</h2>
+    <div class="interactive-signals-grid">
+      <div><span>NPS headline</span><strong>${formatMetric(score)}</strong><small>${total.toLocaleString()} analyzed responses</small></div>
+      <div><span>Top driver</span><strong>${escapeHtml(topDriver)}</strong><small>Primary movement signal</small></div>
+      <div><span>Best movement</span><strong>${bestWeek ? escapeHtml(formatDisplayLabel(bestWeek.Week || bestWeek.Date || bestWeek.Period || "")) : "Not available"}</strong><small>Highest weekly score</small></div>
+      <div><span>Sentiment signal</span><strong>${formatMetric(positive)}% positive</strong><small>${formatMetric(negative)}% negative</small></div>
+      <div><span>Recovery pool</span><strong>${detractor.toLocaleString()}</strong><small>Detractor responses to inspect</small></div>
     </div>
   </section>`;
 }
@@ -11120,10 +11622,18 @@ function createInteractiveHtmlReport() {
           .interactive-account-hero { margin: -6px 0 18px; color: #dff7f5; text-transform: uppercase; letter-spacing: .18em; font-size: 13px; font-weight: 300; }
           .interactive-hero h1 { margin: 0; color: #fff; font-size: clamp(36px, 3.4vw, 56px); line-height: 1.08; font-weight: 300; letter-spacing: -.02em; }
           .interactive-subtitle { max-width: 620px; margin: 20px 0 0; color: #e0f4f3; font-size: 17px; line-height: 1.45; font-weight: 300; }
-          .interactive-hero-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 28px; }
-          .interactive-hero-actions a { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; padding: 12px 22px; border: 1.5px solid #ffd22e; border-radius: 999px; color: #ffd22e; text-decoration: none; font-weight: 500; background: rgba(255,210,46,.06); transition: background .18s ease, transform .18s ease; }
-          .interactive-hero-actions a:first-child { box-shadow: inset -42px 0 0 rgba(255,210,46,.16); padding-right: 62px; }
+          .interactive-hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+          .interactive-hero-actions a { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; padding: 9px 16px; border: 1.5px solid #ffd22e; border-radius: 999px; color: #ffd22e; text-decoration: none; font-weight: 400; font-size: 13px; line-height: 1; background: rgba(255,210,46,.04); transition: background .18s ease, transform .18s ease; }
           .interactive-hero-actions a:hover { background: rgba(255,210,46,.13); transform: translateY(-1px); }
+          .interactive-section-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+          .interactive-section-top-link { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 7px 12px; border: 1px solid rgba(47,228,214,.58); border-radius: 999px; color: #dff7f5; text-decoration: none; font-size: 12px; font-weight: 400; background: rgba(255,255,255,.04); }
+          .interactive-section-top-link:hover { color: #ffd22e; border-color: #ffd22e; }
+          .interactive-signals-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+          .interactive-signals-grid div { min-height: 118px; padding: 16px; border: 1px solid rgba(255,255,255,.24); border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.05)); }
+          .interactive-signals-grid span, .interactive-signals-grid strong, .interactive-signals-grid small { display: block; }
+          .interactive-signals-grid span { color: #2fe4d6; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; }
+          .interactive-signals-grid strong { margin-top: 9px; color: #ffffff; font-size: 20px; font-weight: 500; }
+          .interactive-signals-grid small { margin-top: 6px; color: #d9eff0; line-height: 1.35; }
           .interactive-news-card { position: relative; z-index: 4; width: 100%; padding: 24px 26px; border: 1px solid rgba(255,255,255,.34); border-radius: 34px; background: linear-gradient(180deg, rgba(18,83,94,.92), rgba(13,72,82,.78)); backdrop-filter: blur(16px); box-shadow: 0 26px 80px rgba(0,0,0,.18); }
           .interactive-news-card h2 { margin: 0 0 12px; color: #fff; font-weight: 300; font-size: 24px; }
           .interactive-news-card div { padding: 8px 0; border-top: 1px solid rgba(255,255,255,.14); }
@@ -11144,6 +11654,16 @@ function createInteractiveHtmlReport() {
           .interactive-index, .interactive-executive-read { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid rgba(255,255,255,.20); border-radius: 24px; background: transparent; color: #ffffff; box-shadow: none; }
           .interactive-section { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid #cfe4ec; border-radius: 24px; background: #fff; color: #0c2340; box-shadow: 0 18px 45px rgba(12,35,64,.08); }
           .interactive-index h2, .interactive-executive-read h2 { margin: 0 0 14px; color: #ffffff; font-size: 34px; font-weight: 300; }
+          .interactive-executive-summary-read { margin: 0 0 24px; padding: 24px; border: 1px solid rgba(47,228,214,.32); border-radius: 24px; background: rgba(255,255,255,.96); color: #0c2340; box-shadow: 0 22px 60px rgba(0,0,0,.18); }
+          .interactive-executive-summary-read h2 { color: #062a45 !important; font-size: 30px !important; margin-bottom: 16px !important; }
+          .interactive-executive-summary-read .interactive-eyebrow { color: #008b8b !important; }
+          .interactive-executive-summary-body { max-height: none; color: #173b56; }
+          .interactive-executive-summary-body .result-executive-summary,
+          .interactive-executive-summary-body .result-executive-summary p,
+          .interactive-executive-summary-body .result-executive-summary li { color: #173b56 !important; }
+          .interactive-executive-summary-body .result-executive-summary h3,
+          .interactive-executive-summary-body .result-executive-summary h4 { color: #062a45 !important; }
+          .interactive-executive-summary-body .executive-callout { background: linear-gradient(135deg, #ffffff 0%, #f1fffd 100%) !important; }
           .interactive-index-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
           .interactive-index-grid a { position: relative; overflow: hidden; min-height: 118px; padding: 16px; border: 1px solid rgba(255,255,255,.28); border-radius: 20px; background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.07)); backdrop-filter: blur(14px); text-decoration: none; color: #ffffff; }
           .interactive-index-grid a::after { content: ""; position: absolute; top: -34px; right: -34px; width: 86px; height: 86px; border-radius: 999px; background: rgba(47,228,214,.10); pointer-events: none; }
@@ -11206,7 +11726,7 @@ function createInteractiveHtmlReport() {
             border-color: rgba(185, 220, 228, .88) !important;
             text-shadow: none !important;
           }
-          .interactive-section, .interactive-section-intro, .interactive-index, .interactive-executive-read { scroll-margin-top: 150px; }
+          .interactive-section, .interactive-section-intro, .interactive-index, .interactive-executive-read, .interactive-signals-section { scroll-margin-top: 150px; }
           .interactive-section-intro { min-height: 520px; margin: 22px auto; max-width: 1320px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .44fr); gap: 34px; align-items: center; padding: 52px; border: 1px solid rgba(255,255,255,.24); border-radius: 32px; color: #ffffff; background:
             radial-gradient(circle at 86% 18%, rgba(127,194,65,.14), transparent 28%),
             radial-gradient(circle at 10% 85%, rgba(0,213,205,.14), transparent 30%),
@@ -11248,7 +11768,7 @@ function createInteractiveHtmlReport() {
             .interactive-hero-visual { inset: auto 0 0 12vw; height: 230px; opacity: .28; }
             .interactive-section-intro { grid-template-columns: 1fr; padding: 30px; }
             .interactive-intro-image, .interactive-intro-image img { min-height: 220px; }
-            .interactive-kpi-strip, .interactive-index-grid, .interactive-report-section .metric-grid, .interactive-report-section .dashboard-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+            .interactive-kpi-strip, .interactive-index-grid, .interactive-signals-grid, .interactive-report-section .metric-grid, .interactive-report-section .dashboard-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
           }
           @media print {
             @page { size: A4 landscape; margin: 9mm; }
@@ -11418,10 +11938,16 @@ function createInteractiveHtmlReport() {
           </nav>
           ${interactiveHtmlHome(tabs, references, htmlOptions)}
           <section id="interactive-executive-read" class="interactive-executive-read">
+            <div class="interactive-section-toolbar"><a class="interactive-section-top-link" href="#interactive-home">Move to top</a></div>
+            ${interactiveExecutiveSummaryReadHtml()}
+          </section>
+          <section id="interactive-executive-snapshot" class="interactive-executive-read">
+            <div class="interactive-section-toolbar"><a class="interactive-section-top-link" href="#interactive-home">Move to top</a></div>
             <p class="interactive-eyebrow">Best of the Best Executive Read</p>
             <h2>What leadership should know first</h2>
             ${snapshot}
           </section>
+          ${interactiveExecutiveSignalsSectionHtml()}
           ${sections}
         </main>
         <script>
@@ -12937,7 +13463,7 @@ function performanceScoreFromRows(rows, fallback = 0) {
     const detractor = typed.filter((item) => isDetractorType(item.type)).length;
     const total = promoter + passive + detractor;
     return {
-      score: total ? (promoter / total) * 100 : fallback,
+      score: total ? ((promoter - detractor) / total) * 100 : fallback,
       total,
       promoter,
       passive,
@@ -14213,7 +14739,7 @@ function performanceMovingAveragePopulationPoints(dailyRows, mode = "daily", con
     Week: bucket.label,
     Period: bucket.label,
     Key: bucket.key,
-    NPS: bucket.Responses ? Number(((bucket.Promoter / bucket.Responses) * 100).toFixed(1)) : 0,
+    NPS: bucket.Responses ? Number((((bucket.Promoter - bucket.Detractor) / bucket.Responses) * 100).toFixed(1)) : 0,
     Responses: bucket.Responses,
     Promoter: bucket.Promoter,
     Passive: bucket.Passive,
@@ -17583,6 +18109,7 @@ function renderDataViews(analysis = state.analysis || {}) {
   renderAnyTable("analysisSentimentTable", analysis.sentimentMovement || []);
   renderAnyTable("analysisConsistencyTable", analysis.consistency || [], 6);
   renderAnyTable("analysisFormulaTable", analysis.formulas || [], 4);
+  renderDimensionLens(analysis.dynamicDimensions || []);
   renderDynamicDimensions(analysis.dynamicDimensions || []);
   if ($("detailedInsightText")) $("detailedInsightText").textContent = analysis.insights || "Run analysis to populate detailed insight.";
   if (typeof setupStatsControls === "function") setupStatsControls(analysis);
@@ -18457,6 +18984,102 @@ function resultStatusTone(status = "") {
   return "pass";
 }
 
+function resultDecisionFocusBucket(status = "") {
+  const text = String(status || "").toLowerCase();
+  if (/no action|informational/.test(text)) {
+    return { key: "noaction", label: "No Action Required", tone: "neutral", description: "Informational checks only." };
+  }
+  if (/favorable|healthy|pass|lower-risk|low risk/.test(text)) {
+    return { key: "favorable", label: "Favorable", tone: "pass", description: "Healthy signals to maintain." };
+  }
+  if (/monitor|watch|directional|no evidence/.test(text)) {
+    return { key: "monitor", label: "Monitor", tone: "monitor", description: "Watch before acting." };
+  }
+  return { key: "actionable", label: "Actionable", tone: "attention", description: "Needs follow-up or review." };
+}
+
+function resultDecisionShortResponse(question = {}) {
+  const text = `${question.text || ""} ${question.answer || ""} ${question.status || ""}`.toLowerCase();
+  if (/below target|target gap|miss|below/.test(text)) return "Below target";
+  if (/above target|met target|at target|above/.test(text)) return "Above target";
+  if (/declin|drop|down|worsen|negative momentum/.test(text)) return "Declining";
+  if (/improv|increase|up|positive momentum|recover/.test(text)) return "Improving";
+  if (/stable|flat|unchanged|consistent/.test(text)) return "Stable";
+  if (/highest|best|top reliable|leads/.test(text)) return "Top segment";
+  if (/lowest|weakest|needs focus|bottom/.test(text)) return "Needs focus";
+  if (/negative sentiment|risk|review|required|actionable|investigate/.test(text)) return "Needs review";
+  if (/monitor|directional|watch/.test(text)) return "Monitor";
+  if (/favorable|healthy|controlled|low risk/.test(text)) return "Healthy";
+  if (/no action|informational/.test(text)) return "No action";
+  return resultDecisionFocusBucket(question.status || "Monitor").label;
+}
+
+function showResultDecisionFocusDetail(questions = [], bucketKey = "actionable", title = "Decision Checks") {
+  const modal = $("summaryModal");
+  const body = $("summaryBody");
+  if (!modal || !body) return;
+  const rows = questions.filter((question) => resultDecisionFocusBucket(question.status || "Monitor").key === bucketKey);
+  body.innerHTML = `<div class="lens-question-popup decision-focus-detail">
+    <p class="eyebrow">Decision Focus</p>
+    <h2>${escapeHtml(title)}</h2>
+    <p class="modal-subtitle">${rows.length.toLocaleString()} check${rows.length === 1 ? "" : "s"} in this decision group.</p>
+    <div class="table-wrap fit-table compact-report-table">
+      <table class="decision-question-table decision-focus-detail-table">
+        <thead><tr><th>S.No</th><th>Category</th><th>Check</th><th>Response</th><th>Status</th></tr></thead>
+        <tbody>${rows.length ? rows.map((question, index) => {
+          const status = question.status || "Monitor";
+          const tone = resultStatusTone(status);
+          return `<tr>
+            <td>${index + 1}</td>
+            <td><strong>${escapeHtml(resultQuestionCategory(question))}</strong></td>
+            <td>${escapeHtml(question.question || "Decision check")}</td>
+            <td><span class="decision-short-response">${escapeHtml(resultDecisionShortResponse(question))}</span></td>
+            <td><span class="decision-status-pill ${tone}">${escapeHtml(status)}</span></td>
+          </tr>`;
+        }).join("") : `<tr><td colspan="5">No checks are available in this group.</td></tr>`}</tbody>
+      </table>
+    </div>
+  </div>`;
+  modal.classList.remove("hidden");
+}
+
+function renderResultDecisionFocusCards(questions = [], selectedCategory = "All") {
+  const container = $("resultDecisionFocusCards");
+  if (!container) return;
+  const categoryQuestions = questions.filter((question) => selectedCategory === "All" || resultQuestionCategory(question) === selectedCategory);
+  const buckets = [
+    resultDecisionFocusBucket("Actionable"),
+    resultDecisionFocusBucket("Monitor"),
+    resultDecisionFocusBucket("Favorable"),
+    resultDecisionFocusBucket("No Action Required"),
+  ];
+  const grouped = new Map(buckets.map((bucket) => [bucket.key, { ...bucket, items: [] }]));
+  categoryQuestions.forEach((question) => {
+    const bucket = resultDecisionFocusBucket(question.status || "Monitor");
+    grouped.get(bucket.key)?.items.push(question);
+  });
+  container.innerHTML = buckets.map((bucket) => {
+    const group = grouped.get(bucket.key) || { ...bucket, items: [] };
+    const checks = group.items.slice(0, 3).map((question) => `<li>${escapeHtml(question.question || "Decision check")}</li>`).join("");
+    const more = group.items.length > 3 ? `<li class="decision-focus-more">+${group.items.length - 3} more checks</li>` : "";
+    const empty = group.items.length ? "" : `<li class="decision-focus-empty">No checks in this group</li>`;
+    return `<article class="decision-focus-card ${bucket.tone}" data-decision-focus-card="${escapeHtml(bucket.key)}" title="Double-click to view all ${escapeHtml(bucket.label)} checks">
+      <div class="decision-focus-card-head">
+        <span class="decision-status-pill ${bucket.tone}">${escapeHtml(bucket.label)}</span>
+        <strong>${group.items.length}</strong>
+      </div>
+      <p>${escapeHtml(bucket.description)}</p>
+      <ul>${checks}${more}${empty}</ul>
+    </article>`;
+  }).join("");
+  container.querySelectorAll("[data-decision-focus-card]").forEach((card) => {
+    card.addEventListener("dblclick", () => {
+      const bucket = buckets.find((item) => item.key === card.dataset.decisionFocusCard) || buckets[0];
+      showResultDecisionFocusDetail(categoryQuestions, bucket.key, bucket.label);
+    });
+  });
+}
+
 function renderResultDecisionQuestions(questions = [], selectedCategory = "All", selectedDecision = "All") {
   const container = $("resultDecisionGuide");
   const select = $("resultDecisionCategory");
@@ -18476,6 +19099,7 @@ function renderResultDecisionQuestions(questions = [], selectedCategory = "All",
     decisionSelect.onchange = () => renderResultDecisionQuestions(questions, select?.value || "All", decisionSelect.value || "All");
     selectedDecision = currentDecision;
   }
+  renderResultDecisionFocusCards(questions, selectedCategory);
   const filtered = questions.filter((question) => {
     const categoryMatch = selectedCategory === "All" || resultQuestionCategory(question) === selectedCategory;
     const decisionMatch = selectedDecision === "All" || (question.status || "Monitor") === selectedDecision;
@@ -18485,17 +19109,19 @@ function renderResultDecisionQuestions(questions = [], selectedCategory = "All",
   container.innerHTML = filtered.length ? `
     <div class="table-wrap fit-table compact-report-table">
       <table class="decision-question-table decision-check-table">
-        <thead><tr><th>S.No</th><th>Category</th><th>Check</th><th>Status</th><th>Info</th></tr></thead>
+        <thead><tr><th>S.No</th><th>Category</th><th>Check</th><th>Response</th><th>Status</th><th>Info</th></tr></thead>
         <tbody>
           ${filtered.map((question, index) => {
             const originalIndex = Math.max(0, questions.indexOf(question));
             const status = question.status || "Monitor";
             const tone = resultStatusTone(status);
+            const answer = question.text || question.answer || "Answered after the completed analysis is available.";
             const info = question.method || question.logic || question.statistics || question.guardrail || question.text || "";
             return `<tr>
               <td>${index + 1}</td>
               <td><strong>${escapeHtml(resultQuestionCategory(question))}</strong></td>
               <td>${escapeHtml(question.question || "Decision check")}</td>
+              <td class="decision-response-cell" title="${escapeHtml(answer)}"><span>${escapeHtml(answer)}</span></td>
               <td><span class="decision-status-pill ${tone}">${escapeHtml(status)}</span></td>
               <td><button class="mini-info-button" type="button" data-result-question-info="${originalIndex}" title="${escapeHtml(info)}">i</button></td>
             </tr>`;
@@ -18803,13 +19429,18 @@ function resultDateFromRow(row = {}) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function resultLocalDateKey(date) {
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function resultWeekKeyForDate(date) {
   if (!date) return "";
   const startDay = resultCalendarWeekStartIndex();
   const normalized = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diff = (normalized.getDay() - startDay + 7) % 7;
   normalized.setDate(normalized.getDate() - diff);
-  return normalized.toISOString().slice(0, 10);
+  return resultLocalDateKey(normalized);
 }
 
 function resultMonthKeyForDate(date) {
@@ -19243,28 +19874,28 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
     </div>
     <h4>Executive Performance Summary</h4>
     <ul class="executive-bullet-list">
-      <li><strong>Coverage:</strong> A total of <strong>${escapeHtml(totalText)}</strong> customer surveys were analyzed across <strong>${weeklyRows.length || "X"}</strong> weeks covering the period <strong>${escapeHtml(startDate || periodText)}</strong> to <strong>${escapeHtml(endDate || periodText)}</strong>.</li>
-      <li><strong>Target Achievement:</strong> Overall ${escapeHtml(metric)} is <strong>${fmt(score, scoreSuffix)}</strong> against a target of <strong>${fmt(target, scoreSuffix)}</strong>, resulting in a variance of <strong>${fmt(gap)}</strong> points (${gap >= 0 ? "Above Target" : "Below Target"}). The target was achieved in <strong>${targetHitWeeks}</strong> of <strong>${weeklyRows.length || "X"}</strong> weeks (<strong>${fmt(targetHitPct, "%")}</strong>), indicating <strong>${escapeHtml(targetAttainment)}</strong> target attainment.</li>
-      <li><strong>Average Performance:</strong> The average ${escapeHtml(metric)} for the analysis period is <strong>${fmt(weeklyMean, scoreSuffix)}</strong>, while the current week recorded <strong>${fmt(currentWeekScore, scoreSuffix)}</strong>, which is <strong>${fmt(Math.abs(currentWeekVsAvg))}</strong> points (<strong>${fmt(Math.abs(currentWeekVsAvgPct), "%")}</strong>) ${currentWeekVsAvg >= 0 ? "Above" : "Below"} the period average.</li>
-      <li><strong>Volume & Trend:</strong> The average weekly survey volume is <strong>${fmt(avgWeeklyVolume)}</strong>, while the average monthly survey volume is <strong>${fmt(avgMonthlyVolume)}</strong>. The current week recorded <strong>${fmt(latestVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentWeekVolumeGap), "%")}</strong> ${currentWeekVolumeGap >= 0 ? "Above" : "Below"} the weekly average), and the current month recorded <strong>${fmt(currentMonthVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentMonthVolumeGap), "%")}</strong> ${currentMonthVolumeGap >= 0 ? "Above" : "Below"} the monthly average), indicating <strong>${escapeHtml(volumeWord)}</strong> customer participation.</li>
-      <li><strong>Performance Trend:</strong> Compared to the previous reporting period, ${escapeHtml(metric)} has <strong>${escapeHtml(trendWord)}</strong> by <strong>${fmt(Math.abs(movement))}</strong> points (<strong>${fmt(Math.abs(movementPct), "%")}</strong>), indicating <strong>${escapeHtml(momentum)}</strong> momentum.</li>
-      <li><strong>Performance Consistency:</strong> Across the analysis period, performance improved in <strong>${improvedWeeks}</strong> weeks, declined in <strong>${declinedWeeks}</strong> weeks, and remained unchanged in <strong>${unchangedWeeks}</strong> weeks, reflecting <strong>${escapeHtml(stability)}</strong> consistency. The overall volatility score is <strong>${fmt(volatility)}</strong>, indicating <strong>${escapeHtml(volatilityLabel)}</strong> performance.</li>
-      <li><strong>Improvement Opportunity:</strong> The Interquartile Range (IQR) is <strong>${fmt(iqr)}</strong> points, with the top quartile averaging <strong>${fmt(topQuartileAvg, scoreSuffix)}</strong> and the bottom quartile averaging <strong>${fmt(bottomQuartileAvg, scoreSuffix)}</strong>, resulting in an interquartile gap of <strong>${fmt(interquartileGap)}</strong> points. The middle 50% of observations fall between <strong>${fmt(q1, scoreSuffix)}</strong> and <strong>${fmt(q3, scoreSuffix)}</strong>, suggesting <strong>${escapeHtml(experienceVariability)}</strong> variability in customer experience.</li>
+      <li>A total of <strong>${escapeHtml(totalText)}</strong> customer surveys were analyzed across <strong>${weeklyRows.length || "X"}</strong> weeks covering the period <strong>${escapeHtml(startDate || periodText)}</strong> to <strong>${escapeHtml(endDate || periodText)}</strong>.</li>
+      <li>Overall ${escapeHtml(metric)} is <strong>${fmt(score, scoreSuffix)}</strong> against a target of <strong>${fmt(target, scoreSuffix)}</strong>, resulting in a variance of <strong>${fmt(gap)}</strong> points (${gap >= 0 ? "Above Target" : "Below Target"}). The target was achieved in <strong>${targetHitWeeks}</strong> of <strong>${weeklyRows.length || "X"}</strong> weeks (<strong>${fmt(targetHitPct, "%")}</strong>), indicating <strong>${escapeHtml(targetAttainment)}</strong> target attainment.</li>
+      <li>The average ${escapeHtml(metric)} for the analysis period is <strong>${fmt(weeklyMean, scoreSuffix)}</strong>, while the current week recorded <strong>${fmt(currentWeekScore, scoreSuffix)}</strong>, which is <strong>${fmt(Math.abs(currentWeekVsAvg))}</strong> points (<strong>${fmt(Math.abs(currentWeekVsAvgPct), "%")}</strong>) ${currentWeekVsAvg >= 0 ? "Above" : "Below"} the period average.</li>
+      <li>The average weekly survey volume is <strong>${fmt(avgWeeklyVolume)}</strong>, while the average monthly survey volume is <strong>${fmt(avgMonthlyVolume)}</strong>. The current week recorded <strong>${fmt(latestVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentWeekVolumeGap), "%")}</strong> ${currentWeekVolumeGap >= 0 ? "Above" : "Below"} the weekly average), and the current month recorded <strong>${fmt(currentMonthVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentMonthVolumeGap), "%")}</strong> ${currentMonthVolumeGap >= 0 ? "Above" : "Below"} the monthly average), indicating <strong>${escapeHtml(volumeWord)}</strong> customer participation.</li>
+      <li>Compared to the previous reporting period, ${escapeHtml(metric)} has <strong>${escapeHtml(trendWord)}</strong> by <strong>${fmt(Math.abs(movement))}</strong> points (<strong>${fmt(Math.abs(movementPct), "%")}</strong>), indicating <strong>${escapeHtml(momentum)}</strong> momentum.</li>
+      <li>Across the analysis period, performance improved in <strong>${improvedWeeks}</strong> weeks, declined in <strong>${declinedWeeks}</strong> weeks, and remained unchanged in <strong>${unchangedWeeks}</strong> weeks, reflecting <strong>${escapeHtml(stability)}</strong> consistency. The overall volatility score is <strong>${fmt(volatility)}</strong>, indicating <strong>${escapeHtml(volatilityLabel)}</strong> performance.</li>
+      <li>The Interquartile Range (IQR) is <strong>${fmt(iqr)}</strong> points, with the top quartile averaging <strong>${fmt(topQuartileAvg, scoreSuffix)}</strong> and the bottom quartile averaging <strong>${fmt(bottomQuartileAvg, scoreSuffix)}</strong>, resulting in an interquartile gap of <strong>${fmt(interquartileGap)}</strong> points. The middle 50% of observations fall between <strong>${fmt(q1, scoreSuffix)}</strong> and <strong>${fmt(q3, scoreSuffix)}</strong>, suggesting <strong>${escapeHtml(experienceVariability)}</strong> variability in customer experience.</li>
     </ul>
     <h4>AI Insights & Root Cause Analysis</h4>
     <ul class="executive-bullet-list">
-      <li><strong>Customer Sentiment:</strong> AI analysis indicates <strong>${fmt(Number(sentiment.Positive), "%")}</strong> Positive, <strong>${fmt(Number(sentiment.Neutral), "%")}</strong> Neutral, and <strong>${fmt(Number(sentiment.Negative), "%")}</strong> Negative sentiment, suggesting an overall customer experience that is <strong>${escapeHtml(sentimentAssessment)}</strong>.</li>
-      <li><strong>Key Satisfaction Drivers:</strong> ACPT analysis identifies <strong>${escapeHtml(driverText)}</strong> as the strongest contributors to customer satisfaction.</li>
-      <li><strong>Primary Pain Points:</strong> The leading causes of dissatisfaction are <strong>${escapeHtml(painText)}</strong>, representing the biggest barriers to achieving the target.</li>
-      <li><strong>Dominant Themes:</strong> Theme analysis highlights <strong>${escapeHtml(themeText)}</strong> as the most influential customer topics by frequency and business impact.</li>
-      <li><strong>Emerging Trends:</strong> AI detected <strong>X</strong> emerging themes that have increased by <strong>X%</strong> compared to the previous period and may require proactive attention.</li>
+      <li>AI analysis indicates <strong>${fmt(Number(sentiment.Positive), "%")}</strong> Positive, <strong>${fmt(Number(sentiment.Neutral), "%")}</strong> Neutral, and <strong>${fmt(Number(sentiment.Negative), "%")}</strong> Negative sentiment, suggesting an overall customer experience that is <strong>${escapeHtml(sentimentAssessment)}</strong>.</li>
+      <li>ACPT analysis identifies <strong>${escapeHtml(driverText)}</strong> as the strongest contributors to customer satisfaction.</li>
+      <li>The leading causes of dissatisfaction are <strong>${escapeHtml(painText)}</strong>, representing the biggest barriers to achieving the target.</li>
+      <li>Theme analysis highlights <strong>${escapeHtml(themeText)}</strong> as the most influential customer topics by frequency and business impact.</li>
+      <li>AI detected <strong>X</strong> emerging themes that have increased by <strong>X%</strong> compared to the previous period and may require proactive attention.</li>
     </ul>
     <h4>Business Impact & Recommendations</h4>
     <ul class="executive-bullet-list">
-      <li><strong>Highest Impact Opportunity:</strong> Addressing <strong>${escapeHtml(driverText)}</strong> is expected to improve overall ${escapeHtml(metric)} by approximately <strong>${fmt(impactPoints)}</strong> points based on current trend analysis.</li>
-      <li><strong>Operational Focus:</strong> The largest performance gap exists within <strong>${escapeHtml(priority)}</strong>, contributing <strong>${fmt(operationalShare, "%")}</strong> of all negative customer feedback and representing the highest ROI improvement opportunity.</li>
-      <li><strong>Recommended Actions:</strong> Prioritize improvements in <strong>${escapeHtml(priority)}</strong>, replicate best practices from the top-performing segments, and focus coaching on the bottom-performing quartile to reduce performance variation.</li>
-      <li><strong>Business Outlook:</strong> Based on statistical analysis, AI insights, sentiment, ACPT findings, theme distribution, and recent performance trends, overall performance is assessed as <strong>${escapeHtml(outlook)}</strong>, with <strong>${escapeHtml(priority)}</strong> identified as the highest-priority initiative for the next reporting period.</li>
+      <li>Addressing <strong>${escapeHtml(driverText)}</strong> is expected to improve overall ${escapeHtml(metric)} by approximately <strong>${fmt(impactPoints)}</strong> points based on current trend analysis.</li>
+      <li>The largest performance gap exists within <strong>${escapeHtml(priority)}</strong>, contributing <strong>${fmt(operationalShare, "%")}</strong> of all negative customer feedback and representing the highest ROI improvement opportunity.</li>
+      <li>Prioritize improvements in <strong>${escapeHtml(priority)}</strong>, replicate best practices from the top-performing segments, and focus coaching on the bottom-performing quartile to reduce performance variation.</li>
+      <li>Based on statistical analysis, AI insights, sentiment, ACPT findings, theme distribution, and recent performance trends, overall performance is assessed as <strong>${escapeHtml(outlook)}</strong>, with <strong>${escapeHtml(priority)}</strong> identified as the highest-priority initiative for the next reporting period.</li>
     </ul>
   </section>`;
 }
@@ -19493,6 +20124,7 @@ function renderAnalysis(analysis, options = {}) {
   refreshSummaryBuilder();
   renderSummaryBuilderDashboard();
   renderColumnExplorer();
+  renderAnalysisRawDataPage();
   if (typeof renderExecutiveLens === "function") renderExecutiveLens(analysis);
   if (typeof renderThemeBuilder === "function") renderThemeBuilder();
   if (typeof renderAnalysisSnapshot === "function") renderAnalysisSnapshot(analysis);
@@ -19570,20 +20202,71 @@ function owlEvidenceRows(rows) {
   })).filter((row) => row.Theme !== "Not classified" || row.ACPT !== "Not classified" || row["Resolution Status"] !== "Not mentioned");
 }
 
+function polarPoint(cx, cy, radius, angleDegrees) {
+  const angle = (angleDegrees - 90) * Math.PI / 180;
+  return {
+    x: cx + radius * Math.cos(angle),
+    y: cy + radius * Math.sin(angle),
+  };
+}
+
+function renderOwlDistributionChart(svgId, dist = [], emptyMessage = "Run Owl theme classification to view this chart.") {
+  const svg = $(svgId);
+  if (!svg) return;
+  const top = (dist || []).slice(0, 4);
+  const other = (dist || []).slice(4).reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const data = other > 0 ? [...top, { label: "Other", count: other }] : top;
+  if (!data.length) {
+    svg.innerHTML = `<text x="380" y="130" text-anchor="middle" fill="#728399" font-size="13">${escapeHtml(emptyMessage)}</text>`;
+    return;
+  }
+  const cx = 380, cy = 140, radius = 112;
+  const total = data.reduce((sum, item) => sum + Number(item.count || 0), 0) || 1;
+  const palette = ["#1f7fd1", "#34c98f", "#ffb252", "#7c5cff", "#d9e6ee"];
+  let start = -90;
+  const slices = data.map((item, index) => {
+    const value = Number(item.count || 0);
+    const angle = (value / total) * 360;
+    const end = start + angle;
+    const large = angle > 180 ? 1 : 0;
+    const startPoint = polarPoint(cx, cy, radius, start);
+    const endPoint = polarPoint(cx, cy, radius, end);
+    const mid = polarPoint(cx, cy, radius + 30, start + angle / 2);
+    const labelX = mid.x < cx ? mid.x - 88 : mid.x + 14;
+    const labelAnchor = mid.x < cx ? "end" : "start";
+    const label = String(item.label || "Unknown").slice(0, 18);
+    const pct = (value / total) * 100;
+    start = end;
+    const shape = angle >= 359.99
+      ? `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${palette[index % palette.length]}" stroke="#fff" stroke-width="2"></circle>`
+      : `<path d="M ${cx} ${cy} L ${startPoint.x} ${startPoint.y} A ${radius} ${radius} 0 ${large} 1 ${endPoint.x} ${endPoint.y} Z" fill="${palette[index % palette.length]}" stroke="#fff" stroke-width="2"></path>`;
+    return `
+      ${shape}
+      <line x1="${mid.x}" y1="${mid.y}" x2="${labelAnchor === "end" ? labelX + 8 : labelX - 8}" y2="${mid.y}" stroke="${palette[index % palette.length]}" stroke-width="2"></line>
+      <text x="${labelX}" y="${mid.y - 4}" text-anchor="${labelAnchor}" fill="#0c2340" font-size="11">${escapeHtml(label)}</text>
+      <text x="${labelX}" y="${mid.y + 11}" text-anchor="${labelAnchor}" fill="#50647a" font-size="10">${formatMetric(pct)}% | ${value.toLocaleString()}</text>
+    `;
+  }).join("");
+  const center = data[0] ? `${formatMetric((Number(data[0].count || 0) / total) * 100)}%` : "-";
+  svg.innerHTML = `${slices}<circle cx="${cx}" cy="${cy}" r="50" fill="#fff" opacity="0.94"></circle><text x="${cx}" y="${cy - 5}" text-anchor="middle" fill="#0c2340" font-size="24" font-weight="500">${center}</text><text x="${cx}" y="${cy + 18}" text-anchor="middle" fill="#607487" font-size="11">top share</text>`;
+}
+
 function renderOwlOverviewViews(analysis = state.analysis || {}) {
   const rows = owlOutputRows(analysis);
-  const checkedTotal = Math.min(rows.length, Math.round(Number(analysis.summary?.total || analysis.summary?.Total || state.setupBaseRowCount || rows.length)) || rows.length);
+  const declaredTotal = Math.round(Number(analysis.summary?.total || analysis.summary?.Total || state.setupBaseRowCount || rows.length)) || rows.length;
+  const checkedTotal = Math.max(rows.length, declaredTotal);
   const themeDist = owlDistribution(rows, ["Primary Reason", "Owl Primary Driver", "Primary Theme", "Theme", "Predicted Theme", "Owl Theme", "Driver", "Reason"]);
   const acptDist = owlDistribution(rows, ["ACPT Primary Category", "ACPT", "Predicted ACPT", "Owl ACPT", "Ownership", "Accountability", "Bucket Category", "Owl Customer Impact"]);
+  const resolutionDist = owlDistribution(rows, ["Owl Resolution Status", "Resolution Status", "Predicted Resolution", "Resolution"]);
   const themeCount = themeDist.reduce((sum, item) => sum + item.count, 0);
   const acptCount = acptDist.reduce((sum, item) => sum + item.count, 0);
+  const resolutionCount = resolutionDist.reduce((sum, item) => sum + item.count, 0);
   const evidence = owlEvidenceRows(rows);
   owlOverviewCards("themesOverviewMetricGrid", [
-    { label: "Rows Checked", value: checkedTotal.toLocaleString(), note: "Analyzed row output" },
-    { label: "Rows With Theme", value: themeCount.toLocaleString(), note: "Rows with theme output" },
-    { label: "Theme Coverage", value: checkedTotal ? `${formatMetric((themeCount / checkedTotal) * 100)}%` : "-", note: "Share with theme output" },
+    { label: "Rows Classified", value: checkedTotal.toLocaleString(), note: "Rows checked for Owl evidence" },
+    { label: "Theme Coverage", value: checkedTotal ? `${formatMetric((themeCount / checkedTotal) * 100)}%` : "-", note: `${themeCount.toLocaleString()} rows with theme output` },
     { label: "Top Theme", value: themeDist[0]?.label || "-", note: themeDist[0] ? `${themeDist[0].count.toLocaleString()} rows` : "No output" },
-    ...owlTopCards("Theme", themeDist, checkedTotal, 8),
+    { label: "Resolution Coverage", value: checkedTotal ? `${formatMetric((resolutionCount / checkedTotal) * 100)}%` : "-", note: resolutionDist[0] ? `${resolutionDist[0].label} leads` : "No resolution output" },
   ]);
   owlOverviewCards("acptOverviewMetricGrid", [
     { label: "Rows Checked", value: checkedTotal.toLocaleString(), note: "Analyzed row output" },
@@ -19592,7 +20275,9 @@ function renderOwlOverviewViews(analysis = state.analysis || {}) {
     { label: "Top ACPT", value: acptDist[0]?.label || "-", note: acptDist[0] ? `${acptDist[0].count.toLocaleString()} rows` : "No output" },
     ...owlTopCards("ACPT", acptDist, checkedTotal, 8),
   ]);
-  if ($("themesOverviewList")) $("themesOverviewList").innerHTML = "";
+  renderOwlDistributionChart("owlThemeTopChart", themeDist, "No Owl theme output is available yet.");
+  renderOwlDistributionChart("owlThemeAcptChart", acptDist, "No Owl ACPT output is available yet.");
+  renderOwlDistributionChart("owlThemeResolutionChart", resolutionDist, "No Owl resolution output is available yet.");
   if ($("acptOverviewList")) $("acptOverviewList").innerHTML = "";
   if ($("themesOverviewMeta")) $("themesOverviewMeta").textContent = evidence.length ? `${evidence.length.toLocaleString()} row(s) with Owl or local theme evidence.` : "No theme evidence is available yet.";
   if ($("acptOverviewMeta")) $("acptOverviewMeta").textContent = evidence.length ? `${evidence.length.toLocaleString()} row(s) with Owl or local ACPT evidence.` : "No ACPT evidence is available yet.";
@@ -19853,10 +20538,11 @@ async function loadStatus() {
   }
   const sparrowReady = payload.model_status?.sparrow?.ready;
   const vultureReady = payload.model_status?.vulture?.ready;
+  const themeUsesLocalRules = (state.activeAnalysisEngines?.theme || "local") === "local";
   if ($("sparrowDot")) $("sparrowDot").className = `dot ${sparrowReady ? "ready" : "missing"}`;
-  if ($("vultureDot")) $("vultureDot").className = `dot ${vultureReady ? "ready" : "missing"}`;
+  if ($("vultureDot")) $("vultureDot").className = `dot ${themeUsesLocalRules || vultureReady ? "ready" : "missing"}`;
   if ($("sparrowText")) $("sparrowText").textContent = sparrowReady ? "Ready" : "Missing";
-  if ($("vultureText")) $("vultureText").textContent = vultureReady ? "Ready" : "Missing";
+  if ($("vultureText")) $("vultureText").textContent = themeUsesLocalRules ? "Local Rules" : (vultureReady ? "Ready" : "Missing");
   if (!forceGuidedStart && (state.lookupColumns || []).length && !state.setupCoverageChoice) state.setupCoverageChoice = "lookup";
   if (!analysisComplete && !forceGuidedStart && (state.baseColumns || []).length && !state.setupBaseRowCount) {
     state.setupBaseRowCount = Number(payload.row_counts?.base || payload.base_rows || 0);
@@ -20364,6 +21050,7 @@ function wireUploadInputs() {
   }
 }
 wireUploadInputs();
+wireUploadedFilePreview();
 $("customStatsSource")?.addEventListener("change", renderCustomStatsShell);
 $("customStatsType")?.addEventListener("change", renderCustomStatsControls);
 $("customStatsRun")?.addEventListener("click", runCustomStats);
@@ -20375,6 +21062,10 @@ $("exportAnalysisProjectSetup")?.addEventListener("click", exportAnalysisProject
 $("exportExecutiveSummaryTxt")?.addEventListener("click", exportExecutiveSummaryTxt);
 $("exportExecutiveSummaryPdf")?.addEventListener("click", exportExecutiveSummaryPdf);
 $("exportExecutiveSummaryHtml")?.addEventListener("click", exportExecutiveSummaryHtml);
+$("downloadRawDataExcel")?.addEventListener("click", () => downloadAnalysisRawData("excel"));
+$("downloadRawDataCsv")?.addEventListener("click", () => downloadAnalysisRawData("csv"));
+$("downloadRawDataExcelPanel")?.addEventListener("click", () => downloadAnalysisRawData("excel"));
+$("downloadRawDataCsvPanel")?.addEventListener("click", () => downloadAnalysisRawData("csv"));
 $("importAnalysisProjectFile")?.addEventListener("change", (event) => importAnalysisProject(event.target.files?.[0]));
 $("startNewAnalysis")?.addEventListener("click", startNewAnalysisWorkspace);
 $("signOutAndStop")?.addEventListener("click", signOutAndStopServer);
