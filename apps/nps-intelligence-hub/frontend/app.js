@@ -11530,7 +11530,6 @@ function interactiveExecutiveSummaryReadHtml() {
   const source = $("resultExecutiveSummaryBox");
   if (!source || !source.textContent.trim()) return "";
   return `<section class="interactive-executive-summary-read" aria-label="Executive Read from Analysis Results">
-    <div class="interactive-section-toolbar"><a class="interactive-section-top-link" href="#interactive-home">Move to top</a></div>
     <p class="interactive-eyebrow">Analysis Results Executive Read</p>
     <h2>Executive Read</h2>
     <div class="interactive-executive-summary-body">${source.innerHTML}</div>
@@ -11621,6 +11620,12 @@ function createInteractiveHtmlReport() {
   }
   const references = reportReferenceRows(tabs);
   const navGroups = interactiveNavGroups(tabs);
+  const reportMenuGroupsHtml = navGroups
+    .map((group) => `<div class="interactive-dropdown-section">
+      <strong>${escapeHtml(group.label)}</strong>
+      ${group.tabs.map((tab) => `<a href="#interactive-intro-${escapeHtml(tab)}">${escapeHtml(PDF_TAB_TITLES[tab] || tab)}</a>`).join("")}
+    </div>`)
+    .join("");
   const sections = tabs.map((tab, index) => cloneTabForInteractiveHtml(tab, index)).join("");
   const baseHref = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, "")}`;
   const stylesheetHref = `${baseHref}styles.css?v=20260613-interactive-html`;
@@ -11653,18 +11658,20 @@ function createInteractiveHtmlReport() {
           .interactive-brand-mark strong { font-size: 22px; font-weight: 800; line-height: 1; }
           .interactive-account-name { margin-left: 18px; padding: 8px 14px; border-left: 1px solid rgba(47,228,214,.45); color: #dff7f5; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; font-weight: 400; }
           .interactive-nav-menu { display: flex; align-items: center; gap: 12px; margin-left: auto; }
-          .interactive-menu { position: relative; padding-bottom: 14px; margin-bottom: -14px; }
-          .interactive-menu > a { display: inline-flex; align-items: center; gap: 8px; padding: 13px 18px; border-radius: 999px; color: #f5fbfc; text-decoration: none; font-weight: 500; }
-          .interactive-menu > a::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid #2fe4d6; border-bottom: 1.5px solid #2fe4d6; transform: rotate(45deg) translateY(-2px); }
-          .interactive-menu:hover > a { background: rgba(255,255,255,.10); }
-          .interactive-dropdown { position: absolute; top: 100%; left: 0; min-width: 300px; padding: 22px; border: 1px solid rgba(47,228,214,.36); border-radius: 28px; background: linear-gradient(180deg, rgba(11,73,86,.94), rgba(8,53,65,.88)); backdrop-filter: blur(18px); box-shadow: 0 24px 60px rgba(0,0,0,.24); opacity: 0; transform: translateY(8px); pointer-events: none; transition: .18s ease; }
-          .interactive-report-menu .interactive-dropdown { left: auto; right: 0; width: min(760px, 82vw); max-height: 72vh; overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
-          .interactive-menu:hover .interactive-dropdown { opacity: 1; transform: translateY(0); pointer-events: auto; }
-          .interactive-dropdown a { display: block; padding: 10px 0; color: rgba(245,251,252,.92); text-decoration: none; font-weight: 400; border-top: 1px solid rgba(255,255,255,.08); }
-          .interactive-dropdown a:first-of-type { border-top: 0; }
-          .interactive-dropdown a:hover { color: #2fe4d6; padding-left: 4px; }
-          .interactive-dropdown-section strong { display: block; margin-bottom: 8px; color: #2fe4d6; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; font-weight: 500; }
-          .interactive-dropdown-section a { font-size: 13px; padding: 7px 0; }
+          .interactive-menu { position: relative; padding-bottom: 12px; margin-bottom: -12px; }
+          .interactive-menu > a { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 8px 14px; border: 1px solid rgba(47,228,214,.42); border-radius: 999px; color: #f5fbfc; text-decoration: none; font-size: 13px; font-weight: 400; background: rgba(255,255,255,.05); }
+          .interactive-menu > a::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid #2fe4d6; border-bottom: 1.5px solid #2fe4d6; transform: rotate(45deg) translateY(-2px); }
+          .interactive-menu:hover > a, .interactive-menu:focus-within > a { color: #ffd22e; border-color: rgba(255,210,46,.8); background: rgba(255,210,46,.08); }
+          .interactive-dropdown { position: absolute; top: calc(100% - 2px); right: 0; z-index: 20; width: min(720px, 74vw); max-height: 58vh; overflow: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; padding: 18px 20px; border: 1px solid rgba(47,228,214,.36); border-radius: 22px; background: rgba(247,252,252,.98); box-shadow: 0 24px 60px rgba(0,0,0,.28); opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .16s ease, transform .16s ease; scrollbar-width: thin; scrollbar-color: rgba(0,156,156,.76) rgba(0,72,84,.08); }
+          .interactive-dropdown::-webkit-scrollbar { width: 8px; height: 8px; }
+          .interactive-dropdown::-webkit-scrollbar-track { background: rgba(0,72,84,.07); border-radius: 999px; margin: 14px 0; }
+          .interactive-dropdown::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #2fe4d6, #008c8d); border: 2px solid rgba(247,252,252,.98); border-radius: 999px; }
+          .interactive-dropdown::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #ffd22e, #00a7a7); }
+          .interactive-menu:hover .interactive-dropdown, .interactive-menu:focus-within .interactive-dropdown { opacity: 1; transform: translateY(0); pointer-events: auto; }
+          .interactive-dropdown-section strong { display: block; margin: 0 0 8px; color: #008c8d; text-transform: uppercase; letter-spacing: .14em; font-size: 10px; font-weight: 600; }
+          .interactive-dropdown-section a { display: block; padding: 7px 0; border-top: 1px solid rgba(0,72,84,.10); color: #0c2340; text-decoration: none; font-size: 13px; line-height: 1.25; font-weight: 400; }
+          .interactive-dropdown-section a:first-of-type { border-top: 0; }
+          .interactive-dropdown-section a:hover { color: #008c8d; }
           .interactive-download-action { border: 1px solid #ffd22e; color: #ffd22e !important; font-weight: 500; text-decoration: none; padding: 10px 14px; border-radius: 999px; white-space: nowrap; }
           .interactive-download-action.secondary { border-color: rgba(47,228,214,.58); color: #dff7f5 !important; }
           .interactive-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); gap: 54px; align-items: start; min-height: 650px; padding: 150px 7vw 56px; overflow: hidden; }
@@ -11705,7 +11712,7 @@ function createInteractiveHtmlReport() {
           .interactive-index, .interactive-executive-read { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid rgba(255,255,255,.20); border-radius: 24px; background: transparent; color: #ffffff; box-shadow: none; }
           .interactive-section { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid #cfe4ec; border-radius: 24px; background: #fff; color: #0c2340; box-shadow: 0 18px 45px rgba(12,35,64,.08); }
           .interactive-index h2, .interactive-executive-read h2 { margin: 0 0 14px; color: #ffffff; font-size: 34px; font-weight: 300; }
-          .interactive-executive-summary-read { margin: 0 0 24px; padding: 24px; border: 1px solid rgba(47,228,214,.32); border-radius: 24px; background: transparent; color: #ffffff; box-shadow: none; }
+          .interactive-executive-summary-read { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: #ffffff; box-shadow: none; }
           .interactive-executive-summary-read h2 { color: #ffffff !important; font-size: 30px !important; margin-bottom: 16px !important; }
           .interactive-executive-summary-read .interactive-eyebrow { color: #2fe4d6 !important; }
           .interactive-executive-summary-body { max-height: none; color: #ffffff; }
@@ -11721,14 +11728,16 @@ function createInteractiveHtmlReport() {
           .interactive-decision-guide-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 12px; }
           .interactive-decision-guide-head h3 { margin: 0; color: #ffffff; font-size: 24px; font-weight: 400; }
           .interactive-decision-guide-head span { color: #dff7f5; border: 1px solid rgba(47,228,214,.42); border-radius: 999px; padding: 7px 12px; font-size: 12px; }
-          .interactive-decision-table-wrap { max-height: 680px; overflow: auto; border: 1px solid rgba(255,255,255,.18); border-radius: 18px; background: rgba(255,255,255,.05); }
-          .interactive-decision-table { width: 100%; border-collapse: collapse; color: #ffffff; font-size: 12px; }
-          .interactive-decision-table th { position: sticky; top: 0; z-index: 1; background: rgba(4,56,66,.98); color: #dff7f5; text-align: left; text-transform: uppercase; letter-spacing: .08em; font-size: 10px; font-weight: 500; padding: 10px 12px; border-bottom: 1px solid rgba(47,228,214,.22); }
-          .interactive-decision-table td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,.10); vertical-align: top; line-height: 1.35; }
-          .interactive-decision-table tr:nth-child(even) td { background: rgba(255,255,255,.035); }
-          .interactive-decision-table th:first-child, .interactive-decision-table td:first-child { width: 54px; text-align: center; }
-          .interactive-decision-table th:nth-child(2), .interactive-decision-table td:nth-child(2) { width: 120px; color: #bff6f1; }
-          .interactive-decision-table th:nth-child(5), .interactive-decision-table td:nth-child(5) { width: 120px; }
+          .interactive-decision-table-wrap { max-height: 680px; overflow: auto; border: 1px solid rgba(255,255,255,.18); border-radius: 18px; background: rgba(5,58,68,.46); }
+          .interactive-decision-table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; color: #ffffff; font-size: 12px; background: transparent !important; }
+          .interactive-decision-table th { position: sticky; top: 0; z-index: 1; background: rgba(4,56,66,.98) !important; color: #dff7f5 !important; text-align: left; text-transform: uppercase; letter-spacing: .08em; font-size: 10px; font-weight: 500; padding: 10px 12px; border-bottom: 1px solid rgba(47,228,214,.22); }
+          .interactive-decision-table td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,.10); vertical-align: top; line-height: 1.35; color: #eefefe !important; background: transparent !important; white-space: normal; overflow: hidden; text-overflow: ellipsis; }
+          .interactive-decision-table tr:nth-child(even) { background: rgba(255,255,255,.035); }
+          .interactive-decision-table th:first-child, .interactive-decision-table td:first-child { width: 52px; text-align: center; }
+          .interactive-decision-table th:nth-child(2), .interactive-decision-table td:nth-child(2) { width: 110px; color: #bff6f1 !important; }
+          .interactive-decision-table th:nth-child(3), .interactive-decision-table td:nth-child(3) { width: 34%; }
+          .interactive-decision-table th:nth-child(4), .interactive-decision-table td:nth-child(4) { width: 42%; }
+          .interactive-decision-table th:nth-child(5), .interactive-decision-table td:nth-child(5) { width: 128px; }
           .interactive-decision-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 76px; border: 1px solid rgba(255,210,46,.55); border-radius: 999px; padding: 4px 8px; color: #ffd22e; background: rgba(255,210,46,.08); white-space: nowrap; }
           .interactive-decision-empty { color: #dff7f5; }
           .interactive-index-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
@@ -11793,6 +11802,7 @@ function createInteractiveHtmlReport() {
             border-color: rgba(185, 220, 228, .88) !important;
             text-shadow: none !important;
           }
+          .interactive-executive-read .analysis-complete-insights { display: none !important; }
           .interactive-section, .interactive-section-intro, .interactive-index, .interactive-executive-read, .interactive-signals-section { scroll-margin-top: 150px; }
           .interactive-section-intro { min-height: 520px; margin: 22px auto; max-width: 1320px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .44fr); gap: 34px; align-items: center; padding: 52px; border: 1px solid rgba(255,255,255,.24); border-radius: 32px; color: #ffffff; background:
             radial-gradient(circle at 86% 18%, rgba(127,194,65,.14), transparent 28%),
@@ -11993,13 +12003,17 @@ function createInteractiveHtmlReport() {
             <a class="interactive-brand-mark" href="#interactive-home"><span>KA</span><strong>Krestrel</strong></a>
             ${htmlOptions.accountName ? `<span class="interactive-account-name">${escapeHtml(htmlOptions.accountName)}</span>` : ""}
             <div class="interactive-nav-menu">
-              <div class="interactive-menu interactive-report-menu">
+              <div class="interactive-menu interactive-report-menu" aria-label="Report menu">
                 <a href="#interactive-index">Report Menu</a>
                 <div class="interactive-dropdown">
-                  ${navGroups.map((group) => `<div class="interactive-dropdown-section">
-                    <strong>${escapeHtml(group.label)}</strong>
-                    ${group.tabs.map((tab) => `<a href="#interactive-intro-${escapeHtml(tab)}">${escapeHtml(PDF_TAB_TITLES[tab] || tab)}</a>`).join("")}
-                  </div>`).join("")}
+                  <div class="interactive-dropdown-section">
+                    <strong>Start</strong>
+                    <a href="#interactive-index">Report Index</a>
+                    <a href="#interactive-executive-read">Executive Read</a>
+                    <a href="#interactive-executive-snapshot">Executive Snapshot</a>
+                    <a href="#interactive-executive-signals-section">Executive Signals</a>
+                  </div>
+                  ${reportMenuGroupsHtml}
                 </div>
               </div>
               <a class="interactive-download-action secondary" href="#" onclick="prepareInteractivePdfPrint(); return false;">Download PDF</a>
@@ -12434,6 +12448,10 @@ function rootCauseAllRows() {
 
 function rowNpsType(row) {
   return String(row?.["NPS Type"] || row?.NPS_Type || row?.Segment || row?.["NPS Type"] || row?.NPS_Type || row?.Type || "").trim();
+}
+
+function npsTypeForSummary(row) {
+  return String(npsDashboardType(row) || rowNpsType(row) || "").trim().toLowerCase();
 }
 
 function npsFromRows(rows) {
