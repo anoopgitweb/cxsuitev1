@@ -10920,6 +10920,19 @@ const BOARD_PDF_RECOMMENDED_TABS = [
   "analysis",
 ];
 
+const BOARD_ROOM_MENU_GROUPS = [
+  { label: "Analysis Results", tabs: ["datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout"] },
+  { label: "Dashboard Suite", tabs: ["executive", "agent", "manager", "customdashboards"] },
+  { label: "Performance Lens", tabs: ["performancequestions", "movingaverages", "quartile", "statistics", "customstats"] },
+  { label: "Sentiment Engine", tabs: ["feedback", "sentimentcompare"] },
+  { label: "Theme Intelligence", tabs: ["themesoverview", "acptoverview", "themebuilder", "themecompare", "theme", "rootcause"] },
+  { label: "Dimension Studio", tabs: ["wave", "tenure", "dimensionlens", "customdims"] },
+  { label: "Experience Signals", tabs: ["operations", "Promoterdna", "promoterdna", "gap", "detail", "churn", "analysis"] },
+  { label: "Data Tools", tabs: ["columnexplorer"] },
+];
+
+const BOARD_ROOM_TAB_ORDER = BOARD_ROOM_MENU_GROUPS.flatMap((group) => group.tabs);
+
 const BOARD_PDF_SECTION_GUIDES = {
   datasetsummary: "Run-level source, analyzed row volume, mapped fields, generated outputs, and data coverage checks.",
   performanceoverview: "Monthly and weekly trend performance, volume movement, period tables, and score direction.",
@@ -10962,9 +10975,12 @@ const BOARD_PDF_SECTION_GUIDES = {
 };
 
 function boardPdfAvailableTabs() {
-  return Object.keys(PDF_TAB_TITLES)
+  const available = Object.keys(PDF_TAB_TITLES)
     .filter((tab, index, tabs) => tabs.indexOf(tab) === index)
     .filter((tab) => Boolean($(tab)));
+  const ordered = BOARD_ROOM_TAB_ORDER.filter((tab) => available.includes(tab));
+  const remaining = available.filter((tab) => !ordered.includes(tab));
+  return [...ordered, ...remaining];
 }
 
 function boardPdfOptionCountLine(tab) {
@@ -10999,9 +11015,10 @@ function selectedPdfTabs() {
 }
 
 function selectedBoardPdfTabs() {
-  return [...document.querySelectorAll("[data-board-pdf-tab]:checked")]
+  const selected = new Set([...document.querySelectorAll("[data-board-pdf-tab]:checked")]
     .map((input) => input.dataset.boardPdfTab)
-    .filter((id) => id && $(id));
+    .filter((id) => id && $(id)));
+  return boardPdfAvailableTabs().filter((tab) => selected.has(tab));
 }
 
 function setBoardPdfSelection(mode) {
@@ -11435,13 +11452,8 @@ function cloneTabForInteractiveHtml(tabId, index = 0) {
 }
 
 function interactiveNavGroups(tabs) {
-  const groups = [
-    { label: "Dashboard Views", tabs: ["executive", "executivelens", "performancequestions", "agent", "manager", "quartile"] },
-    { label: "Intelligence", tabs: ["feedback", "sentimentcompare", "themecompare", "rootcause", "analysis"] },
-    { label: "Data Tools", tabs: ["customstats", "columnexplorer", "statistics"] },
-  ];
   const used = new Set();
-  const result = groups
+  const result = BOARD_ROOM_MENU_GROUPS
     .map((group) => {
       const groupTabs = group.tabs.filter((tab) => tabs.includes(tab));
       groupTabs.forEach((tab) => used.add(tab));
@@ -11449,7 +11461,7 @@ function interactiveNavGroups(tabs) {
     })
     .filter((group) => group.tabs.length);
   const otherTabs = tabs.filter((tab) => !used.has(tab));
-  if (otherTabs.length) result.push({ label: "More Views", tabs: otherTabs });
+  if (otherTabs.length) result.push({ label: "Other Views", tabs: otherTabs });
   return result;
 }
 
@@ -11518,10 +11530,36 @@ function interactiveExecutiveSummaryReadHtml() {
   const source = $("resultExecutiveSummaryBox");
   if (!source || !source.textContent.trim()) return "";
   return `<section class="interactive-executive-summary-read" aria-label="Executive Read from Analysis Results">
+    <div class="interactive-section-toolbar"><a class="interactive-section-top-link" href="#interactive-home">Move to top</a></div>
     <p class="interactive-eyebrow">Analysis Results Executive Read</p>
     <h2>Executive Read</h2>
     <div class="interactive-executive-summary-body">${source.innerHTML}</div>
   </section>`;
+}
+
+function interactiveDecisionGuideTableHtml() {
+  const questions = Array.isArray(state.leadershipQuestions) ? state.leadershipQuestions : [];
+  if (!questions.length) return `<p class="interactive-decision-empty">Decision Guide will appear after the analysis generates leadership checks.</p>`;
+  return `<div class="interactive-decision-table-wrap">
+    <table class="interactive-decision-table">
+      <thead>
+        <tr><th>S.No</th><th>Category</th><th>Question</th><th>Response</th><th>Decision</th></tr>
+      </thead>
+      <tbody>
+        ${questions.map((question, index) => {
+          const status = question.status || "Monitor";
+          const answer = question.text || question.answer || "Answered after analysis.";
+          return `<tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(resultQuestionCategory(question))}</td>
+            <td>${escapeHtml(question.question || "Decision check")}</td>
+            <td>${escapeHtml(answer)}</td>
+            <td><span class="interactive-decision-pill">${escapeHtml(status)}</span></td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  </div>`;
 }
 
 function interactiveExecutiveSignalsSectionHtml() {
@@ -11550,6 +11588,16 @@ function interactiveExecutiveSignalsSectionHtml() {
       <div><span>Best movement</span><strong>${bestWeek ? escapeHtml(formatDisplayLabel(bestWeek.Week || bestWeek.Date || bestWeek.Period || "")) : "Not available"}</strong><small>Highest weekly score</small></div>
       <div><span>Sentiment signal</span><strong>${formatMetric(positive)}% positive</strong><small>${formatMetric(negative)}% negative</small></div>
       <div><span>Recovery pool</span><strong>${detractor.toLocaleString()}</strong><small>Detractor responses to inspect</small></div>
+    </div>
+    <div class="interactive-decision-guide-block">
+      <div class="interactive-decision-guide-head">
+        <div>
+          <p class="interactive-eyebrow">Decision Guide</p>
+          <h3>Leadership checks</h3>
+        </div>
+        <span>${(state.leadershipQuestions || []).length.toLocaleString()} checks</span>
+      </div>
+      ${interactiveDecisionGuideTableHtml()}
     </div>
   </section>`;
 }
@@ -11607,13 +11655,16 @@ function createInteractiveHtmlReport() {
           .interactive-nav-menu { display: flex; align-items: center; gap: 12px; margin-left: auto; }
           .interactive-menu { position: relative; padding-bottom: 14px; margin-bottom: -14px; }
           .interactive-menu > a { display: inline-flex; align-items: center; gap: 8px; padding: 13px 18px; border-radius: 999px; color: #f5fbfc; text-decoration: none; font-weight: 500; }
-          .interactive-menu > a::after { content: "âŒ„"; font-size: 14px; color: #2fe4d6; }
+          .interactive-menu > a::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid #2fe4d6; border-bottom: 1.5px solid #2fe4d6; transform: rotate(45deg) translateY(-2px); }
           .interactive-menu:hover > a { background: rgba(255,255,255,.10); }
           .interactive-dropdown { position: absolute; top: 100%; left: 0; min-width: 300px; padding: 22px; border: 1px solid rgba(47,228,214,.36); border-radius: 28px; background: linear-gradient(180deg, rgba(11,73,86,.94), rgba(8,53,65,.88)); backdrop-filter: blur(18px); box-shadow: 0 24px 60px rgba(0,0,0,.24); opacity: 0; transform: translateY(8px); pointer-events: none; transition: .18s ease; }
+          .interactive-report-menu .interactive-dropdown { left: auto; right: 0; width: min(760px, 82vw); max-height: 72vh; overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
           .interactive-menu:hover .interactive-dropdown { opacity: 1; transform: translateY(0); pointer-events: auto; }
           .interactive-dropdown a { display: block; padding: 10px 0; color: rgba(245,251,252,.92); text-decoration: none; font-weight: 400; border-top: 1px solid rgba(255,255,255,.08); }
           .interactive-dropdown a:first-of-type { border-top: 0; }
           .interactive-dropdown a:hover { color: #2fe4d6; padding-left: 4px; }
+          .interactive-dropdown-section strong { display: block; margin-bottom: 8px; color: #2fe4d6; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; font-weight: 500; }
+          .interactive-dropdown-section a { font-size: 13px; padding: 7px 0; }
           .interactive-download-action { border: 1px solid #ffd22e; color: #ffd22e !important; font-weight: 500; text-decoration: none; padding: 10px 14px; border-radius: 999px; white-space: nowrap; }
           .interactive-download-action.secondary { border-color: rgba(47,228,214,.58); color: #dff7f5 !important; }
           .interactive-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); gap: 54px; align-items: start; min-height: 650px; padding: 150px 7vw 56px; overflow: hidden; }
@@ -11654,16 +11705,32 @@ function createInteractiveHtmlReport() {
           .interactive-index, .interactive-executive-read { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid rgba(255,255,255,.20); border-radius: 24px; background: transparent; color: #ffffff; box-shadow: none; }
           .interactive-section { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid #cfe4ec; border-radius: 24px; background: #fff; color: #0c2340; box-shadow: 0 18px 45px rgba(12,35,64,.08); }
           .interactive-index h2, .interactive-executive-read h2 { margin: 0 0 14px; color: #ffffff; font-size: 34px; font-weight: 300; }
-          .interactive-executive-summary-read { margin: 0 0 24px; padding: 24px; border: 1px solid rgba(47,228,214,.32); border-radius: 24px; background: rgba(255,255,255,.96); color: #0c2340; box-shadow: 0 22px 60px rgba(0,0,0,.18); }
-          .interactive-executive-summary-read h2 { color: #062a45 !important; font-size: 30px !important; margin-bottom: 16px !important; }
-          .interactive-executive-summary-read .interactive-eyebrow { color: #008b8b !important; }
-          .interactive-executive-summary-body { max-height: none; color: #173b56; }
+          .interactive-executive-summary-read { margin: 0 0 24px; padding: 24px; border: 1px solid rgba(47,228,214,.32); border-radius: 24px; background: transparent; color: #ffffff; box-shadow: none; }
+          .interactive-executive-summary-read h2 { color: #ffffff !important; font-size: 30px !important; margin-bottom: 16px !important; }
+          .interactive-executive-summary-read .interactive-eyebrow { color: #2fe4d6 !important; }
+          .interactive-executive-summary-body { max-height: none; color: #ffffff; }
           .interactive-executive-summary-body .result-executive-summary,
           .interactive-executive-summary-body .result-executive-summary p,
-          .interactive-executive-summary-body .result-executive-summary li { color: #173b56 !important; }
+          .interactive-executive-summary-body .result-executive-summary li { color: #ffffff !important; }
           .interactive-executive-summary-body .result-executive-summary h3,
-          .interactive-executive-summary-body .result-executive-summary h4 { color: #062a45 !important; }
-          .interactive-executive-summary-body .executive-callout { background: linear-gradient(135deg, #ffffff 0%, #f1fffd 100%) !important; }
+          .interactive-executive-summary-body .result-executive-summary h4 { color: #2fe4d6 !important; border-color: rgba(47,228,214,.28) !important; }
+          .interactive-executive-summary-body .result-executive-summary strong { color: #ffffff !important; }
+          .interactive-executive-summary-body .result-executive-summary li::before { background: #ffffff !important; }
+          .interactive-executive-summary-body .executive-callout-grid { display: none !important; }
+          .interactive-decision-guide-block { margin-top: 22px; padding-top: 20px; border-top: 1px solid rgba(47,228,214,.25); }
+          .interactive-decision-guide-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 12px; }
+          .interactive-decision-guide-head h3 { margin: 0; color: #ffffff; font-size: 24px; font-weight: 400; }
+          .interactive-decision-guide-head span { color: #dff7f5; border: 1px solid rgba(47,228,214,.42); border-radius: 999px; padding: 7px 12px; font-size: 12px; }
+          .interactive-decision-table-wrap { max-height: 680px; overflow: auto; border: 1px solid rgba(255,255,255,.18); border-radius: 18px; background: rgba(255,255,255,.05); }
+          .interactive-decision-table { width: 100%; border-collapse: collapse; color: #ffffff; font-size: 12px; }
+          .interactive-decision-table th { position: sticky; top: 0; z-index: 1; background: rgba(4,56,66,.98); color: #dff7f5; text-align: left; text-transform: uppercase; letter-spacing: .08em; font-size: 10px; font-weight: 500; padding: 10px 12px; border-bottom: 1px solid rgba(47,228,214,.22); }
+          .interactive-decision-table td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,.10); vertical-align: top; line-height: 1.35; }
+          .interactive-decision-table tr:nth-child(even) td { background: rgba(255,255,255,.035); }
+          .interactive-decision-table th:first-child, .interactive-decision-table td:first-child { width: 54px; text-align: center; }
+          .interactive-decision-table th:nth-child(2), .interactive-decision-table td:nth-child(2) { width: 120px; color: #bff6f1; }
+          .interactive-decision-table th:nth-child(5), .interactive-decision-table td:nth-child(5) { width: 120px; }
+          .interactive-decision-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 76px; border: 1px solid rgba(255,210,46,.55); border-radius: 999px; padding: 4px 8px; color: #ffd22e; background: rgba(255,210,46,.08); white-space: nowrap; }
+          .interactive-decision-empty { color: #dff7f5; }
           .interactive-index-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
           .interactive-index-grid a { position: relative; overflow: hidden; min-height: 118px; padding: 16px; border: 1px solid rgba(255,255,255,.28); border-radius: 20px; background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.07)); backdrop-filter: blur(14px); text-decoration: none; color: #ffffff; }
           .interactive-index-grid a::after { content: ""; position: absolute; top: -34px; right: -34px; width: 86px; height: 86px; border-radius: 999px; background: rgba(47,228,214,.10); pointer-events: none; }
@@ -11926,12 +11993,15 @@ function createInteractiveHtmlReport() {
             <a class="interactive-brand-mark" href="#interactive-home"><span>KA</span><strong>Krestrel</strong></a>
             ${htmlOptions.accountName ? `<span class="interactive-account-name">${escapeHtml(htmlOptions.accountName)}</span>` : ""}
             <div class="interactive-nav-menu">
-              ${navGroups.map((group) => `<div class="interactive-menu">
-                <a href="#interactive-index">${escapeHtml(group.label)}</a>
+              <div class="interactive-menu interactive-report-menu">
+                <a href="#interactive-index">Report Menu</a>
                 <div class="interactive-dropdown">
-                  ${group.tabs.map((tab) => `<a href="#interactive-intro-${escapeHtml(tab)}">${escapeHtml(PDF_TAB_TITLES[tab] || tab)}</a>`).join("")}
+                  ${navGroups.map((group) => `<div class="interactive-dropdown-section">
+                    <strong>${escapeHtml(group.label)}</strong>
+                    ${group.tabs.map((tab) => `<a href="#interactive-intro-${escapeHtml(tab)}">${escapeHtml(PDF_TAB_TITLES[tab] || tab)}</a>`).join("")}
+                  </div>`).join("")}
                 </div>
-              </div>`).join("")}
+              </div>
               <a class="interactive-download-action secondary" href="#" onclick="prepareInteractivePdfPrint(); return false;">Download PDF</a>
               <a class="interactive-download-action" href="#" onclick="downloadInteractiveHtml(); return false;">Download HTML</a>
             </div>
@@ -19827,6 +19897,11 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   const currentWeekScore = Number(weeklyRows.at(-1)?.score);
   const currentWeekVsAvg = Number.isFinite(currentWeekScore) && Number.isFinite(weeklyMean) ? currentWeekScore - weeklyMean : NaN;
   const currentWeekVsAvgPct = Number.isFinite(currentWeekVsAvg) && weeklyMean ? (currentWeekVsAvg / Math.abs(weeklyMean)) * 100 : NaN;
+  const monthlyValues = monthlyRows.map((row) => Number(row.score)).filter(Number.isFinite);
+  const monthlyMean = monthlyValues.length ? monthlyValues.reduce((sum, value) => sum + value, 0) / monthlyValues.length : NaN;
+  const currentMonthScore = Number(monthlyRows.at(-1)?.score);
+  const currentMonthVsAvg = Number.isFinite(currentMonthScore) && Number.isFinite(monthlyMean) ? currentMonthScore - monthlyMean : NaN;
+  const currentMonthVsAvgPct = Number.isFinite(currentMonthVsAvg) && monthlyMean ? (currentMonthVsAvg / Math.abs(monthlyMean)) * 100 : NaN;
   const avgWeeklyVolume = weeklyRows.length ? weeklyRows.reduce((sum, row) => sum + Number(row.volume || 0), 0) / weeklyRows.length : NaN;
   const avgMonthlyVolume = monthlyRows.length ? monthlyRows.reduce((sum, row) => sum + Number(row.volume || 0), 0) / monthlyRows.length : NaN;
   const currentMonthVolume = Number(monthlyRows.at(-1)?.volume || 0);
@@ -19865,30 +19940,170 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   const priority = painPoint || topDriver || topTheme || "X";
   const operationalShare = Number.isFinite(negativeShare) ? negativeShare : NaN;
   const impactPoints = Number.isFinite(interquartileGap) ? interquartileGap / 2 : NaN;
+  const consistencyRead = stability === "High" ? "Good" : stability === "Low" ? "Poor" : stability === "Moderate" ? "Moderate" : "Not available";
+  const executiveRows = (context.outputRows && context.outputRows.length ? context.outputRows : allFeedbackRows()).filter(Boolean);
+  const baseRows = executiveRows.length ? executiveRows : (analysis.feedbackRows || analysis.feedbackTableRows || analysis.preview || []);
+  const validVerbatimRows = baseRows.filter((row) => feedbackText(row).trim().length > 0);
+  const validVerbatimCount = validVerbatimRows.length;
+  const missingVerbatimCount = Math.max(total - validVerbatimCount, 0);
+  const verbatimParticipation = total ? (validVerbatimCount / total) * 100 : NaN;
+  const currentWeekKey = String(weeklyRows.at(-1)?.period || "");
+  const currentWeekRows = currentWeekKey ? baseRows.filter((row) => feedbackWeek(row) === currentWeekKey) : [];
+  const currentWeekVerbatimRows = currentWeekRows.filter((row) => feedbackText(row).trim().length > 0);
+  const currentWeekVerbatimPct = currentWeekRows.length ? (currentWeekVerbatimRows.length / currentWeekRows.length) * 100 : NaN;
+  const currentWeekVerbatimGap = Number.isFinite(currentWeekVerbatimPct) && Number.isFinite(verbatimParticipation) ? currentWeekVerbatimPct - verbatimParticipation : NaN;
+  const npsTypeForSummary = (row) => String(npsDashboardType(row) || rowNpsType(row) || "").trim().toLowerCase();
+  const segmentCounts = { promoter: 0, passive: 0, detractor: 0 };
+  const segmentVerbatims = { promoter: 0, passive: 0, detractor: 0 };
+  baseRows.forEach((row) => {
+    const type = npsTypeForSummary(row);
+    if (!Object.prototype.hasOwnProperty.call(segmentCounts, type)) return;
+    segmentCounts[type] += 1;
+    if (feedbackText(row).trim()) segmentVerbatims[type] += 1;
+  });
+  const passiveDetractorCount = segmentCounts.passive + segmentCounts.detractor;
+  const passiveDetractorBlindSpots = passiveDetractorCount - segmentVerbatims.passive - segmentVerbatims.detractor;
+  const segmentParticipationRows = ["promoter", "passive", "detractor"].map((key) => ({
+    key,
+    label: key === "promoter" ? "Promoters" : key === "passive" ? "Passives" : "Detractors",
+    count: segmentCounts[key],
+    verbatims: segmentVerbatims[key],
+    pct: segmentCounts[key] ? (segmentVerbatims[key] / segmentCounts[key]) * 100 : NaN,
+  })).filter((row) => row.count > 0);
+  const highestSegmentParticipation = segmentParticipationRows.slice().sort((a, b) => (b.pct || 0) - (a.pct || 0))[0]?.label || "X";
+  const lowestSegmentParticipation = segmentParticipationRows.slice().sort((a, b) => (a.pct || 0) - (b.pct || 0))[0]?.label || "X";
+  const segmentCoverageText = segmentParticipationRows.length
+    ? segmentParticipationRows.map((row) => `${row.label}: <strong>${row.verbatims.toLocaleString()}</strong> of <strong>${row.count.toLocaleString()}</strong> (<strong>${fmt(row.pct, "%")}</strong>)`).join(", ")
+    : "Promoters: <strong>X</strong> of <strong>Y</strong> (<strong>X%</strong>), Passives: <strong>X</strong> of <strong>Y</strong> (<strong>X%</strong>), and Detractors: <strong>X</strong> of <strong>Y</strong> (<strong>X%</strong>)";
+  const verbatimThemeNames = ["Primary Reason", "Owl Primary Driver", "Primary Theme", "Theme", "Predicted Theme", "Owl Theme", "Driver", "Reason"];
+  const themeCounts = new Map();
+  validVerbatimRows.forEach((row) => {
+    const value = String(resultFirstValue(row, verbatimThemeNames, "") || "").trim();
+    if (!value) return;
+    themeCounts.set(value, (themeCounts.get(value) || 0) + 1);
+  });
+  const themeDistribution = [...themeCounts.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  const distinctThemeCount = themeDistribution.length;
+  const topThemeLimit = Math.min(5, themeDistribution.length);
+  const topThemeShare = validVerbatimCount && topThemeLimit ? (themeDistribution.slice(0, topThemeLimit).reduce((sum, row) => sum + row.count, 0) / validVerbatimCount) * 100 : NaN;
+  const meaningfulWordsForSummary = (text) => String(text || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).map((word) => word.trim()).filter((word) => word.length > 2 && !WORD_CLOUD_STOP_WORDS.has(word) && !/^\d+$/.test(word));
+  const verbatimWordLists = validVerbatimRows.map((row) => meaningfulWordsForSummary(feedbackText(row)));
+  const totalMeaningfulWords = verbatimWordLists.reduce((sum, words) => sum + words.length, 0);
+  const avgMeaningfulWords = validVerbatimCount ? totalMeaningfulWords / validVerbatimCount : NaN;
+  const currentWeekWordLists = currentWeekVerbatimRows.map((row) => meaningfulWordsForSummary(feedbackText(row)));
+  const currentWeekWordTotal = currentWeekWordLists.reduce((sum, words) => sum + words.length, 0);
+  const currentWeekAvgWords = currentWeekVerbatimRows.length ? currentWeekWordTotal / currentWeekVerbatimRows.length : NaN;
+  const currentWeekWordGap = Number.isFinite(currentWeekAvgWords) && Number.isFinite(avgMeaningfulWords) ? currentWeekAvgWords - avgMeaningfulWords : NaN;
+  const uniqueMeaningfulWords = new Set(verbatimWordLists.flat()).size;
+  const actionableRows = validVerbatimRows.filter((row) => {
+    const sentimentText = String(row.Sentiment || row.sentiment || "").toLowerCase();
+    const type = npsTypeForSummary(row);
+    const hasTheme = verbatimThemeNames.some((name) => String(row[name] || "").trim());
+    return /negative|review|required|actionable|risk/.test(sentimentText) || ["passive", "detractor"].includes(type) || hasTheme;
+  }).length;
+  const actionablePct = validVerbatimCount ? (actionableRows / validVerbatimCount) * 100 : NaN;
+  const phraseCounts = new Map();
+  verbatimWordLists.forEach((words) => {
+    for (let size = 2; size <= 3; size += 1) {
+      for (let index = 0; index <= words.length - size; index += 1) {
+        const phrase = words.slice(index, index + size).join(" ");
+        if (!phrase) continue;
+        phraseCounts.set(phrase, (phraseCounts.get(phrase) || 0) + 1);
+      }
+    }
+  });
+  const recurringPhrases = [...phraseCounts.entries()].filter(([, count]) => count > 1).map(([phrase, count]) => ({ phrase, count })).sort((a, b) => b.count - a.count || a.phrase.localeCompare(b.phrase)).slice(0, 5);
+  const totalPhraseOccurrences = [...phraseCounts.values()].reduce((sum, count) => sum + count, 0);
+  const topPhraseShare = totalPhraseOccurrences && recurringPhrases.length ? (recurringPhrases.reduce((sum, row) => sum + row.count, 0) / totalPhraseOccurrences) * 100 : NaN;
+  const phraseText = recurringPhrases.length ? recurringPhrases.map((row) => `"${escapeHtml(row.phrase)}"`).join(", ") : "\"X\", \"X\", \"X\", \"X\", and \"X\"";
+  const verbatimSentimentAssessment = negativeShare >= 30 ? "Needs Improvement" : negativeShare >= 20 ? "Fair" : Number(sentiment.Positive || 0) >= 70 ? "Excellent" : "Good";
+  const acptThemeCategoryNames = ["ACPT Primary Category", "ACPT", "Predicted ACPT", "Owl ACPT", "Ownership", "Accountability", "Bucket Category", "Owl Customer Impact"];
+  const countDistribution = (sourceRows, names) => {
+    const counts = new Map();
+    sourceRows.forEach((row) => {
+      const value = String(resultFirstValue(row, names, "") || "").trim();
+      if (!value) return;
+      counts.set(value, (counts.get(value) || 0) + 1);
+    });
+    return [...counts.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  };
+  const acptDistribution = countDistribution(validVerbatimRows, acptThemeCategoryNames);
+  const classifiedThemeAcptRows = validVerbatimRows.filter((row) => resultFirstValue(row, verbatimThemeNames, "") || resultFirstValue(row, acptThemeCategoryNames, ""));
+  const topAcptLimit = Math.min(5, acptDistribution.length);
+  const topAcptText = acptDistribution.length ? acptDistribution.slice(0, 5).map((row) => `<strong>${escapeHtml(row.label)}</strong>`).join(", ") : "<strong>X</strong>, <strong>X</strong>, <strong>X</strong>, <strong>X</strong>, and <strong>X</strong>";
+  const topThemeText = themeDistribution.length ? themeDistribution.slice(0, 5).map((row) => `<strong>${escapeHtml(row.label)}</strong>`).join(", ") : "<strong>X</strong>, <strong>X</strong>, <strong>X</strong>, <strong>X</strong>, and <strong>X</strong>";
+  const combinedDistribution = [...themeDistribution.map((row) => ({ ...row, family: "theme" })), ...acptDistribution.map((row) => ({ ...row, family: "ACPT" }))].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  const combinedTopLimit = Math.min(5, combinedDistribution.length);
+  const combinedTopShare = validVerbatimCount && combinedTopLimit ? Math.min(100, (combinedDistribution.slice(0, combinedTopLimit).reduce((sum, row) => sum + row.count, 0) / validVerbatimCount) * 100) : NaN;
+  const combinedSentiment = new Map();
+  const addCombinedSentiment = (label, sentimentKey) => {
+    if (!label || !sentimentKey) return;
+    if (!combinedSentiment.has(label)) combinedSentiment.set(label, { Positive: 0, Neutral: 0, Negative: 0, total: 0 });
+    const bucket = combinedSentiment.get(label);
+    bucket[sentimentKey] += 1;
+    bucket.total += 1;
+  };
+  classifiedThemeAcptRows.forEach((row) => {
+    const sentimentValue = String(row.Sentiment || row.sentiment || row["Sentiment Label"] || "").trim().toLowerCase();
+    const sentimentKey = sentimentValue === "positive" ? "Positive" : sentimentValue === "neutral" ? "Neutral" : sentimentValue === "negative" ? "Negative" : "";
+    addCombinedSentiment(String(resultFirstValue(row, verbatimThemeNames, "") || "").trim(), sentimentKey);
+    addCombinedSentiment(String(resultFirstValue(row, acptThemeCategoryNames, "") || "").trim(), sentimentKey);
+  });
+  const combinedSentimentRows = [...combinedSentiment.entries()].map(([label, counts]) => ({
+    label,
+    positivePct: counts.total ? (counts.Positive / counts.total) * 100 : NaN,
+    negativeCount: counts.Negative || 0,
+  }));
+  const topPositiveThemeAcpt = combinedSentimentRows.slice().sort((a, b) => (b.positivePct || 0) - (a.positivePct || 0))[0]?.label || "X";
+  const topNegativeThemeAcpt = combinedSentimentRows.slice().sort((a, b) => (b.negativeCount || 0) - (a.negativeCount || 0))[0]?.label || "X";
+  const weekKeysForThemes = [...new Set(classifiedThemeAcptRows.map((row) => feedbackWeek(row)).filter(Boolean))].sort();
+  const currentThemeWeek = weekKeysForThemes.at(-1) || "";
+  const combinedWeekCounts = new Map();
+  classifiedThemeAcptRows.forEach((row) => {
+    const week = feedbackWeek(row);
+    if (!week) return;
+    [resultFirstValue(row, verbatimThemeNames, ""), resultFirstValue(row, acptThemeCategoryNames, "")].forEach((value) => {
+      const label = String(value || "").trim();
+      if (!label) return;
+      const key = `${label}|||${week}`;
+      combinedWeekCounts.set(key, (combinedWeekCounts.get(key) || 0) + 1);
+    });
+  });
+  const fastestThemeAcpt = combinedDistribution.map((row) => {
+    const current = currentThemeWeek ? Number(combinedWeekCounts.get(`${row.label}|||${currentThemeWeek}`) || 0) : 0;
+    const average = weekKeysForThemes.length ? row.count / weekKeysForThemes.length : NaN;
+    const changePct = average ? ((current - average) / average) * 100 : NaN;
+    return { ...row, current, average, changePct };
+  }).filter((row) => Number.isFinite(row.changePct)).sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))[0];
+  const passiveDetractorClassified = classifiedThemeAcptRows.filter((row) => ["passive", "detractor"].includes(npsTypeForSummary(row)));
+  const passiveDetractorDrivers = countDistribution(passiveDetractorClassified, [...verbatimThemeNames, ...acptThemeCategoryNames]);
+  const topPassiveDetractorDriver = passiveDetractorDrivers[0];
+  const passiveDetractorDriverShare = passiveDetractorClassified.length && topPassiveDetractorDriver ? (topPassiveDetractorDriver.count / passiveDetractorClassified.length) * 100 : NaN;
   container.classList.remove("driver-list");
   container.innerHTML = `<section class="result-executive-summary">
-    <div class="executive-callout-grid">
-      <div class="executive-callout"><span>Business Outlook</span><strong>${escapeHtml(outlook)}</strong><small>${escapeHtml(priority)} is the next-period priority.</small></div>
-      <div class="executive-callout"><span>Target Gap</span><strong>${fmt(gap)} pts</strong><small>${gap >= 0 ? "Above target" : "Below target"} against ${fmt(target, scoreSuffix)}.</small></div>
-      <div class="executive-callout"><span>Consistency</span><strong>${escapeHtml(stability)}</strong><small>Volatility ${fmt(volatility)}.</small></div>
-    </div>
     <h4>Executive Performance Summary</h4>
     <ul class="executive-bullet-list">
       <li>A total of <strong>${escapeHtml(totalText)}</strong> customer surveys were analyzed across <strong>${weeklyRows.length || "X"}</strong> weeks covering the period <strong>${escapeHtml(startDate || periodText)}</strong> to <strong>${escapeHtml(endDate || periodText)}</strong>.</li>
-      <li>Overall ${escapeHtml(metric)} is <strong>${fmt(score, scoreSuffix)}</strong> against a target of <strong>${fmt(target, scoreSuffix)}</strong>, resulting in a variance of <strong>${fmt(gap)}</strong> points (${gap >= 0 ? "Above Target" : "Below Target"}). The target was achieved in <strong>${targetHitWeeks}</strong> of <strong>${weeklyRows.length || "X"}</strong> weeks (<strong>${fmt(targetHitPct, "%")}</strong>), indicating <strong>${escapeHtml(targetAttainment)}</strong> target attainment.</li>
-      <li>The average ${escapeHtml(metric)} for the analysis period is <strong>${fmt(weeklyMean, scoreSuffix)}</strong>, while the current week recorded <strong>${fmt(currentWeekScore, scoreSuffix)}</strong>, which is <strong>${fmt(Math.abs(currentWeekVsAvg))}</strong> points (<strong>${fmt(Math.abs(currentWeekVsAvgPct), "%")}</strong>) ${currentWeekVsAvg >= 0 ? "Above" : "Below"} the period average.</li>
-      <li>The average weekly survey volume is <strong>${fmt(avgWeeklyVolume)}</strong>, while the average monthly survey volume is <strong>${fmt(avgMonthlyVolume)}</strong>. The current week recorded <strong>${fmt(latestVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentWeekVolumeGap), "%")}</strong> ${currentWeekVolumeGap >= 0 ? "Above" : "Below"} the weekly average), and the current month recorded <strong>${fmt(currentMonthVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentMonthVolumeGap), "%")}</strong> ${currentMonthVolumeGap >= 0 ? "Above" : "Below"} the monthly average), indicating <strong>${escapeHtml(volumeWord)}</strong> customer participation.</li>
-      <li>Compared to the previous reporting period, ${escapeHtml(metric)} has <strong>${escapeHtml(trendWord)}</strong> by <strong>${fmt(Math.abs(movement))}</strong> points (<strong>${fmt(Math.abs(movementPct), "%")}</strong>), indicating <strong>${escapeHtml(momentum)}</strong> momentum.</li>
-      <li>Across the analysis period, performance improved in <strong>${improvedWeeks}</strong> weeks, declined in <strong>${declinedWeeks}</strong> weeks, and remained unchanged in <strong>${unchangedWeeks}</strong> weeks, reflecting <strong>${escapeHtml(stability)}</strong> consistency. The overall volatility score is <strong>${fmt(volatility)}</strong>, indicating <strong>${escapeHtml(volatilityLabel)}</strong> performance.</li>
+      <li>The average weekly ${escapeHtml(metric)} for the analysis period is <strong>${fmt(weeklyMean, scoreSuffix)}</strong>, while the current week recorded <strong>${fmt(currentWeekScore, scoreSuffix)}</strong>, which is <strong>${fmt(Math.abs(currentWeekVsAvg))}</strong> points (<strong>${fmt(Math.abs(currentWeekVsAvgPct), "%")}</strong>) ${currentWeekVsAvg >= 0 ? "Above" : "Below"} the period average. The average monthly ${escapeHtml(metric)} for the analysis period is <strong>${fmt(monthlyMean, scoreSuffix)}</strong>, while the current month recorded <strong>${fmt(currentMonthScore, scoreSuffix)}</strong>, which is <strong>${fmt(Math.abs(currentMonthVsAvg))}</strong> points (<strong>${fmt(Math.abs(currentMonthVsAvgPct), "%")}</strong>) ${currentMonthVsAvg >= 0 ? "Above" : "Below"} the period average.</li>
+      <li>The average weekly survey volume is <strong>${fmt(avgWeeklyVolume)}</strong>, while the current week recorded <strong>${fmt(latestVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentWeekVolumeGap), "%")}</strong> ${currentWeekVolumeGap >= 0 ? "Up" : "Down"}). The average monthly survey volume is <strong>${fmt(avgMonthlyVolume)}</strong>, while the current month recorded <strong>${fmt(currentMonthVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentMonthVolumeGap), "%")}</strong> ${currentMonthVolumeGap >= 0 ? "Up" : "Down"}), indicating a <strong>${volumeWord === "Increasing" ? "rise" : volumeWord === "Declining" ? "decline" : "stable pattern"}</strong> in survey participation.</li>
+      <li>Across the analysis period, target was met in <strong>${targetHitWeeks}</strong> of <strong>${weeklyRows.length || "X"}</strong> weeks (<strong>${fmt(targetHitPct, "%")}</strong>). Performance improved in <strong>${improvedWeeks}</strong> weeks, declined in <strong>${declinedWeeks}</strong> weeks, and remained unchanged in <strong>${unchangedWeeks}</strong> weeks, reflecting <strong>${escapeHtml(consistencyRead)}</strong> consistency. The overall volatility score is <strong>${fmt(volatility)}</strong>, calculated as the standard deviation of weekly ${escapeHtml(metric)} scores, indicating <strong>${escapeHtml(volatilityLabel)}</strong> performance.</li>
       <li>The Interquartile Range (IQR) is <strong>${fmt(iqr)}</strong> points, with the top quartile averaging <strong>${fmt(topQuartileAvg, scoreSuffix)}</strong> and the bottom quartile averaging <strong>${fmt(bottomQuartileAvg, scoreSuffix)}</strong>, resulting in an interquartile gap of <strong>${fmt(interquartileGap)}</strong> points. The middle 50% of observations fall between <strong>${fmt(q1, scoreSuffix)}</strong> and <strong>${fmt(q3, scoreSuffix)}</strong>, suggesting <strong>${escapeHtml(experienceVariability)}</strong> variability in customer experience.</li>
     </ul>
-    <h4>AI Insights & Root Cause Analysis</h4>
+    <h4>AI Verbatim Insights</h4>
     <ul class="executive-bullet-list">
-      <li>AI analysis indicates <strong>${fmt(Number(sentiment.Positive), "%")}</strong> Positive, <strong>${fmt(Number(sentiment.Neutral), "%")}</strong> Neutral, and <strong>${fmt(Number(sentiment.Negative), "%")}</strong> Negative sentiment, suggesting an overall customer experience that is <strong>${escapeHtml(sentimentAssessment)}</strong>.</li>
-      <li>ACPT analysis identifies <strong>${escapeHtml(driverText)}</strong> as the strongest contributors to customer satisfaction.</li>
-      <li>The leading causes of dissatisfaction are <strong>${escapeHtml(painText)}</strong>, representing the biggest barriers to achieving the target.</li>
-      <li>Theme analysis highlights <strong>${escapeHtml(themeText)}</strong> as the most influential customer topics by frequency and business impact.</li>
-      <li>AI detected <strong>X</strong> emerging themes that have increased by <strong>X%</strong> compared to the previous period and may require proactive attention.</li>
+      <li>A total of <strong>${escapeHtml(totalText)}</strong> customer surveys were collected across <strong>${weeklyRows.length || "X"}</strong> weeks, covering the period <strong>${escapeHtml(startDate || periodText)}</strong> to <strong>${escapeHtml(endDate || periodText)}</strong>. Of these, <strong>${validVerbatimCount.toLocaleString()}</strong> surveys (<strong>${fmt(verbatimParticipation, "%")}</strong>) contained valid customer verbatims, while <strong>${missingVerbatimCount.toLocaleString()}</strong> surveys (<strong>${fmt(total ? (missingVerbatimCount / total) * 100 : NaN, "%")}</strong>) did not include written feedback. Overall verbatim participation was <strong>${fmt(verbatimParticipation, "%")}</strong>, compared with <strong>${fmt(currentWeekVerbatimPct, "%")}</strong> in the current week (${Number.isFinite(currentWeekVerbatimGap) ? `${currentWeekVerbatimGap >= 0 ? "Above" : "Below"} the reporting period average by <strong>${fmt(Math.abs(currentWeekVerbatimGap))}</strong> percentage points` : "X"}).</li>
+      <li>Detractors and Passives account for <strong>${passiveDetractorCount.toLocaleString()}</strong> surveys (<strong>${fmt(total ? (passiveDetractorCount / total) * 100 : NaN, "%")}</strong>) of the total responses, of which <strong>${passiveDetractorBlindSpots.toLocaleString()}</strong> surveys (<strong>${fmt(passiveDetractorCount ? (passiveDetractorBlindSpots / passiveDetractorCount) * 100 : NaN, "%")}</strong>) are blind spots due to missing verbatims. Verbatim participation by customer segment was ${segmentCoverageText}, with <strong>${escapeHtml(highestSegmentParticipation)}</strong> recording the highest participation rate and <strong>${escapeHtml(lowestSegmentParticipation)}</strong> the lowest.</li>
+      <li>AI-based analysis identified <strong>${fmt(Number(sentiment.Positive), "%")}</strong> Positive, <strong>${fmt(Number(sentiment.Neutral), "%")}</strong> Neutral, and <strong>${fmt(Number(sentiment.Negative), "%")}</strong> Negative sentiment, indicating an overall customer experience that is <strong>${escapeHtml(verbatimSentimentAssessment)}</strong>. AI also identified <strong>${distinctThemeCount || "X"}</strong> distinct themes, with the Top <strong>${topThemeLimit || "X"}</strong> themes contributing <strong>${fmt(topThemeShare, "%")}</strong> of all verbatims and representing the primary drivers of customer experience.</li>
+      <li>Customers used an average of <strong>${fmt(avgMeaningfulWords)}</strong> meaningful words per verbatim (excluding stop words), compared with <strong>${fmt(currentWeekAvgWords)}</strong> in the current week (${Number.isFinite(currentWeekWordGap) ? `${currentWeekWordGap >= 0 ? "Above" : "Below"} the reporting period average by <strong>${fmt(Math.abs(currentWeekWordGap))}</strong> words` : "X"}). A total of <strong>${uniqueMeaningfulWords ? uniqueMeaningfulWords.toLocaleString() : "X"}</strong> unique meaningful words were identified, while <strong>${fmt(actionablePct, "%")}</strong> of verbatims contained actionable feedback, demonstrating the depth and usefulness of customer feedback for improvement initiatives.</li>
+      <li>The Top 5 recurring customer phrases were ${phraseText}, accounting for <strong>${fmt(topPhraseShare, "%")}</strong> of all meaningful phrase occurrences and providing a concise summary of the dominant topics influencing customer experience during the reporting period.</li>
+    </ul>
+    <h4>ACPT and Theme Analysis</h4>
+    <ul class="executive-bullet-list">
+      <li>AI analyzed <strong>${validVerbatimCount.toLocaleString()}</strong> valid customer verbatims and identified <strong>${distinctThemeCount || "X"}</strong> distinct themes, classifying them into <strong>${acptDistribution.length || "X"}</strong> ACPT categories. The Top <strong>${combinedTopLimit || "X"}</strong> themes/categories accounted for <strong>${fmt(combinedTopShare, "%")}</strong> of all customer feedback, indicating that a small number of topics drive the majority of customer conversations.</li>
+      <li>The most frequently discussed themes were ${topThemeText}, while the leading ACPT categories were ${topAcptText}, representing the primary drivers of customer experience during the reporting period.</li>
+      <li>Compared with the reporting period average, mentions of <strong>${escapeHtml(fastestThemeAcpt?.label || "X")}</strong> ${fastestThemeAcpt ? (fastestThemeAcpt.changePct >= 0 ? "increased" : "decreased") : "increased/decreased"} by <strong>${fastestThemeAcpt ? fmt(Math.abs(fastestThemeAcpt.changePct), "%") : "X%"}</strong> in the current week, making it the fastest-moving customer theme/category.</li>
+      <li>Sentiment analysis across identified themes and ACPT categories shows that <strong>${escapeHtml(topPositiveThemeAcpt)}</strong> contributed the highest proportion of positive customer experiences, whereas <strong>${escapeHtml(topNegativeThemeAcpt)}</strong> accounted for the largest share of negative customer feedback, highlighting the strongest strengths and improvement opportunities.</li>
+      <li>Among Detractor and Passive customers, <strong>${fmt(passiveDetractorDriverShare, "%")}</strong> of all classified feedback was attributed to <strong>${escapeHtml(topPassiveDetractorDriver?.label || "X")}</strong>, making it the single largest driver of customer dissatisfaction and the highest-priority improvement area. The Top 5 recurring customer topics were ${phraseText}, collectively contributing <strong>${fmt(topPhraseShare, "%")}</strong> of all classified feedback.</li>
     </ul>
     <h4>Business Impact & Recommendations</h4>
     <ul class="executive-bullet-list">
@@ -20262,6 +20477,8 @@ function renderOwlOverviewViews(analysis = state.analysis || {}) {
   const acptCount = acptDist.reduce((sum, item) => sum + item.count, 0);
   const resolutionCount = resolutionDist.reduce((sum, item) => sum + item.count, 0);
   const evidence = owlEvidenceRows(rows);
+  renderOwlThemeSummary(rows, evidence, themeDist, checkedTotal, analysis);
+  renderAcptOverviewSummary(rows, evidence, acptDist, checkedTotal);
   owlOverviewCards("themesOverviewMetricGrid", [
     { label: "Rows Classified", value: checkedTotal.toLocaleString(), note: "Rows checked for Owl evidence" },
     { label: "Theme Coverage", value: checkedTotal ? `${formatMetric((themeCount / checkedTotal) * 100)}%` : "-", note: `${themeCount.toLocaleString()} rows with theme output` },
@@ -20278,11 +20495,199 @@ function renderOwlOverviewViews(analysis = state.analysis || {}) {
   renderOwlDistributionChart("owlThemeTopChart", themeDist, "No Owl theme output is available yet.");
   renderOwlDistributionChart("owlThemeAcptChart", acptDist, "No Owl ACPT output is available yet.");
   renderOwlDistributionChart("owlThemeResolutionChart", resolutionDist, "No Owl resolution output is available yet.");
-  if ($("acptOverviewList")) $("acptOverviewList").innerHTML = "";
+  renderAcptOwnershipMix("acptOverviewList", acptDist, checkedTotal);
   if ($("themesOverviewMeta")) $("themesOverviewMeta").textContent = evidence.length ? `${evidence.length.toLocaleString()} row(s) with Owl or local theme evidence.` : "No theme evidence is available yet.";
   if ($("acptOverviewMeta")) $("acptOverviewMeta").textContent = evidence.length ? `${evidence.length.toLocaleString()} row(s) with Owl or local ACPT evidence.` : "No ACPT evidence is available yet.";
   renderAnyTable("themesOverviewTable", evidence, 8);
   renderAnyTable("acptOverviewTable", evidence.map((row) => ({ ACPT: row.ACPT, Theme: row.Theme, "Resolution Status": row["Resolution Status"], Confidence: row.Confidence, Evidence: row.Evidence, Feedback: row.Feedback })), 8);
+}
+
+function renderAcptOverviewSummary(rows = [], evidence = [], acptDist = [], checkedTotal = 0) {
+  const host = $("acptOverviewSummary");
+  if (!host) return;
+  const acptNames = ["ACPT Primary Category", "ACPT", "Predicted ACPT", "Owl ACPT", "Ownership", "Accountability", "Bucket Category", "Owl Customer Impact"];
+  const validVerbatims = rows.filter((row) => feedbackText(row).trim());
+  const analyzedVerbatims = validVerbatims.length || evidence.length || rows.length;
+  const normalizedOther = (value) => /^(other|unclassified|uncategorized|not classified|unknown|n\/a|-|none)$/i.test(String(value || "").trim());
+  const acptRows = rows.map((row) => ({
+    row,
+    acpt: String(resultFirstValue(row, acptNames, "") || "").trim(),
+    sentiment: String(row.Sentiment || row.sentiment || row["Sentiment Label"] || "").trim().toLowerCase(),
+    week: feedbackWeek(row),
+    type: npsTypeForSummary(row),
+  })).filter((item) => item.acpt);
+  const classifiedRows = acptRows.filter((item) => !normalizedOther(item.acpt));
+  const classifiedPct = analyzedVerbatims ? (classifiedRows.length / analyzedVerbatims) * 100 : NaN;
+  const unclassifiedPct = analyzedVerbatims ? ((analyzedVerbatims - classifiedRows.length) / analyzedVerbatims) * 100 : NaN;
+  const totalClassified = classifiedRows.length || acptDist.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const topCategories = acptDist.filter((item) => item && item.label && !normalizedOther(item.label)).slice(0, 5);
+  const topCategoryShare = totalClassified && topCategories.length ? (topCategories.reduce((sum, item) => sum + Number(item.count || 0), 0) / totalClassified) * 100 : NaN;
+  const topCategoryText = topCategories.length
+    ? topCategories.map((item) => `<strong>${escapeHtml(item.label)}</strong> (${formatMetric(totalClassified ? (Number(item.count || 0) / totalClassified) * 100 : NaN)}%)`).join(", ")
+    : "<strong>X</strong> (X%), <strong>X</strong> (X%), <strong>X</strong> (X%), <strong>X</strong> (X%), and <strong>X</strong> (X%)";
+  const sentimentByAcpt = new Map();
+  classifiedRows.forEach((item) => {
+    if (!sentimentByAcpt.has(item.acpt)) sentimentByAcpt.set(item.acpt, { Positive: 0, Neutral: 0, Negative: 0, total: 0 });
+    const bucket = sentimentByAcpt.get(item.acpt);
+    const key = item.sentiment === "positive" ? "Positive" : item.sentiment === "neutral" ? "Neutral" : item.sentiment === "negative" ? "Negative" : "";
+    if (key) bucket[key] += 1;
+    bucket.total += 1;
+  });
+  const sentimentRows = [...sentimentByAcpt.entries()].map(([label, counts]) => ({
+    label,
+    positivePct: counts.total ? (counts.Positive / counts.total) * 100 : NaN,
+    negativePct: counts.total ? (counts.Negative / counts.total) * 100 : NaN,
+    negativeCount: counts.Negative || 0,
+  }));
+  const positiveCategory = sentimentRows.slice().sort((a, b) => (b.positivePct || 0) - (a.positivePct || 0))[0]?.label || "X";
+  const negativeCategory = sentimentRows.slice().sort((a, b) => (b.negativeCount || 0) - (a.negativeCount || 0))[0]?.label || "X";
+  const weekKeys = [...new Set(classifiedRows.map((item) => item.week).filter(Boolean))].sort();
+  const currentWeek = weekKeys.at(-1) || "";
+  const weekTotals = new Map();
+  const acptWeekCounts = new Map();
+  classifiedRows.forEach((item) => {
+    if (!item.week) return;
+    weekTotals.set(item.week, (weekTotals.get(item.week) || 0) + 1);
+    const key = `${item.acpt}|||${item.week}`;
+    acptWeekCounts.set(key, (acptWeekCounts.get(key) || 0) + 1);
+  });
+  const movementRows = topCategories.map((item) => {
+    const currentCount = currentWeek ? Number(acptWeekCounts.get(`${item.label}|||${currentWeek}`) || 0) : 0;
+    const currentTotal = currentWeek ? Number(weekTotals.get(currentWeek) || 0) : 0;
+    const currentShare = currentTotal ? (currentCount / currentTotal) * 100 : NaN;
+    const periodShare = totalClassified ? (Number(item.count || 0) / totalClassified) * 100 : NaN;
+    const gap = Number.isFinite(currentShare) && Number.isFinite(periodShare) ? currentShare - periodShare : NaN;
+    return { label: item.label, currentShare, periodShare, gap };
+  }).filter((item) => Number.isFinite(item.gap));
+  const movement = movementRows.slice().sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))[0];
+  const trendDirection = !movement ? "Rising / Stable / Declining" : Math.abs(movement.gap) < 1 ? "Stable" : movement.gap > 0 ? "Rising" : "Declining";
+  const passiveDetractorRows = classifiedRows.filter((item) => ["passive", "detractor"].includes(item.type));
+  const pdCounts = new Map();
+  passiveDetractorRows.forEach((item) => pdCounts.set(item.acpt, (pdCounts.get(item.acpt) || 0) + 1));
+  const pdTop = [...pdCounts.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))[0];
+  const pdShare = passiveDetractorRows.length && pdTop ? (pdTop.count / passiveDetractorRows.length) * 100 : NaN;
+  host.innerHTML = `<section class="owl-theme-summary-card">
+    <div class="owl-theme-summary-head">
+      <div>
+        <p class="eyebrow">ACPT Summary</p>
+        <h2>ACPT Analysis</h2>
+      </div>
+      <span>${analyzedVerbatims ? analyzedVerbatims.toLocaleString() : "X"} analyzed verbatims</span>
+    </div>
+    <ul>
+      <li>A total of <strong>${analyzedVerbatims ? analyzedVerbatims.toLocaleString() : "X"}</strong> customer verbatims were analyzed across <strong>${acptDist.length || "X"}</strong> ACPT categories. <strong>${Number.isFinite(classifiedPct) ? `${formatMetric(classifiedPct)}%` : "X%"}</strong> of verbatims were successfully classified, while <strong>${Number.isFinite(unclassifiedPct) ? `${formatMetric(unclassifiedPct)}%` : "X%"}</strong> remained unclassified or fell into the Other category.</li>
+      <li>The most frequently occurring ACPT categories were ${topCategoryText}, collectively accounting for <strong>${Number.isFinite(topCategoryShare) ? `${formatMetric(topCategoryShare)}%` : "X%"}</strong> of all classified feedback.</li>
+      <li>Positive sentiment was primarily associated with <strong>${escapeHtml(positiveCategory)}</strong>, while Negative sentiment was predominantly linked to <strong>${escapeHtml(negativeCategory)}</strong>, highlighting the strongest drivers of customer satisfaction and dissatisfaction.</li>
+      <li>The current week recorded <strong>${movement ? `${formatMetric(movement.currentShare)}%` : "X%"}</strong> of feedback related to <strong>${escapeHtml(movement?.label || "X")}</strong>, compared with a reporting period average of <strong>${movement ? `${formatMetric(movement.periodShare)}%` : "X%"}</strong> (${movement ? `${movement.gap >= 0 ? "Above" : "Below"} average by <strong>${formatMetric(Math.abs(movement.gap))}</strong> percentage points` : "Above / Below average by X percentage points"}), indicating a <strong>${escapeHtml(trendDirection)}</strong> trend.</li>
+      <li>Among Detractor and Passive customers, <strong>${Number.isFinite(pdShare) ? `${formatMetric(pdShare)}%` : "X%"}</strong> of all classified feedback was attributed to <strong>${escapeHtml(pdTop?.label || "X")}</strong>, representing the largest opportunity for operational improvement.</li>
+    </ul>
+  </section>`;
+}
+
+function renderAcptOwnershipMix(targetId, dist = [], totalRows = 0) {
+  const host = $(targetId);
+  if (!host) return;
+  const total = Number(totalRows || 0) || dist.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const rows = (dist || []).filter((item) => item && item.label && Number(item.count || 0) > 0).slice(0, 8);
+  if (!rows.length) {
+    host.innerHTML = `<p class="insight-text">No ACPT ownership output is available yet.</p>`;
+    return;
+  }
+  const max = Math.max(...rows.map((item) => Number(item.count || 0)), 1);
+  host.innerHTML = rows.map((item, index) => {
+    const count = Number(item.count || 0);
+    const share = total ? (count / total) * 100 : 0;
+    const width = Math.max(4, (count / max) * 100);
+    return `<div class="acpt-mix-row">
+      <div class="acpt-mix-rank">${String(index + 1).padStart(2, "0")}</div>
+      <div class="acpt-mix-main">
+        <div class="acpt-mix-label"><strong>${escapeHtml(item.label)}</strong><span>${count.toLocaleString()} rows | ${formatMetric(share)}%</span></div>
+        <div class="acpt-mix-track"><span style="width:${width}%"></span></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderOwlThemeSummary(rows = [], evidence = [], themeDist = [], checkedTotal = 0, analysis = state.analysis || {}) {
+  const host = $("owlThemeSummary");
+  if (!host) return;
+  const analyzedVerbatims = evidence.length || rows.filter((row) => feedbackText(row).trim()).length || rows.length;
+  const themeTotal = themeDist.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const topLimit = Math.min(5, themeDist.length);
+  const topThemes = themeDist.slice(0, topLimit);
+  const topThemeShare = themeTotal && topThemes.length ? (topThemes.reduce((sum, item) => sum + Number(item.count || 0), 0) / themeTotal) * 100 : NaN;
+  const topThemeNames = topThemes.map((item) => item.label).filter(Boolean);
+  const dominantTheme = topThemeNames[0] || "X";
+  const sentimentCounts = { Positive: 0, Neutral: 0, Negative: 0 };
+  const themeSentiment = new Map();
+  const themeNames = ["Primary Reason", "Owl Primary Driver", "Primary Theme", "Theme", "Predicted Theme", "Owl Theme", "Driver", "Reason"];
+  rows.forEach((row) => {
+    const theme = String(resultFirstValue(row, themeNames, "") || "").trim();
+    const sentiment = String(row.Sentiment || row.sentiment || row["Sentiment Label"] || "").trim().toLowerCase();
+    const sentimentKey = sentiment === "positive" ? "Positive" : sentiment === "neutral" ? "Neutral" : sentiment === "negative" ? "Negative" : "";
+    if (sentimentKey) sentimentCounts[sentimentKey] += 1;
+    if (!theme || !sentimentKey) return;
+    if (!themeSentiment.has(theme)) themeSentiment.set(theme, { Positive: 0, Neutral: 0, Negative: 0, total: 0 });
+    const bucket = themeSentiment.get(theme);
+    bucket[sentimentKey] += 1;
+    bucket.total += 1;
+  });
+  const sentimentTotal = sentimentCounts.Positive + sentimentCounts.Neutral + sentimentCounts.Negative;
+  const analysisSentiment = analysis.sentiment || {};
+  const positivePct = sentimentTotal ? (sentimentCounts.Positive / sentimentTotal) * 100 : Number(analysisSentiment.Positive);
+  const neutralPct = sentimentTotal ? (sentimentCounts.Neutral / sentimentTotal) * 100 : Number(analysisSentiment.Neutral);
+  const negativePct = sentimentTotal ? (sentimentCounts.Negative / sentimentTotal) * 100 : Number(analysisSentiment.Negative);
+  const sentimentRows = [...themeSentiment.entries()].map(([theme, counts]) => ({
+    theme,
+    positivePct: counts.total ? (counts.Positive / counts.total) * 100 : NaN,
+    negativeCount: counts.Negative || 0,
+  }));
+  const highestPositiveTheme = sentimentRows.slice().sort((a, b) => (b.positivePct || 0) - (a.positivePct || 0))[0]?.theme || "X";
+  const highestNegativeTheme = sentimentRows.slice().sort((a, b) => (b.negativeCount || 0) - (a.negativeCount || 0))[0]?.theme || "X";
+  const weekKeys = [...new Set(rows.map((row) => feedbackWeek(row)).filter(Boolean))].sort();
+  const currentWeek = weekKeys.at(-1) || "";
+  const weekThemeCounts = new Map();
+  rows.forEach((row) => {
+    const week = feedbackWeek(row);
+    const theme = String(resultFirstValue(row, themeNames, "") || "").trim();
+    if (!week || !theme) return;
+    const key = `${theme}|||${week}`;
+    weekThemeCounts.set(key, (weekThemeCounts.get(key) || 0) + 1);
+  });
+  const movementRows = themeDist.map((item) => {
+    const current = currentWeek ? Number(weekThemeCounts.get(`${item.label}|||${currentWeek}`) || 0) : 0;
+    const average = weekKeys.length ? Number(item.count || 0) / weekKeys.length : NaN;
+    const changePct = average ? ((current - average) / average) * 100 : NaN;
+    return { label: item.label, current, average, changePct };
+  }).filter((item) => Number.isFinite(item.changePct));
+  const fastestTheme = movementRows.slice().sort((a, b) => b.changePct - a.changePct)[0];
+  const trendTheme = fastestTheme?.label || dominantTheme;
+  const trendDirection = fastestTheme ? (fastestTheme.changePct >= 0 ? "increased" : "decreased") : "increased/decreased";
+  const trendPct = fastestTheme ? formatMetric(Math.abs(fastestTheme.changePct)) : "X";
+  const negativeThemeTotal = [...themeSentiment.values()].reduce((sum, item) => sum + Number(item.Negative || 0), 0);
+  const topThemeSet = new Set(topThemes.map((item) => item.label));
+  let topThemeNegative = 0;
+  themeSentiment.forEach((counts, theme) => {
+    if (topThemeSet.has(theme)) topThemeNegative += Number(counts.Negative || 0);
+  });
+  const negativeConcentration = negativeThemeTotal ? (topThemeNegative / negativeThemeTotal) * 100 : NaN;
+  const listNames = topThemeNames.length ? topThemeNames.map((name) => `<strong>${escapeHtml(name)}</strong>`).join(", ") : "<strong>X</strong>, <strong>X</strong>, <strong>X</strong>, <strong>X</strong>, and <strong>X</strong>";
+  host.innerHTML = `<section class="owl-theme-summary-card">
+    <div class="owl-theme-summary-head">
+      <div>
+        <p class="eyebrow">Theme Summary</p>
+        <h2>Theme Analysis</h2>
+      </div>
+      <span>${analyzedVerbatims ? analyzedVerbatims.toLocaleString() : "X"} analyzed verbatims</span>
+    </div>
+    <ul>
+      <li>AI identified <strong>${themeDist.length || "X"}</strong> distinct customer themes across <strong>${analyzedVerbatims ? analyzedVerbatims.toLocaleString() : "X"}</strong> analyzed verbatims. The Top <strong>${topLimit || "X"}</strong> themes contributed <strong>${Number.isFinite(topThemeShare) ? `${formatMetric(topThemeShare)}%` : "X%"}</strong> of all customer feedback, indicating that a relatively small number of topics drive the majority of customer conversations.</li>
+      <li>The most frequently discussed themes were ${listNames}, with <strong>${escapeHtml(dominantTheme)}</strong> emerging as the dominant customer concern during the reporting period.</li>
+      <li>Theme sentiment analysis shows <strong>${Number.isFinite(positivePct) ? `${formatMetric(positivePct)}%` : "X%"}</strong> Positive, <strong>${Number.isFinite(neutralPct) ? `${formatMetric(neutralPct)}%` : "X%"}</strong> Neutral, and <strong>${Number.isFinite(negativePct) ? `${formatMetric(negativePct)}%` : "X%"}</strong> Negative theme occurrences, with <strong>${escapeHtml(highestPositiveTheme)}</strong> demonstrating the highest positive perception and <strong>${escapeHtml(highestNegativeTheme)}</strong> contributing the largest share of negative customer experiences.</li>
+      <li>Compared with the reporting period average, mentions of <strong>${escapeHtml(trendTheme)}</strong> ${trendDirection} by <strong>${trendPct}%</strong> during the current week, while <strong>${escapeHtml(fastestTheme?.label || "X")}</strong> emerged as the fastest-growing customer theme.</li>
+      <li><strong>${Number.isFinite(negativeConcentration) ? `${formatMetric(negativeConcentration)}%` : "X%"}</strong> of negative customer feedback was concentrated within the Top <strong>${topLimit || "X"}</strong> themes, suggesting that addressing these key areas has the potential to improve a significant proportion of the overall customer experience.</li>
+    </ul>
+  </section>`;
 }
 
 async function analyze(options = {}) {

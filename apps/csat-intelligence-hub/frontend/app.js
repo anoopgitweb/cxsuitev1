@@ -10982,6 +10982,19 @@ const BOARD_PDF_RECOMMENDED_TABS = [
   "analysis",
 ];
 
+const BOARD_ROOM_MENU_GROUPS = [
+  { label: "Analysis Results", tabs: ["datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout"] },
+  { label: "Dashboard Suite", tabs: ["executive", "agent", "manager", "customdashboards"] },
+  { label: "Performance Lens", tabs: ["performancequestions", "movingaverages", "quartile", "statistics", "customstats"] },
+  { label: "Sentiment Engine", tabs: ["feedback", "sentimentcompare"] },
+  { label: "Theme Intelligence", tabs: ["themesoverview", "acptoverview", "themebuilder", "themecompare", "theme", "rootcause"] },
+  { label: "Dimension Studio", tabs: ["wave", "tenure", "dimensionlens", "customdims"] },
+  { label: "Experience Signals", tabs: ["operations", "Satisfieddna", "promoterdna", "satisfieddna", "gap", "detail", "churn", "analysis"] },
+  { label: "Data Tools", tabs: ["columnexplorer"] },
+];
+
+const BOARD_ROOM_TAB_ORDER = BOARD_ROOM_MENU_GROUPS.flatMap((group) => group.tabs);
+
 const BOARD_PDF_SECTION_GUIDES = {
   datasetsummary: "Run-level source, analyzed row volume, mapped fields, generated outputs, and data coverage checks.",
   performanceoverview: "Monthly and weekly trend performance, volume movement, period tables, and score direction.",
@@ -11024,9 +11037,12 @@ const BOARD_PDF_SECTION_GUIDES = {
 };
 
 function boardPdfAvailableTabs() {
-  return Object.keys(PDF_TAB_TITLES)
+  const available = Object.keys(PDF_TAB_TITLES)
     .filter((tab, index, tabs) => tabs.indexOf(tab) === index)
     .filter((tab) => Boolean($(tab)));
+  const ordered = BOARD_ROOM_TAB_ORDER.filter((tab) => available.includes(tab));
+  const remaining = available.filter((tab) => !ordered.includes(tab));
+  return [...ordered, ...remaining];
 }
 
 function boardPdfOptionCountLine(tab) {
@@ -11061,9 +11077,10 @@ function selectedPdfTabs() {
 }
 
 function selectedBoardPdfTabs() {
-  return [...document.querySelectorAll("[data-board-pdf-tab]:checked")]
+  const selected = new Set([...document.querySelectorAll("[data-board-pdf-tab]:checked")]
     .map((input) => input.dataset.boardPdfTab)
-    .filter((id) => id && $(id));
+    .filter((id) => id && $(id)));
+  return boardPdfAvailableTabs().filter((tab) => selected.has(tab));
 }
 
 function setBoardPdfSelection(mode) {
@@ -11497,13 +11514,8 @@ function cloneTabForInteractiveHtml(tabId, index = 0) {
 }
 
 function interactiveNavGroups(tabs) {
-  const groups = [
-    { label: "Dashboard Views", tabs: ["executive", "executivelens", "performancequestions", "agent", "manager", "quartile"] },
-    { label: "Intelligence", tabs: ["feedback", "sentimentcompare", "themecompare", "rootcause", "analysis"] },
-    { label: "Data Tools", tabs: ["customstats", "columnexplorer", "statistics"] },
-  ];
   const used = new Set();
-  const result = groups
+  const result = BOARD_ROOM_MENU_GROUPS
     .map((group) => {
       const groupTabs = group.tabs.filter((tab) => tabs.includes(tab));
       groupTabs.forEach((tab) => used.add(tab));
@@ -11511,7 +11523,7 @@ function interactiveNavGroups(tabs) {
     })
     .filter((group) => group.tabs.length);
   const otherTabs = tabs.filter((tab) => !used.has(tab));
-  if (otherTabs.length) result.push({ label: "More Views", tabs: otherTabs });
+  if (otherTabs.length) result.push({ label: "Other Views", tabs: otherTabs });
   return result;
 }
 
@@ -11580,10 +11592,36 @@ function interactiveExecutiveSummaryReadHtml() {
   const source = $("resultExecutiveSummaryBox");
   if (!source || !source.textContent.trim()) return "";
   return `<section class="interactive-executive-summary-read" aria-label="Executive Read from Analysis Results">
+    <div class="interactive-section-toolbar"><a class="interactive-section-top-link" href="#interactive-home">Move to top</a></div>
     <p class="interactive-eyebrow">Analysis Results Executive Read</p>
     <h2>Executive Read</h2>
     <div class="interactive-executive-summary-body">${source.innerHTML}</div>
   </section>`;
+}
+
+function interactiveDecisionGuideTableHtml() {
+  const questions = Array.isArray(state.leadershipQuestions) ? state.leadershipQuestions : [];
+  if (!questions.length) return `<p class="interactive-decision-empty">Decision Guide will appear after the analysis generates leadership checks.</p>`;
+  return `<div class="interactive-decision-table-wrap">
+    <table class="interactive-decision-table">
+      <thead>
+        <tr><th>S.No</th><th>Category</th><th>Question</th><th>Response</th><th>Decision</th></tr>
+      </thead>
+      <tbody>
+        ${questions.map((question, index) => {
+          const status = question.status || "Monitor";
+          const answer = question.text || question.answer || "Answered after analysis.";
+          return `<tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(resultQuestionCategory(question))}</td>
+            <td>${escapeHtml(question.question || "Decision check")}</td>
+            <td>${escapeHtml(answer)}</td>
+            <td><span class="interactive-decision-pill">${escapeHtml(status)}</span></td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  </div>`;
 }
 
 function interactiveExecutiveSignalsSectionHtml() {
@@ -11612,6 +11650,16 @@ function interactiveExecutiveSignalsSectionHtml() {
       <div><span>Best movement</span><strong>${bestWeek ? escapeHtml(formatDisplayLabel(bestWeek.Week || bestWeek.Date || bestWeek.Period || "")) : "Not available"}</strong><small>Highest weekly score</small></div>
       <div><span>Sentiment signal</span><strong>${formatMetric(positive)}% positive</strong><small>${formatMetric(negative)}% negative</small></div>
       <div><span>Recovery pool</span><strong>${dissatisfied.toLocaleString()}</strong><small>Dissatisfied responses to inspect</small></div>
+    </div>
+    <div class="interactive-decision-guide-block">
+      <div class="interactive-decision-guide-head">
+        <div>
+          <p class="interactive-eyebrow">Decision Guide</p>
+          <h3>Leadership checks</h3>
+        </div>
+        <span>${(state.leadershipQuestions || []).length.toLocaleString()} checks</span>
+      </div>
+      ${interactiveDecisionGuideTableHtml()}
     </div>
   </section>`;
 }
@@ -11669,13 +11717,16 @@ function createInteractiveHtmlReport() {
           .interactive-nav-menu { display: flex; align-items: center; gap: 12px; margin-left: auto; }
           .interactive-menu { position: relative; padding-bottom: 14px; margin-bottom: -14px; }
           .interactive-menu > a { display: inline-flex; align-items: center; gap: 8px; padding: 13px 18px; border-radius: 999px; color: #f5fbfc; text-decoration: none; font-weight: 500; }
-          .interactive-menu > a::after { content: "âŒ„"; font-size: 14px; color: #2fe4d6; }
+          .interactive-menu > a::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid #2fe4d6; border-bottom: 1.5px solid #2fe4d6; transform: rotate(45deg) translateY(-2px); }
           .interactive-menu:hover > a { background: rgba(255,255,255,.10); }
           .interactive-dropdown { position: absolute; top: 100%; left: 0; min-width: 300px; padding: 22px; border: 1px solid rgba(47,228,214,.36); border-radius: 28px; background: linear-gradient(180deg, rgba(11,73,86,.94), rgba(8,53,65,.88)); backdrop-filter: blur(18px); box-shadow: 0 24px 60px rgba(0,0,0,.24); opacity: 0; transform: translateY(8px); pointer-events: none; transition: .18s ease; }
+          .interactive-report-menu .interactive-dropdown { left: auto; right: 0; width: min(760px, 82vw); max-height: 72vh; overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
           .interactive-menu:hover .interactive-dropdown { opacity: 1; transform: translateY(0); pointer-events: auto; }
           .interactive-dropdown a { display: block; padding: 10px 0; color: rgba(245,251,252,.92); text-decoration: none; font-weight: 400; border-top: 1px solid rgba(255,255,255,.08); }
           .interactive-dropdown a:first-of-type { border-top: 0; }
           .interactive-dropdown a:hover { color: #2fe4d6; padding-left: 4px; }
+          .interactive-dropdown-section strong { display: block; margin-bottom: 8px; color: #2fe4d6; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; font-weight: 500; }
+          .interactive-dropdown-section a { font-size: 13px; padding: 7px 0; }
           .interactive-download-action { border: 1px solid #ffd22e; color: #ffd22e !important; font-weight: 500; text-decoration: none; padding: 10px 14px; border-radius: 999px; white-space: nowrap; }
           .interactive-download-action.secondary { border-color: rgba(47,228,214,.58); color: #dff7f5 !important; }
           .interactive-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); gap: 54px; align-items: start; min-height: 650px; padding: 150px 7vw 56px; overflow: hidden; }
@@ -11716,16 +11767,32 @@ function createInteractiveHtmlReport() {
           .interactive-index, .interactive-executive-read { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid rgba(255,255,255,.20); border-radius: 24px; background: transparent; color: #ffffff; box-shadow: none; }
           .interactive-section { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid #cfe4ec; border-radius: 24px; background: #fff; color: #0c2340; box-shadow: 0 18px 45px rgba(12,35,64,.08); }
           .interactive-index h2, .interactive-executive-read h2 { margin: 0 0 14px; color: #ffffff; font-size: 34px; font-weight: 300; }
-          .interactive-executive-summary-read { margin: 0 0 24px; padding: 24px; border: 1px solid rgba(47,228,214,.32); border-radius: 24px; background: rgba(255,255,255,.96); color: #0c2340; box-shadow: 0 22px 60px rgba(0,0,0,.18); }
-          .interactive-executive-summary-read h2 { color: #062a45 !important; font-size: 30px !important; margin-bottom: 16px !important; }
-          .interactive-executive-summary-read .interactive-eyebrow { color: #008b8b !important; }
-          .interactive-executive-summary-body { max-height: none; color: #173b56; }
+          .interactive-executive-summary-read { margin: 0 0 24px; padding: 24px; border: 1px solid rgba(47,228,214,.32); border-radius: 24px; background: transparent; color: #ffffff; box-shadow: none; }
+          .interactive-executive-summary-read h2 { color: #ffffff !important; font-size: 30px !important; margin-bottom: 16px !important; }
+          .interactive-executive-summary-read .interactive-eyebrow { color: #2fe4d6 !important; }
+          .interactive-executive-summary-body { max-height: none; color: #ffffff; }
           .interactive-executive-summary-body .result-executive-summary,
           .interactive-executive-summary-body .result-executive-summary p,
-          .interactive-executive-summary-body .result-executive-summary li { color: #173b56 !important; }
+          .interactive-executive-summary-body .result-executive-summary li { color: #ffffff !important; }
           .interactive-executive-summary-body .result-executive-summary h3,
-          .interactive-executive-summary-body .result-executive-summary h4 { color: #062a45 !important; }
-          .interactive-executive-summary-body .executive-callout { background: linear-gradient(135deg, #ffffff 0%, #f1fffd 100%) !important; }
+          .interactive-executive-summary-body .result-executive-summary h4 { color: #2fe4d6 !important; border-color: rgba(47,228,214,.28) !important; }
+          .interactive-executive-summary-body .result-executive-summary strong { color: #ffffff !important; }
+          .interactive-executive-summary-body .result-executive-summary li::before { background: #ffffff !important; }
+          .interactive-executive-summary-body .executive-callout-grid { display: none !important; }
+          .interactive-decision-guide-block { margin-top: 22px; padding-top: 20px; border-top: 1px solid rgba(47,228,214,.25); }
+          .interactive-decision-guide-head { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 12px; }
+          .interactive-decision-guide-head h3 { margin: 0; color: #ffffff; font-size: 24px; font-weight: 400; }
+          .interactive-decision-guide-head span { color: #dff7f5; border: 1px solid rgba(47,228,214,.42); border-radius: 999px; padding: 7px 12px; font-size: 12px; }
+          .interactive-decision-table-wrap { max-height: 680px; overflow: auto; border: 1px solid rgba(255,255,255,.18); border-radius: 18px; background: rgba(255,255,255,.05); }
+          .interactive-decision-table { width: 100%; border-collapse: collapse; color: #ffffff; font-size: 12px; }
+          .interactive-decision-table th { position: sticky; top: 0; z-index: 1; background: rgba(4,56,66,.98); color: #dff7f5; text-align: left; text-transform: uppercase; letter-spacing: .08em; font-size: 10px; font-weight: 500; padding: 10px 12px; border-bottom: 1px solid rgba(47,228,214,.22); }
+          .interactive-decision-table td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,.10); vertical-align: top; line-height: 1.35; }
+          .interactive-decision-table tr:nth-child(even) td { background: rgba(255,255,255,.035); }
+          .interactive-decision-table th:first-child, .interactive-decision-table td:first-child { width: 54px; text-align: center; }
+          .interactive-decision-table th:nth-child(2), .interactive-decision-table td:nth-child(2) { width: 120px; color: #bff6f1; }
+          .interactive-decision-table th:nth-child(5), .interactive-decision-table td:nth-child(5) { width: 120px; }
+          .interactive-decision-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 76px; border: 1px solid rgba(255,210,46,.55); border-radius: 999px; padding: 4px 8px; color: #ffd22e; background: rgba(255,210,46,.08); white-space: nowrap; }
+          .interactive-decision-empty { color: #dff7f5; }
           .interactive-index-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
           .interactive-index-grid a { position: relative; overflow: hidden; min-height: 118px; padding: 16px; border: 1px solid rgba(255,255,255,.28); border-radius: 20px; background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.07)); backdrop-filter: blur(14px); text-decoration: none; color: #ffffff; }
           .interactive-index-grid a::after { content: ""; position: absolute; top: -34px; right: -34px; width: 86px; height: 86px; border-radius: 999px; background: rgba(47,228,214,.10); pointer-events: none; }
@@ -11988,12 +12055,15 @@ function createInteractiveHtmlReport() {
             <a class="interactive-brand-mark" href="#interactive-home"><span>KA</span><strong>Krestrel</strong></a>
             ${htmlOptions.accountName ? `<span class="interactive-account-name">${escapeHtml(htmlOptions.accountName)}</span>` : ""}
             <div class="interactive-nav-menu">
-              ${navGroups.map((group) => `<div class="interactive-menu">
-                <a href="#interactive-index">${escapeHtml(group.label)}</a>
+              <div class="interactive-menu interactive-report-menu">
+                <a href="#interactive-index">Report Menu</a>
                 <div class="interactive-dropdown">
-                  ${group.tabs.map((tab) => `<a href="#interactive-intro-${escapeHtml(tab)}">${escapeHtml(PDF_TAB_TITLES[tab] || tab)}</a>`).join("")}
+                  ${navGroups.map((group) => `<div class="interactive-dropdown-section">
+                    <strong>${escapeHtml(group.label)}</strong>
+                    ${group.tabs.map((tab) => `<a href="#interactive-intro-${escapeHtml(tab)}">${escapeHtml(PDF_TAB_TITLES[tab] || tab)}</a>`).join("")}
+                  </div>`).join("")}
                 </div>
-              </div>`).join("")}
+              </div>
               <a class="interactive-download-action secondary" href="#" onclick="prepareInteractivePdfPrint(); return false;">Download PDF</a>
               <a class="interactive-download-action" href="#" onclick="downloadInteractiveHtml(); return false;">Download HTML</a>
             </div>
@@ -20658,11 +20728,6 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   const impactPoints = Number.isFinite(interquartileGap) ? interquartileGap / 2 : NaN;
   container.classList.remove("driver-list");
   container.innerHTML = `<section class="result-executive-summary">
-    <div class="executive-callout-grid">
-      <div class="executive-callout"><span>Business Outlook</span><strong>${escapeHtml(outlook)}</strong><small>${escapeHtml(priority)} is the next-period priority.</small></div>
-      <div class="executive-callout"><span>Target Gap</span><strong>${fmt(gap)} pts</strong><small>${gap >= 0 ? "Above target" : "Below target"} against ${fmt(target, scoreSuffix)}.</small></div>
-      <div class="executive-callout"><span>Consistency</span><strong>${escapeHtml(stability)}</strong><small>Volatility ${fmt(volatility)}.</small></div>
-    </div>
     <h4>Executive Performance Summary</h4>
     <ul class="executive-bullet-list">
       <li>A total of <strong>${escapeHtml(totalText)}</strong> customer surveys were analyzed across <strong>${weeklyRows.length || "X"}</strong> weeks covering the period <strong>${escapeHtml(startDate || periodText)}</strong> to <strong>${escapeHtml(endDate || periodText)}</strong>.</li>

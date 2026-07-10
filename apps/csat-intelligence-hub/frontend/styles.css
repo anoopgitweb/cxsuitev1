@@ -16838,6 +16838,52 @@ body.csat-onboarding-active.csat-stage-complete .guided-analysis-complete.post-t
   box-shadow: none;
 }
 
+#executivesummary .panel {
+  background: linear-gradient(135deg, #003b46 0%, #064f5c 100%);
+  border-color: rgba(47, 228, 214, .32);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+#executivesummary .panel-title-row h2,
+#executivesummary .panel-title-row span,
+#executivesummary .result-executive-summary,
+#executivesummary .result-executive-summary p,
+#executivesummary .result-executive-summary li {
+  color: #ffffff;
+}
+
+#executivesummary .result-rich-text-box {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #ffffff;
+}
+
+#executivesummary .result-executive-summary h4 {
+  color: #2fe4d6;
+  border-bottom-color: rgba(47, 228, 214, .28);
+}
+
+#executivesummary .result-executive-summary strong {
+  color: #ffffff;
+}
+
+#executivesummary .result-executive-summary li::before {
+  background: #ffffff;
+}
+
+#executivesummary .result-export-actions .pill-button {
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(47, 228, 214, .48);
+  color: #ffffff;
+}
+
+#executivesummary .result-export-actions .pill-button:hover {
+  background: rgba(47, 228, 214, .13);
+  color: #ffffff;
+}
+
 @media (max-width: 900px) {
   .executive-callout-grid {
     grid-template-columns: 1fr;
