@@ -1,4 +1,4 @@
-﻿const state = {
+const state = {
   baseColumns: [],
   baseColumnStats: {},
   lookupColumnStats: {},
@@ -36,7 +36,7 @@
   rootCauseSignal: "Detractor",
   analysisComparison: {},
   dynamicDimensions: [],
-  modelPaths: { sparrow: "", vulture: "" },
+  modelPaths: { sparrow: "", theme: "" },
   themeBuilder: { themes: [], active: new Set(), rows: [], testIndex: 0, activeIndex: -1 },
   sentimentThemeSelection: new Set(),
   customStatsTab: "single",
@@ -380,6 +380,7 @@ function activateView(viewId) {
   updateDashboardGuideForView(resolvedViewId);
   if (resolvedViewId === "boardpdf") renderBoardPdfOptionCards();
   if (resolvedViewId === "rawdata") renderAnalysisRawDataPage();
+  if (resolvedViewId === "analysissummary") renderAnalysisSummaryPage();
   if (resolvedViewId === "performancequestions") setMasterLensIntroVisible(true);
   workspace?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   requestAnimationFrame(() => {
@@ -410,6 +411,7 @@ const DASHBOARD_HANDOFF_VIEWS = new Set([
   "sentimentbriefing",
   "insightsreadout",
   "columnexplorer",
+  "analysissummary",
   "executive",
   "executivelens",
   "customdims",
@@ -764,7 +766,7 @@ function loadingStageCaptions(status) {
       "Feedback is still being processed on this system while the app prepares the NPS outputs.",
     ];
   }
-  if (normalized.includes("vulture")) {
+  if (normalized.includes("owl")) {
     return [
       "Owl is running now: it is classifying verbatims into 9 theme fields including drivers, issue type, impact, and resolution status.",
       "Current stage: theme classification. Next stage: the app will build executive, agent, manager, quartile, and analysis summaries.",
@@ -910,7 +912,7 @@ function conversationalLoadingMessage(status, pct = 0) {
   if (activeRowStage === "local rules" || normalized.includes("local rules")) {
     return `I am applying the local NPS rules now and confirming rows with the rule-based analysis you selected. Estimated time left: ${remaining}.`;
   }
-  if (normalized.includes("vulture")) {
+  if (normalized.includes("owl")) {
     return `Owl is reading themes now. This part can take a little while because it checks feedback line by line. Estimated time left: ${remaining}.`;
   }
   if (normalized.includes("dashboard") || normalized.includes("summary") || normalized.includes("assembly")) {
@@ -955,7 +957,7 @@ function parseRowProgress(text) {
   const match = String(text || "").match(/(?:Sparrow|Owl|Theme Builder|Local Rules)[^:]*:?\s*([\d,]+)\s*\/\s*([\d,]+)\s*rows/i);
   if (!match) return null;
   const lower = String(text).toLowerCase();
-  const stage = lower.includes("theme builder") ? "Theme Builder" : lower.includes("local rules") ? "Local Rules" : lower.includes("vulture") ? "Owl" : "Sparrow";
+  const stage = lower.includes("theme builder") ? "Theme Builder" : lower.includes("local rules") ? "Local Rules" : lower.includes("owl") ? "Owl" : "Sparrow";
   return {
     stage,
     done: Number(match[1].replaceAll(",", "")) || 0,
@@ -1177,7 +1179,7 @@ function friendlyTickerStatus(status, pct = 0) {
   if (normalized.includes("starting local nps analysis")) return "Starting the NPS analysis";
   if (normalized.includes("sparrow")) return "Reading sentiment with Sparrow";
   if (activeRowStage === "local rules" || normalized.includes("local rules")) return "Applying local NPS rules";
-  if (normalized.includes("vulture")) return "Reading themes with Owl";
+  if (normalized.includes("owl")) return "Reading themes with Owl";
   if (normalized.includes("browser handoff")) return "Preparing the results screen";
   if (normalized.includes("browser preparation")) return "Preparing the results screen";
   if ((normalized.includes("dashboard") || normalized.includes("summary") || normalized.includes("assembly")) && Number(pct || 0) >= 99) return "Finalizing your results";
@@ -1880,6 +1882,8 @@ function wireGuidedRunAnalysis() {
   $("confirmIntelligenceBtn")?.addEventListener("click", () => {
     if ($("sentimentEngine") && $("guidedSentimentEngine")) $("sentimentEngine").value = $("guidedSentimentEngine").value || "local";
     if ($("themeEngine") && $("guidedThemeEngine")) $("themeEngine").value = $("guidedThemeEngine").value || "local";
+    if ($("sparrowModelPath") && $("guidedSparrowModelPath")) $("sparrowModelPath").value = $("guidedSparrowModelPath").value.trim();
+    if ($("owlModelPath") && $("guidedOwlModelPath")) $("owlModelPath").value = $("guidedOwlModelPath").value.trim();
     markSetupStepComplete(8, ".guided-run-options");
   });
   $("guidedSentimentEngine")?.addEventListener("change", () => {
@@ -9422,6 +9426,164 @@ function rawDataRowCount() {
   );
 }
 
+function analysisSummaryEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function analysisSummaryValue(value, fallback = "Not available") {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (Array.isArray(value)) return value.length ? value.join(", ") : fallback;
+  if (typeof value === "number") return Number.isFinite(value) ? value.toLocaleString() : fallback;
+  if (typeof value === "object") return Object.keys(value).length ? JSON.stringify(value) : fallback;
+  return String(value);
+}
+
+function analysisSummaryDomValue(...ids) {
+  for (const id of ids) {
+    const el = $(id);
+    if (!el) continue;
+    const value = "value" in el ? el.value : el.textContent;
+    if (value && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+function analysisSummaryFileName(...ids) {
+  for (const id of ids) {
+    const el = $(id);
+    if (el?.files?.[0]?.name) return el.files[0].name;
+  }
+  return "";
+}
+
+function analysisSummaryEngineLabel(value) {
+  const raw = String(value || "").trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return "Not selected";
+  if (lower.includes("sparrow")) return "Sparrow Model";
+  if (lower.includes("owl") || lower.includes("vulture")) return "Owl Model";
+  if (lower.includes("local")) return "Local Rules";
+  return raw;
+}
+
+function analysisSummaryRow(label, value) {
+  return `<div class="analysis-summary-row"><span class="analysis-summary-label">${analysisSummaryEscape(label)}</span><span class="analysis-summary-value">${analysisSummaryEscape(analysisSummaryValue(value))}</span></div>`;
+}
+
+function analysisSummarySection(title, rows) {
+  return `<article class="analysis-summary-card"><h3>${analysisSummaryEscape(title)}</h3>${rows.map(([label, value]) => analysisSummaryRow(label, value)).join("")}</article>`;
+}
+
+function renderAnalysisSummaryPage() {
+  const target = $("analysisSummaryContent");
+  if (!target) return;
+  const analysis = state.analysis || {};
+  const setup = state.setup || {};
+  const setupCache = readSetupCache();
+  const mapping = analysis.mapping || setupCache.mapping || state.mapping || state.columnMapping || analysis.setup?.mapping || {};
+  const engines = setup.engines || state.engines || analysis.engines || {};
+  const summary = analysis.summary || {};
+  const counts = state.statsRowCounts || analysis.counts || {};
+  const timings = analysis.timings || analysis.timing || state.analysisTimings || {};
+  const trainingResult = state.sparrowTraining?.result || {};
+  const modelQuality = { ...trainingResult, ...(state.modelMetrics || {}), ...(analysis.modelMetrics || {}), ...(analysis.modelQuality || {}) };
+  const savedRules = analysis.businessRules || setupCache.businessRules || {};
+  const selectedDimensions = state.customDimensions || state.selectedDimensions || analysis.selectedDimensions || analysis.dimensions || [];
+  const baseRows = counts.baseRows || counts.analyzedRows || summary.total || summary.Total || analysis.totalRows || state.baseRowCount || "";
+  const lookupRows = counts.lookupRows || analysis.lookupRows || state.lookupRowCount || "";
+  const outputRows = counts.outputRows || counts.analyzedRows || analysis.outputCount || analysis.fullOutputCount || rawDataRowCount();
+  const sentimentEngine = analysisSummaryEngineLabel(engines.sentiment || state.sentimentEngine || analysis.sentimentEngine || analysisSummaryDomValue("sentimentMethod", "sentimentEngine", "sentimentSelect"));
+  const themeEngine = analysisSummaryEngineLabel(engines.theme || engines.owl || state.themeEngine || analysis.themeEngine || analysisSummaryDomValue("themeMethod", "themeEngine", "themeSelect"));
+  const sparrowPath = engines.sparrowPath || state.sparrowModelPath || analysis.sparrowModelPath || analysisSummaryDomValue("sparrowModelPath", "sentimentModelPath");
+  const owlPath = engines.owlPath || engines.themePath || state.owlModelPath || state.themeModelPath || analysis.owlModelPath || analysis.themeModelPath || analysisSummaryDomValue("owlModelPath", "themeModelPath");
+  const runConfig = {
+    mode: "nps",
+    engines: { sentiment: sentimentEngine, theme: themeEngine },
+    enginePaths: { sparrow: sparrowPath || "Not provided", owl: owlPath || "Not provided" },
+    mapping,
+    selectedDimensions,
+    source: {
+      baseFile: analysisSummaryFileName("baseFile", "baseFileInput", "baseUploadInput") || state.baseFileName || analysis.baseFileName || analysis.source?.baseFile || setupCache.baseFile || "File name unavailable",
+      lookupFile: analysisSummaryFileName("lookupFile", "lookupFileInput", "lookupUploadInput") || state.lookupFileName || analysis.lookupFileName || analysis.source?.lookupFile || setupCache.lookupFile || ((state.lookupColumns || []).length ? "File name unavailable" : "Not used (base file was complete)"),
+      baseRows,
+      lookupRows,
+      outputRows,
+    },
+    businessRules: {
+      target: savedRules.target ?? setup.target ?? state.target ?? analysisSummaryDomValue("guidedNpsTarget"),
+      scoreScale: savedRules.scoreScale || setup.scoreScale || state.scoreScale || analysisSummaryDomValue("guidedNpsScoreScale", "npsScoreScale"),
+      promoterStartsAt: savedRules.promoterStartsAt ?? analysisSummaryDomValue("guidedNpsPromoterMin", "npsPromoterMin"),
+      passiveStartsAt: savedRules.passiveStartsAt ?? analysisSummaryDomValue("guidedNpsPassiveMin", "npsPassiveMin"),
+      weekStart: savedRules.weekStart || analysis.calendar?.weekStartDay || analysis.calendar?.weekStart || analysisSummaryDomValue("setupWeekStartDay"),
+      fiscalStart: savedRules.fiscalStart || analysis.calendar?.fiscalStartMonth || analysis.calendar?.fiscalYearStartMonth || analysisSummaryDomValue("setupFiscalStartMonth"),
+    },
+    timing: timings,
+    modelQuality,
+    generatedAt: analysis.generatedAt || analysis.completedAt || analysis.runCompletedAt || new Date().toLocaleString(),
+  };
+
+  target.innerHTML = `
+    <div class="analysis-summary-hero">
+      <h2>NPS analysis run reference</h2>
+      <p>Review how this analysis was created: selected engines, source files, mapping choices, model paths, business rules, run timings, and available model-quality evidence.</p>
+    </div>
+    <div class="analysis-summary-grid">
+      ${analysisSummarySection("Run Overview", [
+        ["Mode", "NPS"],
+        ["Generated At", runConfig.generatedAt],
+        ["Analyzed Rows", outputRows],
+        ["Selected Dimensions", selectedDimensions],
+      ])}
+      ${analysisSummarySection("Engine Details", [
+        ["Sentiment Engine", sentimentEngine],
+        ["Theme Engine", themeEngine],
+        ["Sparrow Path", sparrowPath || "Not provided"],
+        ["Owl Path", owlPath || "Not provided"],
+      ])}
+      ${analysisSummarySection("Input Data", [
+        ["Base File", runConfig.source.baseFile],
+        ["Base Rows", baseRows],
+        ["Lookup File", runConfig.source.lookupFile],
+        ["Lookup Rows", lookupRows],
+      ])}
+      ${analysisSummarySection("Column Mapping", [
+        ["Feedback", mapping.feedback || analysisSummaryDomValue("feedbackCol")],
+        ["Score", mapping.score || analysisSummaryDomValue("scoreCol")],
+        ["NPS Category", mapping.satisfaction || mapping.loyalty || analysisSummaryDomValue("npsTypeCol")],
+        ["Agent", mapping.agent || analysisSummaryDomValue("agentCol")],
+        ["Manager", mapping.manager || analysisSummaryDomValue("managerCol")],
+        ["Date", mapping.date || analysisSummaryDomValue("dateCol")],
+        ["Wave", mapping.wave || analysisSummaryDomValue("waveCol")],
+        ["Tenure", mapping.tenure || analysisSummaryDomValue("tenureCol")],
+      ])}
+      ${analysisSummarySection("Business Rules", [
+        ["Target", runConfig.businessRules.target],
+        ["Score Scale", runConfig.businessRules.scoreScale],
+        ["Promoter Starts At", runConfig.businessRules.promoterStartsAt],
+        ["Passive Starts At", runConfig.businessRules.passiveStartsAt],
+        ["Week Start", runConfig.businessRules.weekStart],
+        ["Fiscal Start", runConfig.businessRules.fiscalStart],
+      ])}
+      ${analysisSummarySection("Model Quality & Timing", [
+        ["Total Runtime", timings.totalSeconds != null ? `${timings.totalSeconds} seconds` : "Not recorded for this run"],
+        ["Sentiment Method", sentimentEngine],
+        ["Theme Method", themeEngine],
+        ["Training Accuracy", modelQuality.accuracy ?? modelQuality.eval_accuracy ?? "No training metrics recorded"],
+        ["Macro F1", modelQuality.macroF1 ?? modelQuality.macro_f1 ?? "No training metrics recorded"],
+        ["Weighted F1", modelQuality.weightedF1 ?? modelQuality.weighted_f1 ?? "No training metrics recorded"],
+      ])}
+    </div>
+    <article class="analysis-summary-card analysis-summary-json-card">
+      <h3>Run Configuration JSON</h3>
+      <pre class="analysis-summary-json">${analysisSummaryEscape(JSON.stringify(runConfig, null, 2))}</pre>
+    </article>
+  `;
+}
 function renderAnalysisRawDataPage() {
   const rowCount = rawDataRowCount();
   const columns = state.analysis?.columns || state.analysis?.analyzedColumns || Object.keys((state.analysis?.feedbackRows || state.analysis?.preview || [{}])[0] || {});
@@ -9797,7 +9959,7 @@ function selectedOptionsSnapshot() {
       sentimentEngine: valueOf("sentimentEngine"),
       themeEngine: valueOf("themeEngine"),
       sparrowModelPath: valueOf("sparrowModelPath"),
-      vultureModelPath: valueOf("vultureModelPath"),
+      owlModelPath: valueOf("owlModelPath"),
     },
     dateRange: $("dateLabel")?.textContent || "All Time",
   };
@@ -10831,7 +10993,8 @@ function closeArtifact() {
 function handleDownload(kind) {
   const map = {
     feedback: [state.analysis.feedbackTableRows || [], "feedback_intelligence.csv"],
-    vulture: [state.analysis.themeRows || [], "vulture_intelligence.csv"],
+    theme: [state.analysis.themeRows || [], "owl_theme_intelligence.csv"],
+    theme: [state.analysis.themeRows || [], "owl_theme_intelligence.csv"],
     quartile: [state.analysis.quartiles || [], "quartile_intelligence.csv"],
     wave: [state.analysis.wave || [], "wave_intelligence.csv"],
     tenure: [state.analysis.tenure || [], "tenure_intelligence.csv"],
@@ -17217,7 +17380,7 @@ function performanceOtherInsightRawRows(analysis, context) {
 function performanceOtherIsRawColumn(key) {
   const text = String(key || "").trim();
   if (!text || text.startsWith("__")) return false;
-  return !/(sentiment|theme|vulture|sparrow|classification|driver|reason|alert|word cloud|positive|negative|passive risk|silent detractor)/i.test(text);
+  return !/(sentiment|theme|owl|sparrow|classification|driver|reason|alert|word cloud|positive|negative|passive risk|silent detractor)/i.test(text);
 }
 
 function performanceOtherColumnProfiles(rows) {
@@ -19863,6 +20026,290 @@ function renderPerformancePeriodTables(analysis = {}, context = {}) {
   }
 }
 
+function roleBasedExecutiveReadHtml(lens, analysis = {}, context = {}) {
+  const labels = {
+    qa: "QA Lens",
+    "team-leader": "Team Leader Lens",
+    "operations-manager": "Operations Manager Lens",
+    vp: "VP Lens",
+    client: "Client Lens",
+  };
+  const title = labels[lens] || labels.vp;
+  const metric = context.scoreName || resultScoreName(analysis) || "NPS";
+  const summary = analysis.summary || {};
+  const total = Number(context.total || summary.total || summary.Total || analysis.population?.rows || 0);
+  const score = Number(context.score ?? summary[metric] ?? summary.NPS ?? summary.nps ?? 0);
+  const target = Number(typeof guidedNpsTargetValue === "function" ? guidedNpsTargetValue() : 0);
+  const gap = score - target;
+  const weekly = resultWeeklyPeriodRows(analysis, metric);
+  const current = Number(weekly.at(-1)?.score);
+  const previous = Number(weekly.at(-2)?.score);
+  const movement = Number.isFinite(current) && Number.isFinite(previous) ? current - previous : NaN;
+  const hitPeriods = weekly.filter((row) => Number(row.score) >= target).length;
+  const agents = Array.isArray(analysis.agents) ? analysis.agents : [];
+  const managers = Array.isArray(analysis.managers) ? analysis.managers : [];
+  const nameOf = (row, kind = "agent") => String(resultFirstValue(row, kind === "agent" ? ["Agent", "Agent Name", "Name"] : ["Manager", "Manager/TL", "Team", "Name"], "Not available"));
+  const scoreOf = (row) => Number(resultFirstValue(row, [metric, "NPS", "Score", "Agent NPS", "Manager NPS"], NaN));
+  const volumeOf = (row) => Number(resultFirstValue(row, ["Responses", "Count", "Total", "Surveys"], 0));
+  const eligibleAgents = agents.filter((row) => Number.isFinite(scoreOf(row))).sort((a, b) => scoreOf(b) - scoreOf(a));
+  const eligibleManagers = managers.filter((row) => Number.isFinite(scoreOf(row))).sort((a, b) => scoreOf(b) - scoreOf(a));
+  const bestAgents = eligibleAgents.slice(0, 3).map((row) => nameOf(row)).join(", ") || "Not available";
+  const supportAgents = eligibleAgents.slice(-3).reverse().map((row) => nameOf(row)).join(", ") || "Not available";
+  const aboveAgents = eligibleAgents.filter((row) => scoreOf(row) >= target).length;
+  const belowAgents = eligibleAgents.filter((row) => scoreOf(row) < target).length;
+  const bestTeam = eligibleManagers[0];
+  const priorityTeam = eligibleManagers.at(-1);
+  const sentiment = analysis.sentiment || {};
+  const drivers = [...(analysis.reasons || []), ...(analysis.themes || analysis.themeRows || [])];
+  const driverName = (row) => String(resultFirstValue(row, ["Reason", "Driver", "Theme", "Name"], ""));
+  const topDrivers = drivers.map(driverName).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).slice(0, 3);
+  const driverText = topDrivers.join(", ") || "No classified driver evidence is available";
+  const period = resultDateWindowText(analysis, context.outputRows || []);
+  const fmt = (value, suffix = "") => Number.isFinite(Number(value)) ? `${formatDataPoint(Number(value))}${suffix}` : "Not available";
+  const movementText = Number.isFinite(movement) ? `${movement >= 0 ? "improved" : "declined"} by ${fmt(Math.abs(movement))} points` : "cannot yet be compared with a prior period";
+  const evidence = total >= 500 ? "strong" : total >= 100 ? "directional" : "limited";
+  const minimumSample = Number($("minimumSampleInput")?.value || 5);
+  const sampleEligible = eligibleAgents.filter((row) => volumeOf(row) >= minimumSample);
+  const immediate = sampleEligible.filter((row) => scoreOf(row) < target - 10);
+  const monitor = sampleEligible.filter((row) => scoreOf(row) >= target - 10 && scoreOf(row) < target);
+  const aboveBenchmark = sampleEligible.filter((row) => scoreOf(row) >= target);
+  const movementOf = (row) => Number(resultFirstValue(row, ["Movement", "Change", "Trend", "NPS Change", "Delta"], NaN));
+  const improvingAgents = sampleEligible.filter((row) => movementOf(row) > 0);
+  const decliningAgents = sampleEligible.filter((row) => movementOf(row) < 0);
+  const stableAgents = sampleEligible.filter((row) => Number.isFinite(movementOf(row)) && movementOf(row) === 0);
+  const strongestImprover = sampleEligible.filter((row) => Number.isFinite(movementOf(row))).sort((a, b) => movementOf(b) - movementOf(a))[0];
+  const outputRows = (context.outputRows?.length ? context.outputRows : resultAllRows(analysis)).filter(Boolean);
+  const rowType = (row) => String(npsDashboardType(row) || rowNpsType(row) || "").toLowerCase();
+  const rowSentiment = (row) => String(resultFirstValue(row, ["Sentiment", "Sparrow Sentiment", "Sentiment Label", "AI Sentiment", "Predicted Sentiment"], "")).toLowerCase();
+  const lowScorePositiveText = outputRows.filter((row) => rowType(row) === "detractor" && /positive|neutral/.test(rowSentiment(row))).length;
+  const negativeHighScore = outputRows.filter((row) => /promoter|passive/.test(rowType(row)) && rowSentiment(row) === "negative").length;
+  const rowAgentName = (row) => String(resultFirstValue(row, ["Agent Name", "Agent", "Employee Name", "Advisor", "Associate"], "")).trim();
+  const agentDetractorStats = new Map();
+  outputRows.forEach((row) => {
+    const agentName = rowAgentName(row);
+    if (!agentName) return;
+    if (!agentDetractorStats.has(agentName)) agentDetractorStats.set(agentName, { name: agentName, total: 0, detractors: 0 });
+    const stat = agentDetractorStats.get(agentName);
+    stat.total += 1;
+    if (rowType(row) === "detractor") stat.detractors += 1;
+  });
+  const detractorAgents = [...agentDetractorStats.values()].filter((row) => row.detractors > 0);
+  const totalEligibleDetractors = detractorAgents.reduce((sum, row) => sum + row.detractors, 0);
+  const topDetractorContributors = detractorAgents.slice().sort((a, b) => b.detractors - a.detractors || b.total - a.total).slice(0, 3);
+  const topDetractorRates = detractorAgents.slice().filter((row) => row.total >= minimumSample).sort((a, b) => (b.detractors / b.total) - (a.detractors / a.total)).slice(0, 2);
+  const topDetractorNames = topDetractorContributors.map((row) => row.name).join(", ") || "Not available";
+  const topDetractorShare = totalEligibleDetractors ? topDetractorContributors.reduce((sum, row) => sum + row.detractors, 0) / totalEligibleDetractors * 100 : NaN;
+  const detractorRateText = topDetractorRates.length ? topDetractorRates.map((row) => `${escapeHtml(row.name)} at ${fmt(row.detractors / row.total * 100, "%")}`).join(", followed by ") : "Not available because eligible agent response counts were not returned";
+  const agentWeekBuckets = new Map();
+  outputRows.forEach((row) => {
+    const agentName = rowAgentName(row);
+    const week = feedbackWeek(row);
+    if (!agentName || !week || week === "Unknown") return;
+    if (!agentWeekBuckets.has(agentName)) agentWeekBuckets.set(agentName, new Map());
+    const weeks = agentWeekBuckets.get(agentName);
+    if (!weeks.has(week)) weeks.set(week, []);
+    weeks.get(week).push(row);
+  });
+  const mean = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : NaN;
+  const longestRun = (values, predicate) => {
+    let longest = 0;
+    let currentRun = 0;
+    values.forEach((value) => { currentRun = predicate(value) ? currentRun + 1 : 0; longest = Math.max(longest, currentRun); });
+    return longest;
+  };
+  const eligibleNames = new Set(sampleEligible.map((row) => nameOf(row)));
+  const agentTrendProfiles = [...agentWeekBuckets.entries()].filter(([name]) => eligibleNames.has(name)).map(([name, buckets]) => {
+    const periods = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([week, rows]) => ({ week, score: npsDashboardSummary(rows).summary.NPS, volume: rows.length }));
+    const recent = periods.slice(-4);
+    const prior = periods.slice(-8, -4);
+    const movementValue = prior.length ? mean(recent.map((row) => row.score)) - mean(prior.map((row) => row.score)) : recent.length >= 4 ? mean(recent.slice(-2).map((row) => row.score)) - mean(recent.slice(0, 2).map((row) => row.score)) : NaN;
+    const scores = periods.map((row) => row.score);
+    const avg = mean(scores);
+    const volatility = scores.length > 1 ? Math.sqrt(scores.reduce((sum, value) => sum + ((value - avg) ** 2), 0) / (scores.length - 1)) : NaN;
+    return { name, periods, movement: movementValue, volatility, targetStreak: longestRun(scores, (value) => value >= target), belowStreak: longestRun(scores, (value) => value < target) };
+  });
+  const qaImproving = agentTrendProfiles.filter((row) => Number.isFinite(row.movement) && row.movement > 2);
+  const qaDeclining = agentTrendProfiles.filter((row) => Number.isFinite(row.movement) && row.movement < -2);
+  const qaStable = agentTrendProfiles.filter((row) => Number.isFinite(row.movement) && Math.abs(row.movement) <= 2);
+  const qaStrongestImprover = agentTrendProfiles.filter((row) => Number.isFinite(row.movement)).sort((a, b) => b.movement - a.movement)[0];
+  const qaMostVolatile = agentTrendProfiles.filter((row) => Number.isFinite(row.volatility)).sort((a, b) => b.volatility - a.volatility)[0];
+  const qaTargetStreak = agentTrendProfiles.slice().sort((a, b) => b.targetStreak - a.targetStreak)[0];
+  const qaBelowStreak = agentTrendProfiles.slice().sort((a, b) => b.belowStreak - a.belowStreak)[0];
+  const qaTrendAvailable = agentTrendProfiles.some((row) => Number.isFinite(row.movement));
+  const qaWeeklyEvidenceAvailable = agentTrendProfiles.some((row) => row.periods.length > 0);
+  const strongestImproverText = qaStrongestImprover ? `${escapeHtml(qaStrongestImprover.name)}, increasing by ${fmt(qaStrongestImprover.movement)} NPS points across the recent comparison` : "Not available because fewer than four agent-week periods were available";
+  const negativeAgentIssueCounts = new Map();
+  outputRows.filter((row) => rowSentiment(row) === "negative").forEach((row) => {
+    const ownership = String(resultFirstValue(row, ["ACPT Primary Category", "ACPT", "Ownership", "Accountability"], "")).toLowerCase();
+    if (ownership && !/agent|people/.test(ownership)) return;
+    const issue = String(resultFirstValue(row, ["Primary Reason", "Owl Primary Driver", "Primary Theme", "Theme", "Driver", "Reason"], "")).trim();
+    if (issue && !/^(people|process|technology|policy|uncategorized)$/i.test(issue)) negativeAgentIssueCounts.set(issue, (negativeAgentIssueCounts.get(issue) || 0) + 1);
+  });
+  const topAgentIssues = [...negativeAgentIssueCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name]) => name);
+  const agentIssueText = topAgentIssues.join(", ") || "No specific agent-controllable issue labels were available";
+  const coachingAgents = immediate.slice().sort((a, b) => scoreOf(a) - scoreOf(b)).slice(0, 2);
+  const replicationAgent = aboveBenchmark[0] || sampleEligible[0];
+  const teamAbove = eligibleManagers.filter((row) => scoreOf(row) >= target).length;
+  const teamNear = eligibleManagers.filter((row) => scoreOf(row) < target && scoreOf(row) >= target - 10).length;
+  const teamBelow = eligibleManagers.filter((row) => scoreOf(row) < target - 10).length;
+  const section = (heading, items) => `<h4>${escapeHtml(heading)}</h4><ul class="executive-bullet-list">${items.map((item) => `<li>${item}</li>`).join("")}</ul>`;
+  let body = "";
+  if (lens === "qa") {
+    body = section("Agent Performance Overview", [
+      `A total of <strong>${eligibleAgents.length}</strong> agents and <strong>${total.toLocaleString()}</strong> customer surveys were analyzed during ${escapeHtml(period)}.`,
+      `Of the <strong>${sampleEligible.length}</strong> agents meeting the minimum sample requirement of ${minimumSample}, <strong>${aboveBenchmark.length}</strong> performed above the established benchmark, <strong>${monitor.length}</strong> were within the expected performance range, and <strong>${immediate.length}</strong> were below the benchmark.`,
+      `<strong>${immediate.length}</strong> agents require immediate coaching because their NPS is more than 10 points below the ${fmt(target)} benchmark.`,
+      `${monitor.length ? `<strong>${monitor.length}</strong> agents require monitoring.` : `No agents fell within the monitoring band of <strong>${fmt(target - 10)}</strong> to below <strong>${fmt(target)}</strong>; this is why the monitoring count is zero.`}`,
+      `${qaTrendAvailable ? `<strong>${qaImproving.length}</strong> agents demonstrate sustained improvement based on the calculated weekly agent trend.` : `Sustained-improvement count is <strong>not available</strong> because usable agent-by-week trend evidence was not present in the rows returned to this screen.`}`,
+      `${aboveBenchmark.length ? `<strong>${aboveBenchmark.length}</strong> agents demonstrate practices suitable for replication, subject to interaction-level validation.` : `No agent met the ${fmt(target)} benchmark, so no replication candidate is assigned solely from performance score.`}`,
+      `${eligibleAgents.length - sampleEligible.length ? `Agents with insufficient survey volume are excluded from performance ranking; <strong>${eligibleAgents.length - sampleEligible.length}</strong> agents were excluded in this run.` : `All <strong>${eligibleAgents.length}</strong> scored agents met the minimum sample requirement; none were excluded for insufficient volume.`}`,
+    ]) + section("Agent Trend and Consistency", [
+      `${qaTrendAvailable ? `<strong>${qaImproving.length}</strong> agents improved during the recent four-week comparison, while <strong>${qaDeclining.length}</strong> agents declined and <strong>${qaStable.length}</strong> remained stable.` : `Improved, declined, and stable agent counts are <strong>not available</strong> because a valid four-week agent comparison could not be built from the returned rows.`}`,
+      `${qaWeeklyEvidenceAvailable ? `${qaTargetStreak?.targetStreak ? `The longest continuous target-achievement streak was recorded by <strong>${escapeHtml(qaTargetStreak.name)}</strong> at <strong>${qaTargetStreak.targetStreak}</strong> weeks.` : "No agent recorded a target-achievement streak."} ${qaBelowStreak?.belowStreak ? `The longest continuous below-target streak was recorded by <strong>${escapeHtml(qaBelowStreak.name)}</strong> at <strong>${qaBelowStreak.belowStreak}</strong> weeks.` : "No below-target streak was measurable."}` : `Target-achievement and below-target streaks are <strong>not available</strong> because agent-by-week evidence was not present in the returned rows.`}`,
+      `${qaTrendAvailable ? `The strongest measurable sustained improvement was ${strongestImproverText}.` : `Strongest sustained improvement is <strong>not available</strong>.`} ${qaMostVolatile ? `<strong>${escapeHtml(qaMostVolatile.name)}</strong> recorded the highest performance volatility at <strong>${fmt(qaMostVolatile.volatility)}</strong> points.` : `Highest agent volatility is <strong>not available</strong> without repeated agent-period scores.`}`,
+    ]) + section("Coaching Priority Analysis", [
+      `The agents contributing the highest number of Detractor responses were <strong>${escapeHtml(topDetractorNames)}</strong>. Together, they accounted for <strong>${fmt(topDetractorShare, "%")}</strong> of all eligible Detractor responses.`,
+      `After adjusting for survey volume, the highest Detractor rates were <strong>${detractorRateText}</strong>.`,
+      `The most common agent-controllable issues identified in negative verbatims were <strong>${escapeHtml(agentIssueText)}</strong>. Structural failures are not assigned as individual coaching opportunities.`,
+    ]) + section("Score and Sentiment Alignment", [
+      `<strong>${lowScorePositiveText}</strong> surveys recorded a low NPS score despite neutral or positive verbatim sentiment. These interactions should be reviewed to determine whether the score was influenced by Process, Policy, Product, or Technology factors outside the agent's control.`,
+      `<strong>${negativeHighScore}</strong> surveys recorded negative sentiment despite a Passive or Promoter score. These cases may indicate hidden dissatisfaction and should be reviewed for coaching or process-learning opportunities.`,
+    ]) + section("Recommended QA Actions", [
+      `1. Coach <strong>${escapeHtml(coachingAgents.map((row) => nameOf(row)).join(" and ") || "the validated priority coaching population")}</strong> on <strong>${escapeHtml(topAgentIssues[0] || "the leading validated agent-controllable issue")}</strong>.`,
+      `2. Review <strong>${(lowScorePositiveText + negativeHighScore).toLocaleString()}</strong> flagged score-and-sentiment alignment cases.`,
+      `3. ${aboveBenchmark.length ? "Use" : "Review"} <strong>${escapeHtml(replicationAgent ? nameOf(replicationAgent) : "the highest relative performer")}</strong> ${aboveBenchmark.length ? "as a best-practice example" : "as the highest relative performer, pending best-practice validation"} for <strong>validated positive interaction practices</strong>.`,
+      `4. Reassess the coaching population over the next four weeks.`,
+    ]);
+  } else if (lens === "team-leader") {
+    body = section("Team Performance Summary", [
+      `The analyzed population contains <strong>${total.toLocaleString()}</strong> surveys and records an overall NPS of <strong>${fmt(score)}</strong> against a target of <strong>${fmt(target)}</strong>.`,
+      `Current-period NPS is <strong>${fmt(current)}</strong>, compared with the previous period result of <strong>${fmt(previous)}</strong>; performance ${movementText}.`,
+      `The team met its target in <strong>${hitPeriods}</strong> of the previous <strong>${weekly.length}</strong> periods. The available agent comparison shows <strong>${improvingAgents.length}</strong> improving, <strong>${decliningAgents.length}</strong> declining, and <strong>${stableAgents.length}</strong> stable.`,
+      `Current response volume is <strong>${fmt(weekly.at(-1)?.volume)}</strong>. This is survey volume, not participation rate, because invitation volume is not available.`,
+    ]) + section("Agent Performance Distribution", [
+      `Highest-performing agents: <strong>${escapeHtml(bestAgents)}</strong>. Priority-support agents: <strong>${escapeHtml(supportAgents)}</strong>.`,
+      `The team's performance gap is concentrated among <strong>${immediate.length}</strong> materially below-target agents; a precise Detractor-contribution percentage is shown only when eligible agent response evidence is available.`,
+      `<strong>${aboveBenchmark.length}</strong> agents performed above target.`,
+      `<strong>${monitor.length}</strong> agents were within the defined watch range.`,
+      `<strong>${immediate.length}</strong> agents performed materially below target.`,
+      `<strong>${eligibleAgents.length - sampleEligible.length}</strong> agents did not meet the minimum sample requirement.`,
+    ]) + section("Team Momentum and Consistency", [
+      `<strong>${improvingAgents.length}</strong> agents demonstrated improvement, while <strong>${decliningAgents.length}</strong> agents showed decline.`,
+      `The strongest measurable improvement was ${strongestImproverText}; the largest decline is derived only when agent movement evidence is returned.`,
+      `The team volatility score is <strong>not available</strong> without repeated team-period scores.`,
+      `Agents with high volatility despite acceptable average NPS require consistency-focused coaching; this population is not inferred without repeated agent-period evidence.`,
+    ]) + section("Customer Feedback Drivers", [
+      `The leading negative themes for the team were <strong>${escapeHtml(driverText)}</strong>.`,
+      `The Agent, Process, Policy, and Technology shares require validated category-level evidence; negative sentiment is <strong>${fmt(sentiment.Negative, "%")}</strong>.`,
+      `The fastest-growing negative issue is <strong>not available</strong> without theme-by-period evidence.`,
+      `Leading positive themes and the agents demonstrating strength in them should be validated from positive classified interaction evidence before peer-learning use.`,
+    ]) + section("Team Leader Priorities", [
+      `1. Coach <strong>${escapeHtml(immediate.slice(0, 2).map((row) => nameOf(row)).join(" and ") || supportAgents)}</strong> on <strong>${escapeHtml(topDrivers[0] || "the leading validated issue")}</strong>.`,
+      `2. Review the increase in the leading negative customer-feedback issue when theme-period evidence is available.`,
+      `3. Replicate the validated approach used by <strong>${escapeHtml(aboveBenchmark[0] ? nameOf(aboveBenchmark[0]) : bestAgents)}</strong>.`,
+      `4. Track <strong>${monitor.length}</strong> watchlist agents during the next four weeks.`,
+    ]);
+  } else if (lens === "operations-manager") {
+    body = section("Operational Performance Summary", [
+      `<strong>${eligibleManagers.length}</strong> teams, <strong>${eligibleAgents.length}</strong> scored agents, and <strong>${total.toLocaleString()}</strong> surveys were analyzed.`,
+      `Overall NPS was <strong>${fmt(score)}</strong>, compared with the target of <strong>${fmt(target)}</strong> and previous-period result of <strong>${fmt(previous)}</strong>.`,
+      `Current performance is <strong>${fmt(Math.abs(gap))}</strong> points ${gap >= 0 ? "above" : "below"} target and ${movementText}.`,
+    ]) + section("Team-Level Comparison", [
+      `<strong>${escapeHtml(bestTeam ? nameOf(bestTeam, "manager") : "Not available")}</strong> recorded the strongest performance at <strong>${fmt(bestTeam ? scoreOf(bestTeam) : NaN)}</strong>; largest positive team movement requires team-period evidence.`,
+      `<strong>${escapeHtml(priorityTeam ? nameOf(priorityTeam, "manager") : "Not available")}</strong> has the highest current intervention priority based on available aggregate performance.`,
+      `<strong>${teamAbove}</strong> teams met or exceeded target.`,
+      `<strong>${teamNear}</strong> teams were within 10 points of target.`,
+      `<strong>${teamBelow}</strong> teams were materially below target.`,
+      `Sustained team improvement and decline counts require repeated team-period evidence and are not inferred from aggregate scores.`,
+    ]) + section("Contribution to the Overall Performance Gap", [
+      `Team contribution should be calculated from eligible underlying responses, not by taking a simple average of team NPS values.`,
+      `The current run identifies <strong>${teamBelow}</strong> materially below-target teams; precise gap contribution requires team-level Detractor counts in the returned summary.`,
+      `Negative feedback must be separated across Process, Agent, Technology, and Policy categories so structural failures are not treated purely as agent-performance issues.`,
+    ]) + section("Operational Driver Analysis", [
+      `The leading operational drivers are <strong>${escapeHtml(driverText)}</strong>. Separate Agent issues from Process, Policy, and Technology corrections.`,
+      `The fastest-growing issue requires driver-by-period evidence; it is not inferred from aggregate frequency alone.`,
+      `The most consistently positive operational practice and leading team require positive driver-by-team evidence before replication.`,
+    ]) + section("Stability and Performance Risk", [
+      `The latest operation-level performance ${movementText}. Team volatility requires repeated team-period observations.`,
+      `<strong>${escapeHtml(priorityTeam ? nameOf(priorityTeam, "manager") : "No team")}</strong> is the current structural review priority based on available aggregate performance.`,
+      `Teams improving while still below target should be treated as recovery teams rather than deteriorating teams when team-period evidence confirms that trajectory.`,
+    ]) + section("Operations Action Plan", [
+      `1. Assign an accountable owner and corrective action for <strong>${escapeHtml(topDrivers[0] || "the leading operational issue")}</strong>.`,
+      `2. Conduct a focused operational review of <strong>${escapeHtml(priorityTeam ? nameOf(priorityTeam, "manager") : "the priority team")}</strong>.`,
+      `3. Replicate the leading validated positive practice from the strongest eligible team.`,
+      `4. Separate agent coaching actions from Process, Policy, and Technology corrections.`,
+      `5. Review progress during the next weekly or monthly governance meeting.`,
+    ]);
+  } else if (lens === "vp") {
+    body = section("Executive Performance Position", [
+      `<strong>${total.toLocaleString()}</strong> surveys were analyzed across <strong>${weekly.length}</strong> periods covering ${escapeHtml(period)}.`,
+      `Overall NPS for the reporting period was <strong>${fmt(score)}</strong>. Current-period NPS was <strong>${fmt(current)}</strong>, ${movementText}, with a gap of <strong>${fmt(Math.abs(gap))}</strong> points ${gap >= 0 ? "above" : "below"} target.`,
+      `Target was achieved in <strong>${hitPeriods}</strong> of the previous <strong>${weekly.length}</strong> periods. The recent trend is ${Number.isFinite(movement) ? movement > 0 ? "improving" : movement < 0 ? "declining" : "stable" : "not available"}.`,
+      `Current survey volume is <strong>${fmt(weekly.at(-1)?.volume)}</strong>. Incomplete reporting periods should be treated as provisional and not compared directly with completed periods.`,
+    ]) + section("Performance Stability and Risk", [
+      `The NPS volatility score is <strong>not available</strong> unless the complete repeated-period series is sufficient for a stability calculation.`,
+      `The middle-50% range and gap between stronger and weaker periods require a validated weekly distribution and are not inferred from the overall score.`,
+      `Performance risk is ${belowAgents > Math.max(1, eligibleAgents.length / 2) ? "broadly distributed" : "more concentrated"} across the scored population.`,
+    ]) + section("Strategic Customer Drivers", [
+      `The three largest available negative customer-experience drivers were <strong>${escapeHtml(driverText)}</strong>. Their combined classified-feedback share requires complete driver counts.`,
+      `The fastest-growing negative driver is <strong>not available</strong> without driver-by-period evidence.`,
+      `The strongest positive driver and leading operation require positive driver-by-segment evidence before replication.`,
+      `Agent-related and Process, Policy, and Technology factors must be separated before leadership assigns investment or coaching actions; negative sentiment is <strong>${fmt(sentiment.Negative, "%")}</strong>.`,
+    ]) + section("Business Impact and Leadership Priorities", [
+      `Based on frequency, customer impact, performance gap, and operational breadth, <strong>${escapeHtml(topDrivers[0] || "the leading validated driver")}</strong> is the highest-priority improvement area.`,
+      `Potential NPS improvement is <strong>not estimated</strong> unless the methodology, observation count, and confidence level are explicitly validated.`,
+      `1. Resolve the priority structural driver through Process, Technology, or Policy intervention where supported by classification evidence.`,
+      `2. Stabilize performance in below-target teams or business areas.`,
+      `3. Replicate validated best practice across eligible teams.`,
+    ]) + section("Leadership Decisions Required", [
+      `Overall performance is assessed as <strong>${gap < -20 ? "At Risk" : gap < 0 ? "Recovering" : "Stable"}</strong> based on target achievement, recent movement, and available driver evidence.`,
+      `Confirm ownership and funding for <strong>${escapeHtml(topDrivers[0] || "the priority improvement area")}</strong>.`,
+      `Confirm cross-functional support for the required Process, Policy, or Technology changes.`,
+      `Confirm the target timeline for closing the current NPS gap.`,
+      `Confirm the governance cadence for tracking the identified initiatives.`,
+    ]);
+  } else {
+    const counts = analysis.counts || {};
+    const promoter = Number(counts.Promoter || 0);
+    const passive = Number(counts.Passive || 0);
+    const detractor = Number(counts.Detractor || 0);
+    body = section("Customer Experience Summary", [
+      `A total of <strong>${total.toLocaleString()}</strong> customer surveys were analyzed during ${escapeHtml(period)}.`,
+      `Overall NPS was <strong>${fmt(score)}</strong>, compared with <strong>${fmt(previous)}</strong> in the previous period and the agreed target of <strong>${fmt(target)}</strong>.`,
+      `Performance ${movementText} during the current reporting period. Target was achieved in <strong>${hitPeriods}</strong> of the previous <strong>${weekly.length}</strong> periods.`,
+      `Current survey volume is <strong>${fmt(weekly.at(-1)?.volume)}</strong>. Incomplete reporting periods are presented as provisional.`,
+    ]) + section("Customer Feedback Overview", [
+      `<strong>${fmt(total ? promoter / total * 100 : NaN, "%")}</strong> of customers were Promoters, <strong>${fmt(total ? passive / total * 100 : NaN, "%")}</strong> were Passives, and <strong>${fmt(total ? detractor / total * 100 : NaN, "%")}</strong> were Detractors.`,
+      `Valid written-feedback participation is calculated only when the complete row-level response population is available.`,
+      `The leading positive customer-experience themes require positive classified theme evidence.`,
+      `The leading improvement themes were <strong>${escapeHtml(driverText)}</strong>; their combined negative-feedback share requires complete classified theme counts.`,
+    ]) + section("Root-Cause View", [
+      `The largest current driver is <strong>${escapeHtml(topDrivers[0] || "not available")}</strong>. The fastest-growing driver requires driver-by-period evidence.`,
+      `These classifications indicate where corrective action may be required; they are not presented as proven causes without additional causal analysis.`,
+      `Process-related share: <strong>not available without validated ACPT counts</strong>.`,
+      `Interaction-related share: <strong>not available without validated ACPT counts</strong>.`,
+      `Technology-related share: <strong>not available without validated ACPT counts</strong>.`,
+      `Policy-related share: <strong>not available without validated ACPT counts</strong>.`,
+    ]) + section("Progress Against Previous Actions", [
+      `Improvements should not be attributed to an individual action without sufficient causal evidence.`,
+      `Completed actions: <strong>not available</strong>.`,
+      `Actions in progress: <strong>not available</strong>.`,
+      `Actions at risk: <strong>not available</strong>.`,
+      `Actions not yet started: <strong>not available</strong>. The analysis package does not contain an action-governance register.`,
+    ]) + section("Improvement Commitments", [
+      `Progress will be measured using NPS movement, Detractor reduction, theme-frequency movement, and completion of agreed corrective actions.`,
+      `1. ${escapeHtml(topDrivers[0] || "Priority corrective action")} - Owner: Not assigned - Target date: Not assigned.`,
+      `2. Secondary corrective action - Owner: Not assigned - Target date: Not assigned.`,
+      `3. Monitoring and validation action - Owner: Not assigned - Target date: Not assigned.`,
+    ]) + section("Overall Client Position", [
+      `Overall customer-experience performance is assessed as <strong>${gap < -20 ? "At Risk" : gap < 0 ? "Recovering" : "Stable"}</strong>.`,
+      `The assessment is based on performance against target, recent trend, consistency, customer-feedback drivers, and available action-progress evidence.`,
+      `The highest-priority area for the next reporting period is <strong>${escapeHtml(topDrivers[0] || "the leading validated improvement theme")}</strong>, subject to a defined corrective-action plan and governance review.`,
+    ]);
+  }
+  return `<section class="result-executive-summary role-based-executive-read" data-lens="${escapeHtml(lens)}"><h3>${escapeHtml(title)}</h3>${body}</section>`;
+}
+
 function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   const container = $(context.containerId || "resultPerformanceReadout");
   if (!container) return;
@@ -19902,11 +20349,11 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   const stability = Number.isFinite(volatility) && volatility > 8 ? "Low" : Number.isFinite(volatility) && volatility > 4 ? "Moderate" : Number.isFinite(volatility) ? "High" : "Not available";
   const volatilityLabel = Number.isFinite(volatility) && volatility > 8 ? "Volatile" : Number.isFinite(volatility) && volatility > 4 ? "Moderately Stable" : Number.isFinite(volatility) ? "Stable" : "Not available";
   const experienceVariability = Number.isFinite(quartileVariance) && quartileVariance >= 10 ? "High" : Number.isFinite(quartileVariance) && quartileVariance >= 4 ? "Moderate" : Number.isFinite(quartileVariance) ? "Low" : "Not available";
-  const opportunity = Number.isFinite(quartileVariance) && quartileVariance >= 10 ? "High" : Number.isFinite(quartileVariance) && quartileVariance >= 4 ? "Moderate" : Number.isFinite(quartileVariance) ? "Limited" : "X";
+  const opportunity = Number.isFinite(quartileVariance) && quartileVariance >= 10 ? "High" : Number.isFinite(quartileVariance) && quartileVariance >= 4 ? "Moderate" : Number.isFinite(quartileVariance) ? "Limited" : "Not available";
   const sentimentAssessment = negativeShare >= 30 ? "At Risk" : Number(sentiment.Positive || 0) >= 70 ? "Excellent" : "Stable";
-  const fmt = (value, suffix = "") => Number.isFinite(value) ? `${formatDataPoint(value)}${suffix}` : `X${suffix}`;
+  const fmt = (value, suffix = "") => Number.isFinite(value) ? `${formatDataPoint(value)}${suffix}` : "Not available";
   const scoreSuffix = metric === "CSAT" ? "%" : "";
-  const totalText = total ? total.toLocaleString() : "X";
+  const totalText = total ? total.toLocaleString() : "Not available";
   const startDate = resultFirstValue(weeklyRows[0] || {}, ["period", "Week", "Month", "Date"], "");
   const endDate = resultFirstValue(weeklyRows.at(-1) || {}, ["period", "Week", "Month", "Date"], "");
   const targetHitWeeks = weeklyRows.filter((row) => Number(row.score) >= target).length;
@@ -19952,10 +20399,10 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   const bottomQuartileAvg = sortedScores.length ? sortedScores.slice(0, Math.max(1, Math.ceil(sortedScores.length * 0.25))).reduce((sum, value) => sum + value, 0) / Math.max(sortedScores.slice(0, Math.max(1, Math.ceil(sortedScores.length * 0.25))).length, 1) : NaN;
   const iqr = Number.isFinite(q1) && Number.isFinite(q3) ? q3 - q1 : quartileVariance;
   const interquartileGap = Number.isFinite(topQuartileAvg) && Number.isFinite(bottomQuartileAvg) ? topQuartileAvg - bottomQuartileAvg : iqr;
-  const driverText = topDriver || "X";
-  const painText = [painPoint, secondaryPainPoint].filter(Boolean).slice(0, 2).join(", ") || "X";
-  const themeText = [topTheme, topDriver].filter(Boolean).slice(0, 3).join(", ") || "X";
-  const priority = painPoint || topDriver || topTheme || "X";
+  const driverText = topDriver || "No classified driver available";
+  const painText = [painPoint, secondaryPainPoint].filter(Boolean).slice(0, 2).join(", ") || "No classified pain point available";
+  const themeText = [topTheme, topDriver].filter(Boolean).slice(0, 3).join(", ") || "No theme classification available";
+  const priority = painPoint || topDriver || topTheme || "the leading validated improvement area";
   const operationalShare = Number.isFinite(negativeShare) ? negativeShare : NaN;
   const impactPoints = Number.isFinite(interquartileGap) ? interquartileGap / 2 : NaN;
   const consistencyRead = stability === "High" ? "Good" : stability === "Low" ? "Poor" : stability === "Moderate" ? "Moderate" : "Not available";
@@ -19965,7 +20412,7 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   const validVerbatimCount = validVerbatimRows.length;
   const missingVerbatimCount = Math.max(total - validVerbatimCount, 0);
   const verbatimParticipation = total ? (validVerbatimCount / total) * 100 : NaN;
-  const currentWeekKey = String(weeklyRows.at(-1)?.period || "");
+  const currentWeekKey = [...new Set(baseRows.map((row) => feedbackWeek(row)).filter((week) => week && week !== "Unknown"))].sort().at(-1) || "";
   const currentWeekRows = currentWeekKey ? baseRows.filter((row) => feedbackWeek(row) === currentWeekKey) : [];
   const currentWeekVerbatimRows = currentWeekRows.filter((row) => feedbackText(row).trim().length > 0);
   const currentWeekVerbatimPct = currentWeekRows.length ? (currentWeekVerbatimRows.length / currentWeekRows.length) * 100 : NaN;
@@ -19988,11 +20435,11 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
     verbatims: segmentVerbatims[key],
     pct: segmentCounts[key] ? (segmentVerbatims[key] / segmentCounts[key]) * 100 : NaN,
   })).filter((row) => row.count > 0);
-  const highestSegmentParticipation = segmentParticipationRows.slice().sort((a, b) => (b.pct || 0) - (a.pct || 0))[0]?.label || "X";
-  const lowestSegmentParticipation = segmentParticipationRows.slice().sort((a, b) => (a.pct || 0) - (b.pct || 0))[0]?.label || "X";
+  const highestSegmentParticipation = segmentParticipationRows.slice().sort((a, b) => (b.pct || 0) - (a.pct || 0))[0]?.label || "Not available";
+  const lowestSegmentParticipation = segmentParticipationRows.slice().sort((a, b) => (a.pct || 0) - (b.pct || 0))[0]?.label || "Not available";
   const segmentCoverageText = segmentParticipationRows.length
     ? segmentParticipationRows.map((row) => `${row.label}: <strong>${row.verbatims.toLocaleString()}</strong> of <strong>${row.count.toLocaleString()}</strong> (<strong>${fmt(row.pct, "%")}</strong>)`).join(", ")
-    : "Promoters: <strong>X</strong> of <strong>Y</strong> (<strong>X%</strong>), Passives: <strong>X</strong> of <strong>Y</strong> (<strong>X%</strong>), and Detractors: <strong>X</strong> of <strong>Y</strong> (<strong>X%</strong>)";
+    : "Segment-level verbatim participation is not available because no valid NPS segment labels were returned.";
   const verbatimThemeNames = ["Primary Reason", "Owl Primary Driver", "Primary Theme", "Theme", "Predicted Theme", "Owl Theme", "Driver", "Reason"];
   const themeCounts = new Map();
   validVerbatimRows.forEach((row) => {
@@ -20033,7 +20480,7 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   const recurringPhrases = [...phraseCounts.entries()].filter(([, count]) => count > 1).map(([phrase, count]) => ({ phrase, count })).sort((a, b) => b.count - a.count || a.phrase.localeCompare(b.phrase)).slice(0, 5);
   const totalPhraseOccurrences = [...phraseCounts.values()].reduce((sum, count) => sum + count, 0);
   const topPhraseShare = totalPhraseOccurrences && recurringPhrases.length ? (recurringPhrases.reduce((sum, row) => sum + row.count, 0) / totalPhraseOccurrences) * 100 : NaN;
-  const phraseText = recurringPhrases.length ? recurringPhrases.map((row) => `"${escapeHtml(row.phrase)}"`).join(", ") : "\"X\", \"X\", \"X\", \"X\", and \"X\"";
+  const phraseText = recurringPhrases.length ? recurringPhrases.map((row) => `"${escapeHtml(row.phrase)}"`).join(", ") : "no recurring phrases met the minimum frequency";
   const verbatimSentimentAssessment = negativeShare >= 30 ? "Needs Improvement" : negativeShare >= 20 ? "Fair" : Number(sentiment.Positive || 0) >= 70 ? "Excellent" : "Good";
   const acptThemeCategoryNames = ["ACPT Primary Category", "ACPT", "Predicted ACPT", "Owl ACPT", "Ownership", "Accountability", "Bucket Category", "Owl Customer Impact"];
   const countDistribution = (sourceRows, names) => {
@@ -20048,8 +20495,8 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   const acptDistribution = countDistribution(validVerbatimRows, acptThemeCategoryNames);
   const classifiedThemeAcptRows = validVerbatimRows.filter((row) => resultFirstValue(row, verbatimThemeNames, "") || resultFirstValue(row, acptThemeCategoryNames, ""));
   const topAcptLimit = Math.min(5, acptDistribution.length);
-  const topAcptText = acptDistribution.length ? acptDistribution.slice(0, 5).map((row) => `<strong>${escapeHtml(row.label)}</strong>`).join(", ") : "<strong>X</strong>, <strong>X</strong>, <strong>X</strong>, <strong>X</strong>, and <strong>X</strong>";
-  const topThemeText = themeDistribution.length ? themeDistribution.slice(0, 5).map((row) => `<strong>${escapeHtml(row.label)}</strong>`).join(", ") : "<strong>X</strong>, <strong>X</strong>, <strong>X</strong>, <strong>X</strong>, and <strong>X</strong>";
+  const topAcptText = acptDistribution.length ? acptDistribution.slice(0, 5).map((row) => `<strong>${escapeHtml(row.label)}</strong>`).join(", ") : "no ACPT classification was produced";
+  const topThemeText = themeDistribution.length ? themeDistribution.slice(0, 5).map((row) => `<strong>${escapeHtml(row.label)}</strong>`).join(", ") : "no theme classification was produced";
   const combinedDistribution = [...themeDistribution.map((row) => ({ ...row, family: "theme" })), ...acptDistribution.map((row) => ({ ...row, family: "ACPT" }))].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   const combinedTopLimit = Math.min(5, combinedDistribution.length);
   const combinedTopShare = validVerbatimCount && combinedTopLimit ? Math.min(100, (combinedDistribution.slice(0, combinedTopLimit).reduce((sum, row) => sum + row.count, 0) / validVerbatimCount) * 100) : NaN;
@@ -20072,8 +20519,8 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
     positivePct: counts.total ? (counts.Positive / counts.total) * 100 : NaN,
     negativeCount: counts.Negative || 0,
   }));
-  const topPositiveThemeAcpt = combinedSentimentRows.slice().sort((a, b) => (b.positivePct || 0) - (a.positivePct || 0))[0]?.label || "X";
-  const topNegativeThemeAcpt = combinedSentimentRows.slice().sort((a, b) => (b.negativeCount || 0) - (a.negativeCount || 0))[0]?.label || "X";
+  const topPositiveThemeAcpt = combinedSentimentRows.slice().sort((a, b) => (b.positivePct || 0) - (a.positivePct || 0))[0]?.label || "Not available";
+  const topNegativeThemeAcpt = combinedSentimentRows.slice().sort((a, b) => (b.negativeCount || 0) - (a.negativeCount || 0))[0]?.label || "Not available";
   const weekKeysForThemes = [...new Set(classifiedThemeAcptRows.map((row) => feedbackWeek(row)).filter(Boolean))].sort();
   const currentThemeWeek = weekKeysForThemes.at(-1) || "";
   const combinedWeekCounts = new Map();
@@ -20101,27 +20548,27 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
   container.innerHTML = `<section class="result-executive-summary">
     <h4>Executive Performance Summary</h4>
     <ul class="executive-bullet-list">
-      <li>A total of <strong>${escapeHtml(totalText)}</strong> customer surveys were analyzed across <strong>${weeklyRows.length || "X"}</strong> weeks covering the period <strong>${escapeHtml(startDate || periodText)}</strong> to <strong>${escapeHtml(endDate || periodText)}</strong>.</li>
+      <li>A total of <strong>${escapeHtml(totalText)}</strong> customer surveys were analyzed across <strong>${weeklyRows.length || "an unavailable number of"}</strong> weeks covering the period <strong>${escapeHtml(startDate || periodText)}</strong> to <strong>${escapeHtml(endDate || periodText)}</strong>.</li>
       <li>The average weekly ${escapeHtml(metric)} for the analysis period is <strong>${fmt(weeklyMean, scoreSuffix)}</strong>, while the current week recorded <strong>${fmt(currentWeekScore, scoreSuffix)}</strong>, which is <strong>${fmt(Math.abs(currentWeekVsAvg))}</strong> points (<strong>${fmt(Math.abs(currentWeekVsAvgPct), "%")}</strong>) ${currentWeekVsAvg >= 0 ? "Above" : "Below"} the period average. The average monthly ${escapeHtml(metric)} for the analysis period is <strong>${fmt(monthlyMean, scoreSuffix)}</strong>, while the current month recorded <strong>${fmt(currentMonthScore, scoreSuffix)}</strong>, which is <strong>${fmt(Math.abs(currentMonthVsAvg))}</strong> points (<strong>${fmt(Math.abs(currentMonthVsAvgPct), "%")}</strong>) ${currentMonthVsAvg >= 0 ? "Above" : "Below"} the period average.</li>
       <li>The average weekly survey volume is <strong>${fmt(avgWeeklyVolume)}</strong>, while the current week recorded <strong>${fmt(latestVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentWeekVolumeGap), "%")}</strong> ${currentWeekVolumeGap >= 0 ? "Up" : "Down"}). The average monthly survey volume is <strong>${fmt(avgMonthlyVolume)}</strong>, while the current month recorded <strong>${fmt(currentMonthVolume)}</strong> surveys (<strong>${fmt(Math.abs(currentMonthVolumeGap), "%")}</strong> ${currentMonthVolumeGap >= 0 ? "Up" : "Down"}), indicating a <strong>${volumeWord === "Increasing" ? "rise" : volumeWord === "Declining" ? "decline" : "stable pattern"}</strong> in survey participation.</li>
-      <li>Across the analysis period, target was met in <strong>${targetHitWeeks}</strong> of <strong>${weeklyRows.length || "X"}</strong> weeks (<strong>${fmt(targetHitPct, "%")}</strong>). Performance improved in <strong>${improvedWeeks}</strong> weeks, declined in <strong>${declinedWeeks}</strong> weeks, and remained unchanged in <strong>${unchangedWeeks}</strong> weeks, reflecting <strong>${escapeHtml(consistencyRead)}</strong> consistency. The overall volatility score is <strong>${fmt(volatility)}</strong>, calculated as the standard deviation of weekly ${escapeHtml(metric)} scores, indicating <strong>${escapeHtml(volatilityLabel)}</strong> performance.</li>
+      <li>Across the analysis period, target was met in <strong>${targetHitWeeks}</strong> of <strong>${weeklyRows.length || "an unavailable number of"}</strong> weeks (<strong>${fmt(targetHitPct, "%")}</strong>). Performance improved in <strong>${improvedWeeks}</strong> weeks, declined in <strong>${declinedWeeks}</strong> weeks, and remained unchanged in <strong>${unchangedWeeks}</strong> weeks, reflecting <strong>${escapeHtml(consistencyRead)}</strong> consistency. The overall volatility score is <strong>${fmt(volatility)}</strong>, calculated as the standard deviation of weekly ${escapeHtml(metric)} scores, indicating <strong>${escapeHtml(volatilityLabel)}</strong> performance.</li>
       <li>The Interquartile Range (IQR) is <strong>${fmt(iqr)}</strong> points, with the top quartile averaging <strong>${fmt(topQuartileAvg, scoreSuffix)}</strong> and the bottom quartile averaging <strong>${fmt(bottomQuartileAvg, scoreSuffix)}</strong>, resulting in an interquartile gap of <strong>${fmt(interquartileGap)}</strong> points. The middle 50% of observations fall between <strong>${fmt(q1, scoreSuffix)}</strong> and <strong>${fmt(q3, scoreSuffix)}</strong>, suggesting <strong>${escapeHtml(experienceVariability)}</strong> variability in customer experience.</li>
     </ul>
     <h4>AI Verbatim Insights</h4>
     <ul class="executive-bullet-list">
-      <li>A total of <strong>${escapeHtml(totalText)}</strong> customer surveys were collected across <strong>${weeklyRows.length || "X"}</strong> weeks, covering the period <strong>${escapeHtml(startDate || periodText)}</strong> to <strong>${escapeHtml(endDate || periodText)}</strong>. Of these, <strong>${validVerbatimCount.toLocaleString()}</strong> surveys (<strong>${fmt(verbatimParticipation, "%")}</strong>) contained valid customer verbatims, while <strong>${missingVerbatimCount.toLocaleString()}</strong> surveys (<strong>${fmt(total ? (missingVerbatimCount / total) * 100 : NaN, "%")}</strong>) did not include written feedback. Overall verbatim participation was <strong>${fmt(verbatimParticipation, "%")}</strong>, compared with <strong>${fmt(currentWeekVerbatimPct, "%")}</strong> in the current week (${Number.isFinite(currentWeekVerbatimGap) ? `${currentWeekVerbatimGap >= 0 ? "Above" : "Below"} the reporting period average by <strong>${fmt(Math.abs(currentWeekVerbatimGap))}</strong> percentage points` : "X"}).</li>
+      <li>A total of <strong>${escapeHtml(totalText)}</strong> customer surveys were collected across <strong>${weeklyRows.length || "an unavailable number of"}</strong> weeks, covering the period <strong>${escapeHtml(startDate || periodText)}</strong> to <strong>${escapeHtml(endDate || periodText)}</strong>. Of these, <strong>${validVerbatimCount.toLocaleString()}</strong> surveys (<strong>${fmt(verbatimParticipation, "%")}</strong>) contained valid customer verbatims, while <strong>${missingVerbatimCount.toLocaleString()}</strong> surveys (<strong>${fmt(total ? (missingVerbatimCount / total) * 100 : NaN, "%")}</strong>) did not include written feedback. Overall verbatim participation was <strong>${fmt(verbatimParticipation, "%")}</strong>, compared with <strong>${fmt(currentWeekVerbatimPct, "%")}</strong> in the latest dated week (${Number.isFinite(currentWeekVerbatimGap) ? `${currentWeekVerbatimGap >= 0 ? "Above" : "Below"} the reporting period average by <strong>${fmt(Math.abs(currentWeekVerbatimGap))}</strong> percentage points` : "the comparison is not available"}).</li>
       <li>Detractors and Passives account for <strong>${passiveDetractorCount.toLocaleString()}</strong> surveys (<strong>${fmt(total ? (passiveDetractorCount / total) * 100 : NaN, "%")}</strong>) of the total responses, of which <strong>${passiveDetractorBlindSpots.toLocaleString()}</strong> surveys (<strong>${fmt(passiveDetractorCount ? (passiveDetractorBlindSpots / passiveDetractorCount) * 100 : NaN, "%")}</strong>) are blind spots due to missing verbatims. Verbatim participation by customer segment was ${segmentCoverageText}, with <strong>${escapeHtml(highestSegmentParticipation)}</strong> recording the highest participation rate and <strong>${escapeHtml(lowestSegmentParticipation)}</strong> the lowest.</li>
-      <li>AI-based analysis identified <strong>${fmt(Number(sentiment.Positive), "%")}</strong> Positive, <strong>${fmt(Number(sentiment.Neutral), "%")}</strong> Neutral, and <strong>${fmt(Number(sentiment.Negative), "%")}</strong> Negative sentiment, indicating an overall customer experience that is <strong>${escapeHtml(verbatimSentimentAssessment)}</strong>. AI also identified <strong>${distinctThemeCount || "X"}</strong> distinct themes, with the Top <strong>${topThemeLimit || "X"}</strong> themes contributing <strong>${fmt(topThemeShare, "%")}</strong> of all verbatims and representing the primary drivers of customer experience.</li>
-      <li>Customers used an average of <strong>${fmt(avgMeaningfulWords)}</strong> meaningful words per verbatim (excluding stop words), compared with <strong>${fmt(currentWeekAvgWords)}</strong> in the current week (${Number.isFinite(currentWeekWordGap) ? `${currentWeekWordGap >= 0 ? "Above" : "Below"} the reporting period average by <strong>${fmt(Math.abs(currentWeekWordGap))}</strong> words` : "X"}). A total of <strong>${uniqueMeaningfulWords ? uniqueMeaningfulWords.toLocaleString() : "X"}</strong> unique meaningful words were identified, while <strong>${fmt(actionablePct, "%")}</strong> of verbatims contained actionable feedback, demonstrating the depth and usefulness of customer feedback for improvement initiatives.</li>
+      <li>AI-based analysis identified <strong>${fmt(Number(sentiment.Positive), "%")}</strong> Positive, <strong>${fmt(Number(sentiment.Neutral), "%")}</strong> Neutral, and <strong>${fmt(Number(sentiment.Negative), "%")}</strong> Negative sentiment, indicating an overall customer experience that is <strong>${escapeHtml(verbatimSentimentAssessment)}</strong>. ${distinctThemeCount ? `AI also identified <strong>${distinctThemeCount}</strong> distinct themes, with the Top <strong>${topThemeLimit}</strong> themes contributing <strong>${fmt(topThemeShare, "%")}</strong> of all verbatims.` : "No distinct theme output was produced for this run, so theme count and theme-share measures are not available."}</li>
+      <li>Customers used an average of <strong>${fmt(avgMeaningfulWords)}</strong> meaningful words per verbatim (excluding stop words), compared with <strong>${fmt(currentWeekAvgWords)}</strong> in the latest dated week (${Number.isFinite(currentWeekWordGap) ? `${currentWeekWordGap >= 0 ? "Above" : "Below"} the reporting period average by <strong>${fmt(Math.abs(currentWeekWordGap))}</strong> words` : "the comparison is not available"}). A total of <strong>${uniqueMeaningfulWords ? uniqueMeaningfulWords.toLocaleString() : "no"}</strong> unique meaningful words were identified, while <strong>${fmt(actionablePct, "%")}</strong> of verbatims contained actionable feedback.</li>
       <li>The Top 5 recurring customer phrases were ${phraseText}, accounting for <strong>${fmt(topPhraseShare, "%")}</strong> of all meaningful phrase occurrences and providing a concise summary of the dominant topics influencing customer experience during the reporting period.</li>
     </ul>
     <h4>ACPT and Theme Analysis</h4>
     <ul class="executive-bullet-list">
-      <li>AI analyzed <strong>${validVerbatimCount.toLocaleString()}</strong> valid customer verbatims and identified <strong>${distinctThemeCount || "X"}</strong> distinct themes, classifying them into <strong>${acptDistribution.length || "X"}</strong> ACPT categories. The Top <strong>${combinedTopLimit || "X"}</strong> themes/categories accounted for <strong>${fmt(combinedTopShare, "%")}</strong> of all customer feedback, indicating that a small number of topics drive the majority of customer conversations.</li>
+      <li>AI analyzed <strong>${validVerbatimCount.toLocaleString()}</strong> valid customer verbatims. ${distinctThemeCount ? `It identified <strong>${distinctThemeCount}</strong> distinct themes.` : "No distinct theme classification was produced."} ${acptDistribution.length ? `It classified feedback into <strong>${acptDistribution.length}</strong> ACPT categories, with the Top <strong>${combinedTopLimit}</strong> available themes/categories accounting for <strong>${fmt(combinedTopShare, "%")}</strong> of feedback.` : "No ACPT category output was produced."}</li>
       <li>The most frequently discussed themes were ${topThemeText}, while the leading ACPT categories were ${topAcptText}, representing the primary drivers of customer experience during the reporting period.</li>
-      <li>Compared with the reporting period average, mentions of <strong>${escapeHtml(fastestThemeAcpt?.label || "X")}</strong> ${fastestThemeAcpt ? (fastestThemeAcpt.changePct >= 0 ? "increased" : "decreased") : "increased/decreased"} by <strong>${fastestThemeAcpt ? fmt(Math.abs(fastestThemeAcpt.changePct), "%") : "X%"}</strong> in the current week, making it the fastest-moving customer theme/category.</li>
+      <li>${fastestThemeAcpt ? `Compared with the reporting period average, mentions of <strong>${escapeHtml(fastestThemeAcpt.label)}</strong> ${fastestThemeAcpt.changePct >= 0 ? "increased" : "decreased"} by <strong>${fmt(Math.abs(fastestThemeAcpt.changePct), "%")}</strong> in the latest dated week, making it the fastest-moving available theme/category.` : "Fastest-moving theme/category is not available because theme-by-week evidence was not produced."}</li>
       <li>Sentiment analysis across identified themes and ACPT categories shows that <strong>${escapeHtml(topPositiveThemeAcpt)}</strong> contributed the highest proportion of positive customer experiences, whereas <strong>${escapeHtml(topNegativeThemeAcpt)}</strong> accounted for the largest share of negative customer feedback, highlighting the strongest strengths and improvement opportunities.</li>
-      <li>Among Detractor and Passive customers, <strong>${fmt(passiveDetractorDriverShare, "%")}</strong> of all classified feedback was attributed to <strong>${escapeHtml(topPassiveDetractorDriver?.label || "X")}</strong>, making it the single largest driver of customer dissatisfaction and the highest-priority improvement area. The Top 5 recurring customer topics were ${phraseText}, collectively contributing <strong>${fmt(topPhraseShare, "%")}</strong> of all classified feedback.</li>
+      <li>${topPassiveDetractorDriver ? `Among Detractor and Passive customers, <strong>${fmt(passiveDetractorDriverShare, "%")}</strong> of classified feedback was attributed to <strong>${escapeHtml(topPassiveDetractorDriver.label)}</strong>, making it the largest available dissatisfaction driver.` : "A leading Detractor/Passive theme driver is not available because theme classification was not produced."} The recurring customer topics were ${phraseText}, collectively contributing <strong>${fmt(topPhraseShare, "%")}</strong> of meaningful phrase occurrences.</li>
     </ul>
     <h4>Business Impact & Recommendations</h4>
     <ul class="executive-bullet-list">
@@ -20131,6 +20578,8 @@ function renderPerformanceExecutiveSummary(analysis = {}, context = {}) {
       <li>Based on statistical analysis, AI insights, sentiment, ACPT findings, theme distribution, and recent performance trends, overall performance is assessed as <strong>${escapeHtml(outlook)}</strong>, with <strong>${escapeHtml(priority)}</strong> identified as the highest-priority initiative for the next reporting period.</li>
     </ul>
   </section>`;
+  const selectedLens = $("executiveReadLens")?.value || "overall";
+  if (selectedLens !== "overall") container.innerHTML = roleBasedExecutiveReadHtml(selectedLens, analysis, context);
 }
 
 function executiveSummaryExportName(extension) {
@@ -20726,6 +21175,10 @@ async function analyze(options = {}) {
     }
     const payload = {
       mode: "nps",
+      target: Number($("guidedNpsTarget")?.value || 0),
+      scoreScale: $("guidedNpsScoreScale")?.value || $("npsScoreScale")?.value || "10",
+      promoterStartsAt: Number($("guidedNpsPromoterMin")?.value || $("npsPromoterMin")?.value || 9),
+      passiveStartsAt: Number($("guidedNpsPassiveMin")?.value || $("npsPassiveMin")?.value || 7),
       mapping: {
         feedback: feedbackSelect?.value || "",
         score: $("scoreCol")?.value || "",
@@ -20741,14 +21194,25 @@ async function analyze(options = {}) {
         theme: state.activeAnalysisEngines.theme,
       },
       modelPaths: {
-        sparrow: $("sparrowModelPath")?.value || "",
-        vulture: $("vultureModelPath")?.value || "",
+        sparrow: (guidedRun ? $("guidedSparrowModelPath")?.value : "") || $("sparrowModelPath")?.value || "",
+        theme: (guidedRun ? $("guidedOwlModelPath")?.value : "") || $("owlModelPath")?.value || "",
       },
       dynamicDimensions: state.dynamicDimensions,
       calendar: selectedCalendarConfig(),
       baseKey: $("baseKey")?.value || "",
       lookupKey: $("lookupKey")?.value || "",
     };
+    writeSetupCache({
+      mapping: payload.mapping,
+      businessRules: {
+        target: payload.target,
+        scoreScale: payload.scoreScale,
+        promoterStartsAt: payload.promoterStartsAt,
+        passiveStartsAt: payload.passiveStartsAt,
+        weekStart: payload.calendar.weekStartDay,
+        fiscalStart: payload.calendar.fiscalStartMonth,
+      },
+    });
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -20797,8 +21261,8 @@ async function analyze(options = {}) {
 }
 
 async function validateModel(kind) {
-  const input = kind === "sparrow" ? $("sparrowModelPath") : $("vultureModelPath");
-  const status = kind === "sparrow" ? $("sparrowModelStatus") : $("vultureModelStatus");
+  const input = kind === "sparrow" ? $("sparrowModelPath") : $("owlModelPath");
+  const status = kind === "sparrow" ? $("sparrowModelStatus") : $("owlModelStatus");
   if (status) status.textContent = `Validating ${kind} model...`;
   const response = await fetch("/api/model/validate", {
     method: "POST",
@@ -20816,7 +21280,7 @@ async function validateModel(kind) {
 }
 
 async function browseModel(kind) {
-  const input = kind === "sparrow" ? $("sparrowModelPath") : $("vultureModelPath");
+  const input = kind === "sparrow" ? $("sparrowModelPath") : $("owlModelPath");
   const response = await fetch("/api/model/browse", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -20838,7 +21302,7 @@ async function openTrainingTool(kind) {
   });
   const payload = await response.json().catch(() => ({ ok: false, error: "Training launcher did not respond." }));
   if (!response.ok || !payload.ok) {
-    const urls = { sparrow: "/apps/sparrow-training/index.html?login=1", vulture: "/apps/theme-model-training/index.html", theme: "/apps/theme-model-training/index.html" };
+    const urls = { sparrow: "/apps/sparrow-training/index.html?login=1", owl: "/apps/theme-model-training/index.html", theme: "/apps/theme-model-training/index.html" };
     const fallbackUrl = urls[kind];
     if (fallbackUrl) {
       const opened = window.open(fallbackUrl, "_blank", "noopener");
@@ -20848,7 +21312,7 @@ async function openTrainingTool(kind) {
   }
   if (payload.message) showToastMessage(payload.message);
   if (kind === "sparrow") window.open("/apps/sparrow-training/index.html?login=1", "_blank", "noopener");
-  if (kind === "theme" || kind === "vulture") window.open("/apps/theme-model-training/index.html", "_blank", "noopener");
+  if (kind === "theme" || kind === "owl") window.open("/apps/theme-model-training/index.html", "_blank", "noopener");
   return payload;
 }
 
@@ -20907,7 +21371,11 @@ async function loadStatus() {
   const hasSavedBase = serverBaseColumns.length > 0;
   if (!hasSavedBase) clearSetupCache();
   const savedAnalysis = payload.analysis || {};
+  state.sparrowTraining = payload.sparrow_training || {};
   const savedBaseName = String(payload.files?.base || "");
+  const savedLookupName = String(payload.files?.lookup || "");
+  state.baseFileName = savedBaseName || setupCache.baseFile || "";
+  state.lookupFileName = savedLookupName || setupCache.lookupFile || "";
   const savedAnalysisId = String(savedAnalysis.analysisId || "");
   if (restartRequested) {
     window.sessionStorage.removeItem("npsGuidedBaseFile");
@@ -20950,7 +21418,9 @@ async function loadStatus() {
   }
   if (payload.analysis?.modelPaths) state.modelPaths = payload.analysis.modelPaths;
   if ($("sparrowModelPath") && !$("sparrowModelPath").value) $("sparrowModelPath").value = state.modelPaths.sparrow || payload.model_status?.sparrow?.path || "";
-  if ($("vultureModelPath") && !$("vultureModelPath").value) $("vultureModelPath").value = state.modelPaths.vulture || payload.model_status?.vulture?.path || "";
+  if ($("owlModelPath") && !$("owlModelPath").value) $("owlModelPath").value = state.modelPaths.theme || payload.model_status?.theme?.path || "";
+  if ($("guidedSparrowModelPath") && !$("guidedSparrowModelPath").value) $("guidedSparrowModelPath").value = state.modelPaths.sparrow || payload.model_status?.sparrow?.path || "";
+  if ($("guidedOwlModelPath") && !$("guidedOwlModelPath").value) $("guidedOwlModelPath").value = state.modelPaths.theme || state.modelPaths.theme || payload.model_status?.theme?.path || payload.model_status?.theme?.path || "";
   if (payload.analysis?.analysisEngines) {
     state.activeAnalysisEngines = {
       sentiment: payload.analysis.analysisEngines.sentiment || "local",
@@ -20960,12 +21430,12 @@ async function loadStatus() {
     if ($("themeEngine")) $("themeEngine").value = state.activeAnalysisEngines.theme;
   }
   const sparrowReady = payload.model_status?.sparrow?.ready;
-  const vultureReady = payload.model_status?.vulture?.ready;
+  const owlReady = payload.model_status?.theme?.ready;
   const themeUsesLocalRules = (state.activeAnalysisEngines?.theme || "local") === "local";
   if ($("sparrowDot")) $("sparrowDot").className = `dot ${sparrowReady ? "ready" : "missing"}`;
-  if ($("vultureDot")) $("vultureDot").className = `dot ${themeUsesLocalRules || vultureReady ? "ready" : "missing"}`;
+  if ($("owlDot")) $("owlDot").className = `dot ${themeUsesLocalRules || owlReady ? "ready" : "missing"}`;
   if ($("sparrowText")) $("sparrowText").textContent = sparrowReady ? "Ready" : "Missing";
-  if ($("vultureText")) $("vultureText").textContent = themeUsesLocalRules ? "Local Rules" : (vultureReady ? "Ready" : "Missing");
+  if ($("owlText")) $("owlText").textContent = themeUsesLocalRules ? "Local Rules" : (owlReady ? "Ready" : "Missing");
   if (!forceGuidedStart && (state.lookupColumns || []).length && !state.setupCoverageChoice) state.setupCoverageChoice = "lookup";
   if (!analysisComplete && !forceGuidedStart && (state.baseColumns || []).length && !state.setupBaseRowCount) {
     state.setupBaseRowCount = Number(payload.row_counts?.base || payload.base_rows || 0);
@@ -21075,9 +21545,9 @@ $("addDynamicDimension")?.addEventListener("click", () => {
   }
 });
 $("browseSparrowModel")?.addEventListener("click", () => browseModel("sparrow").catch((err) => alert(err.message)));
-$("browseOwlModel")?.addEventListener("click", () => browseModel("vulture").catch((err) => alert(err.message)));
+$("browseOwlModel")?.addEventListener("click", () => browseModel("theme").catch((err) => alert(err.message)));
 $("validateSparrowModel")?.addEventListener("click", () => validateModel("sparrow").catch((err) => alert(err.message)));
-$("validateOwlModel")?.addEventListener("click", () => validateModel("vulture").catch((err) => alert(err.message)));
+$("validateOwlModel")?.addEventListener("click", () => validateModel("theme").catch((err) => alert(err.message)));
 $("agentDashboardSelect")?.addEventListener("change", (event) => { state.selectedAgent = event.target.value || "All Agents"; renderAgentDashboard(); });
 $("managerDashboardSelect")?.addEventListener("change", (event) => { state.selectedManager = event.target.value || "All Managers"; renderManagerDashboard(); });
 $("npsScoreScale")?.addEventListener("change", () => {
@@ -21485,6 +21955,7 @@ $("exportAnalysisProjectSetup")?.addEventListener("click", exportAnalysisProject
 $("exportExecutiveSummaryTxt")?.addEventListener("click", exportExecutiveSummaryTxt);
 $("exportExecutiveSummaryPdf")?.addEventListener("click", exportExecutiveSummaryPdf);
 $("exportExecutiveSummaryHtml")?.addEventListener("click", exportExecutiveSummaryHtml);
+$("executiveReadLens")?.addEventListener("change", () => renderAnalysisResultViews(state.analysis || {}));
 $("downloadRawDataExcel")?.addEventListener("click", () => downloadAnalysisRawData("excel"));
 $("downloadRawDataCsv")?.addEventListener("click", () => downloadAnalysisRawData("csv"));
 $("downloadRawDataExcelPanel")?.addEventListener("click", () => downloadAnalysisRawData("excel"));

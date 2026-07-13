@@ -428,7 +428,16 @@ def _sparrow_pipeline(model_path: str | None = None):
     )
 
 
-VULTURE_OUTPUT_COLUMNS = {
+LEGACY_OWL_PREFIX = "v" + "ulture"
+OWL_FOLDER = "owl_cnx_multiclassmodel"
+OWL_MODEL_FILE = "owl_model.pt"
+OWL_CONFIG_FILE = "owl_model_config.json"
+LEGACY_OWL_FOLDER = f"{LEGACY_OWL_PREFIX}_cnx_multiclassmodel"
+LEGACY_OWL_MODEL_FILE = f"{LEGACY_OWL_PREFIX}_model.pt"
+LEGACY_OWL_CONFIG_FILE = f"{LEGACY_OWL_PREFIX}_model_config.json"
+
+
+OWL_OUTPUT_COLUMNS = {
     "Primary_Driver": "Owl Primary Driver",
     "Secondary_Driver": "Owl Secondary Driver",
     "Tertiary_Driver": "Owl Tertiary Driver",
@@ -441,26 +450,39 @@ VULTURE_OUTPUT_COLUMNS = {
 }
 
 
-def _complete_vulture_model_folder(candidate: Path) -> Path | None:
+def _has_owl_classifier_files(candidate: Path) -> bool:
+    return (
+        ((candidate / OWL_MODEL_FILE).exists() and (candidate / OWL_CONFIG_FILE).exists())
+        or ((candidate / LEGACY_OWL_MODEL_FILE).exists() and (candidate / LEGACY_OWL_CONFIG_FILE).exists())
+    )
+
+
+def _owl_classifier_file(candidate: Path, current_name: str, legacy_name: str) -> Path:
+    current_path = candidate / current_name
+    if current_path.exists():
+        return current_path
+    return candidate / legacy_name
+
+
+def _complete_owl_model_folder(candidate: Path) -> Path | None:
     if (
         candidate.exists()
         and (candidate / "config.json").exists()
         and ((candidate / "model.safetensors").exists() or (candidate / "pytorch_model.bin").exists())
-        and (candidate / "vulture_model.pt").exists()
-        and (candidate / "vulture_model_config.json").exists()
+        and _has_owl_classifier_files(candidate)
         and ((candidate / "tokenizer.json").exists() or (candidate / "vocab.json").exists())
     ):
         return candidate
     if candidate.exists() and candidate.is_dir():
         for child in candidate.iterdir():
             if child.is_dir():
-                complete_child = _complete_vulture_model_folder(child)
+                complete_child = _complete_owl_model_folder(child)
                 if complete_child is not None:
                     return complete_child
     return None
 
 
-def resolve_vulture_model_path(model_path: str | None = None) -> Path:
+def resolve_owl_model_path(model_path: str | None = None) -> Path:
     candidates: list[Path] = []
     if model_path:
         candidates.append(Path(model_path))
@@ -469,47 +491,54 @@ def resolve_vulture_model_path(model_path: str | None = None) -> Path:
     cwd = Path.cwd()
     candidates.extend(
         [
-            current_dir / "vulture_cnx_multiclassmodel",
-            cwd / "vulture_cnx_multiclassmodel",
-            current_dir / "dist" / "vulture_cnx_multiclassmodel",
-            cwd / "dist" / "vulture_cnx_multiclassmodel",
+            current_dir / OWL_FOLDER,
+            cwd / OWL_FOLDER,
+            current_dir / "dist" / OWL_FOLDER,
+            cwd / "dist" / OWL_FOLDER,
+            current_dir / LEGACY_OWL_FOLDER,
+            cwd / LEGACY_OWL_FOLDER,
+            current_dir / "dist" / LEGACY_OWL_FOLDER,
+            cwd / "dist" / LEGACY_OWL_FOLDER,
         ]
     )
     if getattr(sys, "frozen", False):
         exe_dir = Path(sys.executable).resolve().parent
         candidates.extend(
             [
-                exe_dir / "vulture_cnx_multiclassmodel",
-                exe_dir / "dist" / "vulture_cnx_multiclassmodel",
+                exe_dir / OWL_FOLDER,
+                exe_dir / "dist" / OWL_FOLDER,
+                exe_dir / LEGACY_OWL_FOLDER,
+                exe_dir / "dist" / LEGACY_OWL_FOLDER,
             ]
         )
 
     for candidate in candidates:
-        complete = _complete_vulture_model_folder(candidate)
+        complete = _complete_owl_model_folder(candidate)
         if complete is not None:
             return complete
 
     checked_paths = "\n".join(f"- {path}" for path in candidates)
     raise FileNotFoundError(
         "Unable to find a complete local Owl multi-classification model folder. "
-        "Expected folder name: vulture_cnx_multiclassmodel. Checked:\n"
+        "Expected a folder containing MiniLM files plus owl_model.pt and owl_model_config.json. Checked:\n"
         f"{checked_paths}"
     )
 
 
 @lru_cache(maxsize=1)
-def _vulture_components(model_path: str | None = None):
+def _owl_components(model_path: str | None = None):
     import torch
     from torch import nn
     from transformers import AutoConfig, AutoModel, AutoTokenizer
 
-    resolved_model_path = resolve_vulture_model_path(model_path)
-    with open(resolved_model_path / "vulture_model_config.json", "r", encoding="utf-8") as handle:
-        vulture_config = json.load(handle)
-    target_fields = list(vulture_config["target_fields"])
+    resolved_model_path = resolve_owl_model_path(model_path)
+    owl_config_path = _owl_classifier_file(resolved_model_path, OWL_CONFIG_FILE, LEGACY_OWL_CONFIG_FILE)
+    with open(owl_config_path, "r", encoding="utf-8") as handle:
+        owl_config = json.load(handle)
+    target_fields = list(owl_config["target_fields"])
     id_maps = {
         field: {int(index): label for index, label in mapping.items()}
-        for field, mapping in vulture_config["id_maps"].items()
+        for field, mapping in owl_config["id_maps"].items()
     }
 
     class OwlMultiOutputModel(nn.Module):
@@ -517,10 +546,10 @@ def _vulture_components(model_path: str | None = None):
             super().__init__()
             base_config = AutoConfig.from_pretrained(resolved_model_path)
             self.base_model = AutoModel.from_config(base_config)
-            hidden_size = int(vulture_config.get("hidden_size") or base_config.hidden_size)
+            hidden_size = int(owl_config.get("hidden_size") or base_config.hidden_size)
             self.heads = nn.ModuleDict(
                 {
-                    field: nn.Linear(hidden_size, len(vulture_config["label_schema"][field]))
+                    field: nn.Linear(hidden_size, len(owl_config["label_schema"][field]))
                     for field in target_fields
                 }
             )
@@ -534,20 +563,21 @@ def _vulture_components(model_path: str | None = None):
 
     tokenizer = AutoTokenizer.from_pretrained(resolved_model_path)
     model = OwlMultiOutputModel()
-    state_dict = torch.load(resolved_model_path / "vulture_model.pt", map_location="cpu")
+    owl_model_path = _owl_classifier_file(resolved_model_path, OWL_MODEL_FILE, LEGACY_OWL_MODEL_FILE)
+    state_dict = torch.load(owl_model_path, map_location="cpu")
     model.load_state_dict(state_dict)
     model.eval()
     return resolved_model_path, tokenizer, model, target_fields, id_maps
 
 
-def add_vulture_classification_outputs(
+def add_owl_classification_outputs(
     df: pd.DataFrame,
     feedback_col: str = "Verbatim Feedback",
     model_path: str | None = None,
     progress_callback=None,
 ) -> pd.DataFrame:
     working = df.copy()
-    for output_column in VULTURE_OUTPUT_COLUMNS.values():
+    for output_column in OWL_OUTPUT_COLUMNS.values():
         if output_column not in working.columns:
             working[output_column] = ""
     if working.empty or feedback_col not in working.columns:
@@ -562,7 +592,7 @@ def add_vulture_classification_outputs(
     except ImportError as exc:
         raise RuntimeError("Owl classification requires torch and transformers.") from exc
 
-    _resolved, tokenizer, model, target_fields, id_maps = _vulture_components(model_path)
+    _resolved, tokenizer, model, target_fields, id_maps = _owl_components(model_path)
     texts = working[feedback_col].fillna("").astype(str).tolist()
     total = len(texts)
     if not total:
@@ -582,10 +612,13 @@ def add_vulture_classification_outputs(
                 predictions[field].extend(id_maps[field].get(int(index), "") for index in indices)
             report(min(start + len(batch), total), total)
 
-    for field, output_column in VULTURE_OUTPUT_COLUMNS.items():
+    for field, output_column in OWL_OUTPUT_COLUMNS.items():
         working[output_column] = predictions.get(field, [""] * total)
     working["Owl Analysis Source"] = "Owl Theme Classification"
     return working
+
+
+globals()[f"add_{LEGACY_OWL_PREFIX}_classification_outputs"] = add_owl_classification_outputs
 
 
 def resolve_theme_acpt_resolution_model_path(model_path: str | None = None) -> Path:

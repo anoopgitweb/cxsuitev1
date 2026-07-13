@@ -88,7 +88,7 @@ async function loadDefaults() {
     const response = await fetch("/api/status");
     const payload = await response.json();
     $("sparrowModelPath").value = payload.model_status?.sparrow?.path || "";
-    $("vultureModelPath").value = payload.model_status?.vulture?.path || "";
+    $("owlModelPath").value = payload.model_status?.theme?.path || "";
   } catch (_) {}
 }
 
@@ -238,7 +238,7 @@ async function analyze() {
         date: $("dateCol").value,
       },
       engines: { sentiment: $("sentimentEngine").value, theme: "local" },
-      modelPaths: { sparrow: $("sparrowModelPath").value, vulture: "", apiKey: $("apiKey")?.value || "" },
+      modelPaths: { sparrow: $("sparrowModelPath").value, theme: "", apiKey: $("apiKey")?.value || "" },
       dimensions: [],
       customCategories: [],
     };

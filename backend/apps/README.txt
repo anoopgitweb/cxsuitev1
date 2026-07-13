@@ -7,6 +7,6 @@ Backend code has moved into each top-level app folder:
 - apps\csat-intelligence-hub\backend
 - apps\sentiment-analysis
 - apps\sparrow-training
-- apps\vulture-training
+- apps\theme-model-training
 
 The root backend/server.py remains the shared standalone launcher and local HTTP server.

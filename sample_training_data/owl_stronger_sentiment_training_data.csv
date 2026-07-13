@@ -1,0 +1,111 @@
+Feedback,Theme,Sentiment,ACPT,Resolution Status,Difficulty
+"The agent was polite and tried hard, but the refund process took far too long and I had to chase twice.",Process Friction,Mixed,Process,Partially Resolved,Hard
+"Great empathy from the advisor, however the app kept freezing whenever I tried to upload my documents.",Digital Experience,Mixed,Technology,Review Required,Hard
+"The website was easy to use and the final answer was clear, so I am satisfied.",Digital Experience,Positive,Technology,Resolved,Easy
+"My issue was fixed, but only after three transfers and repeating the same story each time.",Agent Behaviour,Mixed,Agent,Partially Resolved,Hard
+"The policy explanation was accurate, yet the policy itself felt unfair and left me frustrated.",Policy Friction,Mixed,Policy,Review Required,Hard
+"The team promised a callback and never contacted me, so I still do not know what happens next.",Communication Clarity,Negative,Agent,Unresolved,Medium
+"Although the agent sounded confident, the answer contradicted what I was told yesterday.",Communication Clarity,Negative,Agent,Review Required,Hard
+"The product works well, but billing errors make the overall experience disappointing.",Billing Accuracy,Mixed,Process,Review Required,Hard
+"Quick resolution, clear communication, and the agent confirmed everything before ending the chat.",Resolution Quality,Positive,Agent,Resolved,Easy
+"I received a response quickly, but it did not actually solve the problem.",Resolution Quality,Mixed,Process,Unresolved,Medium
+"The instructions were short and easy to follow, and the issue is now closed.",Communication Clarity,Positive,Agent,Resolved,Easy
+"The automated menu wasted ten minutes before I could reach a real person.",Wait Time,Negative,Process,Review Required,Medium
+"Support was friendly, but the wait time was unacceptable for such a simple request.",Wait Time,Mixed,Process,Partially Resolved,Hard
+"The agent blamed the policy instead of helping me understand my options.",Policy Friction,Negative,Agent,Review Required,Medium
+"Everything was resolved on the first contact and the representative was knowledgeable.",Resolution Quality,Positive,Agent,Resolved,Easy
+"The mobile app showed payment complete, but my account still says overdue.",Digital Experience,Negative,Technology,Review Required,Hard
+"I appreciate the discount, although the billing correction still has not appeared.",Billing Accuracy,Mixed,Process,Partially Resolved,Hard
+"The chat transcript was emailed immediately and the solution worked as described.",Communication Clarity,Positive,Technology,Resolved,Easy
+"No one explained the next steps, and I left the call more confused than before.",Communication Clarity,Negative,Agent,Unresolved,Medium
+"The advisor was excellent, but the system outage prevented any real progress.",Digital Experience,Mixed,Technology,Unresolved,Hard
+"The replacement was arranged quickly and I felt the company took ownership.",Resolution Quality,Positive,Process,Resolved,Easy
+"The agent said the case was closed even though my problem was still open.",Resolution Quality,Negative,Agent,Unresolved,Medium
+"The portal is slow, confusing, and repeatedly logs me out.",Digital Experience,Negative,Technology,Review Required,Medium
+"I was told the fee would be waived, but it still appeared on the next statement.",Billing Accuracy,Negative,Process,Review Required,Hard
+"The agent listened carefully and corrected the address without any delay.",Agent Behaviour,Positive,Agent,Resolved,Easy
+"Good service from the person, bad experience with the approval workflow.",Process Friction,Mixed,Process,Partially Resolved,Hard
+"The answer was technically correct, but it did not address my actual concern.",Resolution Quality,Mixed,Agent,Review Required,Hard
+"The supervisor stepped in and finally fixed what had been pending for weeks.",Escalation Handling,Positive,Agent,Resolved,Medium
+"I had to escalate twice before anyone accepted responsibility.",Escalation Handling,Negative,Process,Partially Resolved,Medium
+"The form asks for information I already provided, which feels repetitive and inefficient.",Process Friction,Negative,Process,Review Required,Medium
+"Despite the delay, the final outcome was fair and clearly explained.",Resolution Quality,Mixed,Process,Resolved,Hard
+"The agent was kind, but kindness does not help when the policy blocks every option.",Policy Friction,Mixed,Policy,Review Required,Hard
+"I got a clear explanation of charges and the billing issue was corrected.",Billing Accuracy,Positive,Process,Resolved,Easy
+"The same billing mistake has happened three months in a row.",Billing Accuracy,Negative,Process,Unresolved,Medium
+"The online status tracker gave useful updates and reduced the need to call.",Digital Experience,Positive,Technology,Resolved,Easy
+"The status tracker said resolved, but support confirmed it was still pending.",Digital Experience,Negative,Technology,Review Required,Hard
+"The agent used jargon and rushed through the explanation.",Communication Clarity,Negative,Agent,Review Required,Medium
+"Very helpful explanation, though the final approval still took longer than promised.",Wait Time,Mixed,Process,Partially Resolved,Hard
+"The process was smooth from start to finish.",Process Friction,Positive,Process,Resolved,Easy
+"I am unhappy because nobody followed up after promising an update.",Communication Clarity,Negative,Agent,Unresolved,Medium
+"The product is reliable and support resolved my setup question quickly.",Product Fit,Positive,Technology,Resolved,Easy
+"The product features are good, but the setup instructions are unclear.",Product Fit,Mixed,Technology,Partially Resolved,Hard
+"The package does not match my needs and cancellation was difficult.",Product Fit,Negative,Policy,Review Required,Medium
+"The agent fixed the issue but sounded irritated and dismissive.",Agent Behaviour,Mixed,Agent,Resolved,Hard
+"The agent was patient, calm, and checked that I understood the solution.",Agent Behaviour,Positive,Agent,Resolved,Easy
+"The agent interrupted me several times and did not listen to the full issue.",Agent Behaviour,Negative,Agent,Review Required,Medium
+"The case was reopened quickly after I provided the missing document.",Escalation Handling,Positive,Process,Partially Resolved,Medium
+"My escalation disappeared with no owner assigned.",Escalation Handling,Negative,Process,Unresolved,Medium
+"The promised timeline was missed, but the final repair quality was good.",Wait Time,Mixed,Process,Resolved,Hard
+"Waiting forty minutes for a basic password reset is not acceptable.",Wait Time,Negative,Process,Review Required,Medium
+"I was transferred to billing and they solved it immediately.",Billing Accuracy,Positive,Agent,Resolved,Easy
+"The app notification was wrong, but the agent corrected the account manually.",Digital Experience,Mixed,Technology,Resolved,Hard
+"The website payment journey is clean and confirmation arrived instantly.",Digital Experience,Positive,Technology,Resolved,Easy
+"The policy was explained clearly and the exception request was approved.",Policy Friction,Positive,Policy,Resolved,Easy
+"The policy wording is confusing and every agent interprets it differently.",Policy Friction,Negative,Policy,Review Required,Medium
+"The agent apologized, but I still had to do all the follow-up myself.",Agent Behaviour,Mixed,Agent,Partially Resolved,Hard
+"I received the right answer, but only after being placed on hold repeatedly.",Wait Time,Mixed,Process,Resolved,Hard
+"The team fixed the root cause and explained how to avoid the issue again.",Resolution Quality,Positive,Process,Resolved,Easy
+"Support closed the ticket without testing whether the fix worked.",Resolution Quality,Negative,Agent,Unresolved,Medium
+"The renewal price was corrected after I sent proof of the earlier quote.",Billing Accuracy,Positive,Process,Resolved,Medium
+"The quote and invoice did not match, creating unnecessary confusion.",Billing Accuracy,Negative,Process,Review Required,Medium
+"The agent understood the issue, but the internal tools were too slow to process the change.",Digital Experience,Mixed,Technology,Partially Resolved,Hard
+"The app is fast, but it hides important account details behind too many screens.",Digital Experience,Mixed,Technology,Review Required,Hard
+"Every step was explained and I could complete the request without calling again.",Communication Clarity,Positive,Agent,Resolved,Easy
+"I was given three different answers by three different people.",Communication Clarity,Negative,Agent,Review Required,Medium
+"The process requires manager approval for a minor correction, which delayed everything.",Process Friction,Negative,Process,Review Required,Medium
+"The handoff from chat to phone was smooth and the history carried over.",Process Friction,Positive,Process,Resolved,Easy
+"The agent made me feel heard, although the product limitation remains unresolved.",Product Fit,Mixed,Agent,Partially Resolved,Hard
+"The product does exactly what I need and support confirmed the right plan.",Product Fit,Positive,Technology,Resolved,Easy
+"I cannot use the feature I bought because it is not available in my region.",Product Fit,Negative,Policy,Unresolved,Medium
+"The escalation owner called back on time and gave a realistic timeline.",Escalation Handling,Positive,Agent,Partially Resolved,Medium
+"Escalation was offered, but nobody could explain what it would change.",Escalation Handling,Mixed,Process,Review Required,Hard
+"The agent gave a workaround, but it feels temporary and fragile.",Resolution Quality,Mixed,Agent,Partially Resolved,Hard
+"The issue was solved permanently and I received written confirmation.",Resolution Quality,Positive,Process,Resolved,Easy
+"The help article was outdated and caused me to submit the wrong form.",Communication Clarity,Negative,Technology,Review Required,Medium
+"The help article and agent guidance matched perfectly.",Communication Clarity,Positive,Technology,Resolved,Easy
+"Billing support was fast, yet the original charge should never have happened.",Billing Accuracy,Mixed,Process,Resolved,Hard
+"The payment failed twice even though my bank approved it.",Billing Accuracy,Negative,Technology,Review Required,Medium
+"The agent was warm and efficient, but the IVR before the call was painful.",Wait Time,Mixed,Process,Resolved,Hard
+"I got connected immediately and the issue was handled in one conversation.",Wait Time,Positive,Process,Resolved,Easy
+"The product page overpromised and the actual feature set is limited.",Product Fit,Negative,Policy,Review Required,Medium
+"The onboarding checklist made setup simple and reduced confusion.",Product Fit,Positive,Technology,Resolved,Easy
+"The case owner changed twice and no one seemed accountable.",Escalation Handling,Negative,Process,Unresolved,Medium
+"After escalation, the new owner summarized the case and moved it forward.",Escalation Handling,Positive,Agent,Partially Resolved,Medium
+"The workflow is clear for simple cases but breaks down when documents are missing.",Process Friction,Mixed,Process,Review Required,Hard
+"The document upload finally worked after the agent resent the link.",Digital Experience,Mixed,Technology,Resolved,Hard
+"The agent gave incorrect troubleshooting steps and made the outage worse.",Agent Behaviour,Negative,Agent,Review Required,Medium
+"The representative found the exact root cause and fixed it without escalation.",Agent Behaviour,Positive,Agent,Resolved,Easy
+"I liked the agent, but the company process made me feel stuck.",Process Friction,Mixed,Process,Review Required,Hard
+"The service was courteous, accurate, and completed faster than expected.",Resolution Quality,Positive,Agent,Resolved,Easy
+"I received the standard update that my request is still being reviewed.",Communication Clarity,Neutral,Process,Review Required,Medium
+"The agent confirmed my account details and said the next update will arrive tomorrow.",Communication Clarity,Neutral,Agent,Partially Resolved,Easy
+"The case is pending because additional documents are required.",Process Friction,Neutral,Process,Review Required,Easy
+"The payment status shows processing and no action is required from me right now.",Billing Accuracy,Neutral,Technology,Partially Resolved,Easy
+"The product eligibility check is still in progress.",Product Fit,Neutral,Policy,Review Required,Easy
+"Support explained that the request is queued for the specialist team.",Escalation Handling,Neutral,Process,Review Required,Easy
+"The portal displayed a message that maintenance is scheduled tonight.",Digital Experience,Neutral,Technology,Partially Resolved,Easy
+"The advisor shared the policy link and asked me to review it before deciding.",Policy Friction,Neutral,Policy,Partially Resolved,Easy
+"I was told to wait for the next billing cycle before the adjustment appears.",Billing Accuracy,Neutral,Process,Partially Resolved,Medium
+"The agent documented the issue and assigned a reference number.",Agent Behaviour,Neutral,Agent,Partially Resolved,Easy
+"The expected wait time was provided before I joined the queue.",Wait Time,Neutral,Process,Partially Resolved,Easy
+"The system accepted my form and sent a confirmation email.",Digital Experience,Neutral,Technology,Resolved,Easy
+"The help page listed the required steps without additional explanation.",Communication Clarity,Neutral,Technology,Partially Resolved,Easy
+"The request has been escalated and is awaiting manager approval.",Escalation Handling,Neutral,Process,Review Required,Medium
+"The feature is available only after account verification is completed.",Product Fit,Neutral,Policy,Partially Resolved,Easy
+"The agent confirmed the current policy but did not recommend a next action.",Policy Friction,Neutral,Agent,Review Required,Medium
+"The repair team received the ticket and is checking the service history.",Resolution Quality,Neutral,Process,Review Required,Easy
+"The chat ended with a note that follow-up will be sent by email.",Communication Clarity,Neutral,Agent,Partially Resolved,Easy
+"The account page shows the same information that the agent provided.",Digital Experience,Neutral,Technology,Resolved,Easy
+"The billing team is reviewing the disputed charge and will respond after validation.",Billing Accuracy,Neutral,Process,Review Required,Medium

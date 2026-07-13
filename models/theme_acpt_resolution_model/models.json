@@ -1,5 +1,30 @@
 [
   {
+    "id": "adobe-theme-model",
+    "name": "Adobe Theme Model",
+    "path": "models/theme_acpt_resolution_model/adobe-theme-model.joblib",
+    "trainedAt": "2026-07-11T11:46:52",
+    "trainedRows": 216,
+    "labels": [
+      "Agent Behaviour",
+      "Billing Accuracy",
+      "Communication Clarity",
+      "Digital Experience",
+      "Policy Friction",
+      "Product Fit",
+      "Resolution Quality",
+      "Wait Time"
+    ],
+    "outputs": [
+      "Theme",
+      "ACPT",
+      "Resolution Status"
+    ],
+    "accuracy": 1.0,
+    "macroF1": 1.0,
+    "weightedF1": 1.0
+  },
+  {
     "id": "new-model",
     "name": "New Model",
     "path": "models/theme_acpt_resolution_model/new-model.joblib",

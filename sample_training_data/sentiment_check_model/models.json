@@ -1,0 +1,28 @@
+[
+  {
+    "id": "codex-sentiment-check",
+    "name": "codex-sentiment-check",
+    "path": "sample_training_data/sentiment_check_model/codex-sentiment-check.joblib",
+    "trainedAt": "2026-07-11T12:19:01",
+    "trainedRows": 216,
+    "labels": [
+      "Agent Behaviour",
+      "Billing Accuracy",
+      "Communication Clarity",
+      "Digital Experience",
+      "Policy Friction",
+      "Product Fit",
+      "Resolution Quality",
+      "Wait Time"
+    ],
+    "outputs": [
+      "Theme",
+      "Sentiment",
+      "ACPT",
+      "Resolution Status"
+    ],
+    "accuracy": 1.0,
+    "macroF1": 1.0,
+    "weightedF1": 1.0
+  }
+]

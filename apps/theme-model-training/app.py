@@ -33,6 +33,19 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.model_selection import train_test_split
 
 
+def install_sentence_transformer_pickle_aliases() -> None:
+    """Allow older saved Owl bundles to load with the current sentence-transformers package."""
+    sys.modules.setdefault("sentence_transformers.base", sentence_transformers)
+
+
+def load_model_bundle(model_file: Path) -> dict[str, Any]:
+    install_sentence_transformer_pickle_aliases()
+    bundle = joblib.load(model_file)
+    if not isinstance(bundle, dict):
+        raise ValueError(f"Model file is not a valid Owl bundle: {model_file.name}")
+    return bundle
+
+
 ROOT = Path(__file__).resolve().parent
 SUITE_ROOT = ROOT.parents[1] if len(ROOT.parents) > 1 and (ROOT.parents[1] / "models").exists() else ROOT.parent
 MODEL_BUNDLE_DIR = SUITE_ROOT / "models" / "theme_acpt_resolution_model"
@@ -80,13 +93,49 @@ def records_from_upload(filename: str, data: bytes) -> pd.DataFrame:
 
 
 def infer_feedback_column(columns: list[str]) -> str:
-    preferred = ["verbatim", "feedback", "comment", "comments", "description", "summary", "narrative", "text"]
-    lowered = {column.lower(): column for column in columns}
-    for hint in preferred:
+    strong_hints = [
+        "verbatim",
+        "customer comment",
+        "customer comments",
+        "comment",
+        "comments",
+        "feedback text",
+        "feedback verbatim",
+        "survey feedback",
+        "response text",
+        "free text",
+        "narrative",
+    ]
+    weak_hints = ["description", "summary", "feedback", "text"]
+    lowered = {re.sub(r"[^a-z0-9]+", " ", column.lower()).strip(): column for column in columns}
+    for hint in strong_hints:
         for lower, original in lowered.items():
             if hint in lower:
                 return original
-    return columns[0] if columns else ""
+    for hint in weak_hints:
+        matches = [original for lower, original in lowered.items() if hint in lower]
+        if len(matches) == 1:
+            return matches[0]
+    return ""
+
+
+def infer_labeled_columns(columns: list[str]) -> dict[str, str]:
+    def pick(hints: list[str]) -> str:
+        normalized = {re.sub(r"[^a-z0-9]+", "", column.lower()): column for column in columns}
+        for hint in hints:
+            clean_hint = re.sub(r"[^a-z0-9]+", "", hint.lower())
+            for lower, original in normalized.items():
+                if clean_hint and clean_hint in lower:
+                    return original
+        return ""
+
+    return {
+        "feedback": infer_feedback_column(columns),
+        "label": pick(["theme", "topic", "category", "label"]),
+        "sentiment": pick(["sentiment", "tone", "polarity"]),
+        "acpt": pick(["acpt", "ownership", "owner"]),
+        "resolution": pick(["resolution status", "resolution", "resolved status", "status"]),
+    }
 
 
 def model_slug(name: str) -> str:
@@ -133,6 +182,26 @@ def portable_model_path(path: Path) -> str:
         return str(path)
 
 
+def resolve_model_save_dir(value: str) -> Path:
+    return resolve_portable_path(value, TRAINED_DIR)
+
+
+def upsert_manifest_at(manifest_path: Path, item: dict[str, Any]) -> None:
+    if manifest_path.exists():
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            items = data if isinstance(data, list) else []
+        except Exception:
+            items = []
+    else:
+        items = []
+    items = [existing for existing in items if existing.get("id") != item.get("id")]
+    items.append(item)
+    items.sort(key=lambda row: str(row.get("name", "")).lower())
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(items, indent=2), encoding="utf-8")
+
+
 def discover_model_files(folder: str = "") -> list[dict[str, Any]]:
     folder_path = resolve_portable_path(folder, TRAINED_DIR)
     if not folder_path.exists() or not folder_path.is_dir():
@@ -140,7 +209,7 @@ def discover_model_files(folder: str = "") -> list[dict[str, Any]]:
     models = []
     for model_file in sorted(folder_path.glob("*.joblib"), key=lambda path: path.name.lower()):
         try:
-            bundle = joblib.load(model_file)
+            bundle = load_model_bundle(model_file)
             name = clean_text(bundle.get("modelName")) or model_file.stem
             labels = bundle.get("labels") or []
             outputs = ["Theme", *list((bundle.get("outputClassifiers") or {}).keys())]
@@ -177,7 +246,7 @@ def predict_one_verbatim(model_path: str, text: str) -> dict[str, Any]:
     path = resolve_portable_path(model_path)
     if not path.exists() or path.suffix.lower() != ".joblib":
         raise ValueError(f"Model file not found: {model_path}")
-    bundle = joblib.load(path)
+    bundle = load_model_bundle(path)
     classifier = bundle.get("classifier")
     if classifier is None:
         raise ValueError(f"Model file does not contain a classifier: {path.name}")
@@ -212,6 +281,106 @@ def predict_one_verbatim(model_path: str, text: str) -> dict[str, Any]:
         "confidence": float(top_probability),
         "topProbabilities": [{"theme": str(label), "confidence": float(prob)} for label, prob in ranked[:5]],
         "outputs": output_predictions,
+    }
+
+
+def output_prediction_value(prediction: dict[str, Any], *names: str) -> str:
+    outputs = prediction.get("outputs") or {}
+    normalized_outputs = {
+        re.sub(r"[^a-z0-9]+", "", str(key).lower()): value
+        for key, value in outputs.items()
+    }
+    for name in names:
+        normalized_name = re.sub(r"[^a-z0-9]+", "", str(name).lower())
+        output = normalized_outputs.get(normalized_name)
+        if isinstance(output, dict):
+            return clean_text(output.get("prediction"))
+    return ""
+
+
+def bulk_predict_file(
+    filename: str,
+    data: bytes,
+    feedback_col: str,
+    model_path: str,
+    save_folder: str,
+    output_name: str = "",
+) -> dict[str, Any]:
+    df = records_from_upload(filename, data)
+    df.columns = [str(column) for column in df.columns]
+    df = df.where(pd.notna(df), "")
+    columns = list(df.columns)
+    feedback_col = clean_text(feedback_col) or infer_feedback_column(columns)
+    if feedback_col not in df.columns:
+        raise ValueError("Select a valid feedback column.")
+    if not clean_text(model_path):
+        raise ValueError("Select a trained model.")
+    save_dir = resolve_portable_path(save_folder or str(Path.home() / "Documents"), Path.home() / "Documents")
+    save_dir.mkdir(parents=True, exist_ok=True)
+    if output_name:
+        safe_name = re.sub(r'[<>:"/\\\\|?*]+', "_", clean_text(output_name))
+    else:
+        safe_name = f"owl_bulk_analysis_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    if not Path(safe_name).suffix:
+        safe_name = f"{safe_name}.xlsx"
+    output_path = save_dir / safe_name
+
+    now = dt.datetime.now().isoformat(timespec="seconds")
+    rows: list[dict[str, Any]] = []
+    classified_rows = 0
+    model_used = ""
+    for _, row in df.iterrows():
+        verbatim = clean_text(row.get(feedback_col))
+        output_row = {
+            "Verbatim": verbatim,
+            "Theme": "",
+            "Sentiment": "",
+            "ACPT": "",
+            "Resolution Status": "",
+            "Model Used": "",
+            "Time": now,
+        }
+        if len(verbatim.split()) >= 3:
+            try:
+                prediction = predict_one_verbatim(model_path, verbatim)
+                outputs = prediction.get("outputs") or {}
+                model_used = clean_text(prediction.get("modelName")) or model_used
+                output_row.update(
+                    {
+                        "Theme": prediction.get("prediction", ""),
+                        "Sentiment": output_prediction_value(prediction, "Sentiment", "Customer Sentiment", "Sentiment Label"),
+                        "ACPT": output_prediction_value(prediction, "ACPT", "Ownership", "ACPT Ownership"),
+                        "Resolution Status": output_prediction_value(prediction, "Resolution Status", "Resolution"),
+                        "Model Used": model_used,
+                    }
+                )
+                classified_rows += 1
+            except Exception as exc:
+                output_row["Theme"] = f"Prediction error: {exc}"
+                output_row["Model Used"] = model_used or Path(model_path).stem
+        rows.append(output_row)
+
+    out_df = pd.DataFrame(rows, columns=["Verbatim", "Theme", "Sentiment", "ACPT", "Resolution Status", "Model Used", "Time"])
+    if output_path.suffix.lower() == ".csv":
+        out_df.to_csv(output_path, index=False, encoding="utf-8-sig")
+    else:
+        if output_path.suffix.lower() not in {".xlsx", ".xlsm"}:
+            output_path = output_path.with_suffix(".xlsx")
+        with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
+            out_df.to_excel(writer, sheet_name="Owl Bulk Analysis", index=False)
+            sheet = writer.sheets["Owl Bulk Analysis"]
+            sheet.freeze_panes(1, 0)
+            sheet.set_column(0, 0, 60)
+            sheet.set_column(1, 6, 22)
+
+    return {
+        "ok": True,
+        "rows": len(rows),
+        "classifiedRows": classified_rows,
+        "skippedRows": len(rows) - classified_rows,
+        "modelUsed": model_used or Path(model_path).stem,
+        "outputPath": str(output_path.resolve()),
+        "savedAt": now,
     }
 
 
@@ -314,6 +483,8 @@ def train_model(
     model_name: str,
     acpt_col: str = "",
     resolution_col: str = "",
+    save_folder: str = "",
+    sentiment_col: str = "",
 ) -> dict[str, Any]:
     total_start = time.perf_counter()
     if not MODEL_PATH.exists():
@@ -420,10 +591,13 @@ def train_model(
             "report": classification_report(label_test, out_predictions, output_dict=True, zero_division=0),
         }
 
-    TRAINED_DIR.mkdir(parents=True, exist_ok=True)
+    save_dir = resolve_model_save_dir(save_folder)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    latest_model_path = save_dir / "theme_classifier.joblib"
+    manifest_path = save_dir / "models.json"
     clean_name = clean_text(model_name) or f"Theme Model {dt.datetime.now().strftime('%Y-%m-%d %H%M')}"
     slug = model_slug(clean_name)
-    model_file = TRAINED_DIR / f"{slug}.joblib"
+    model_file = save_dir / f"{slug}.joblib"
     bundle = {
         "classifier": classifier,
         "modelPath": str(MODEL_PATH),
@@ -436,6 +610,7 @@ def train_model(
         "labelCounts": dict(counts),
     }
     optional_outputs = [
+        train_optional_output("Sentiment", sentiment_col),
         train_optional_output("ACPT", acpt_col),
         train_optional_output("Resolution Status", resolution_col),
     ]
@@ -597,10 +772,10 @@ def train_model(
             },
             "artifacts": {
                 "namedModelPath": str(model_file),
-                "latestModelPath": str(TRAINED_MODEL_PATH),
-                "manifestPath": str(MODEL_MANIFEST_PATH),
+                "latestModelPath": str(latest_model_path),
+                "manifestPath": str(manifest_path),
                 "namedModelBytes": model_file.stat().st_size if model_file.exists() else 0,
-                "latestModelBytes": TRAINED_MODEL_PATH.stat().st_size if TRAINED_MODEL_PATH.exists() else 0,
+                "latestModelBytes": latest_model_path.stat().st_size if latest_model_path.exists() else 0,
             },
             "outputs": {
                 output_name: {
@@ -646,10 +821,11 @@ def train_model(
         },
     }
     joblib.dump(bundle, model_file)
-    joblib.dump(bundle, TRAINED_MODEL_PATH)
+    joblib.dump(bundle, latest_model_path)
     metrics["technicalDetails"]["artifacts"]["namedModelBytes"] = model_file.stat().st_size if model_file.exists() else 0
-    metrics["technicalDetails"]["artifacts"]["latestModelBytes"] = TRAINED_MODEL_PATH.stat().st_size if TRAINED_MODEL_PATH.exists() else 0
-    upsert_manifest(
+    metrics["technicalDetails"]["artifacts"]["latestModelBytes"] = latest_model_path.stat().st_size if latest_model_path.exists() else 0
+    upsert_manifest_at(
+        manifest_path,
         {
             "id": slug,
             "name": clean_name,
@@ -755,7 +931,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, 400)
             return
-        if path not in {"/api/inspect", "/api/train"}:
+        if path not in {"/api/inspect", "/api/train", "/api/bulk-inspect", "/api/bulk-predict"}:
             self.send_error(404)
             return
         try:
@@ -764,28 +940,51 @@ class Handler(BaseHTTPRequestHandler):
             if upload is None or not getattr(upload, "filename", ""):
                 raise ValueError("Please upload a CSV or Excel file.")
             filename = Path(upload.filename).name
-            df = records_from_upload(filename, upload.file.read())
+            file_bytes = upload.file.read()
+            df = records_from_upload(filename, file_bytes)
             df.columns = [str(column) for column in df.columns]
             df = df.where(pd.notna(df), "")
             columns = list(df.columns)
-            if path == "/api/inspect":
-                self.send_json({"ok": True, "rows": len(df), "columns": columns, "feedbackColumn": infer_feedback_column(columns)})
+            if path in {"/api/inspect", "/api/bulk-inspect"}:
+                suggestions = infer_labeled_columns(columns)
+                self.send_json({
+                    "ok": True,
+                    "rows": len(df),
+                    "columns": columns,
+                    "feedbackColumn": suggestions.get("feedback", ""),
+                    "suggestedColumns": suggestions,
+                })
+                return
+            if path == "/api/bulk-predict":
+                feedback_col = form.getfirst("feedbackColumn", "") or infer_feedback_column(columns)
+                model_path = form.getfirst("modelPath", "") or ""
+                save_folder = form.getfirst("saveFolder", "") or ""
+                output_name = form.getfirst("outputName", "") or ""
+                if not feedback_col:
+                    raise ValueError("Select the feedback or verbatim column before running bulk analysis.")
+                self.send_json(bulk_predict_file(filename, file_bytes, feedback_col, model_path, save_folder, output_name))
                 return
             feedback_col = form.getfirst("feedbackColumn", "") or infer_feedback_column(columns)
             label_col = form.getfirst("labelColumn", "") or ""
             acpt_col = form.getfirst("acptColumn", "") or ""
+            sentiment_col = form.getfirst("sentimentColumn", "") or ""
             resolution_col = form.getfirst("resolutionColumn", "") or ""
             max_rows = int(form.getfirst("maxRows", "5000") or 5000)
             model_name = form.getfirst("modelName", "") or ""
+            save_folder = form.getfirst("saveFolder", "") or ""
+            if not feedback_col:
+                raise ValueError("Select the feedback or verbatim column before training.")
             if feedback_col not in df.columns:
                 raise ValueError("Select a valid feedback column.")
             if label_col not in df.columns:
                 raise ValueError("Select a valid human label column.")
             if acpt_col and acpt_col not in df.columns:
                 raise ValueError("Select a valid ACPT column.")
+            if sentiment_col and sentiment_col not in df.columns:
+                raise ValueError("Select a valid sentiment column.")
             if resolution_col and resolution_col not in df.columns:
                 raise ValueError("Select a valid resolution status column.")
-            self.send_json({"ok": True, "metrics": train_model(df, feedback_col, label_col, max_rows, model_name, acpt_col, resolution_col)})
+            self.send_json({"ok": True, "metrics": train_model(df, feedback_col, label_col, max_rows, model_name, acpt_col, resolution_col, save_folder, sentiment_col)})
         except Exception as exc:
             self.send_json({"ok": False, "error": str(exc)}, 400)
 

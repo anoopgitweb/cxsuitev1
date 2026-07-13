@@ -13,12 +13,12 @@ APPS = ROOT / "apps"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(APPS / "nps-analyzer" / "backend"))
 
-from analysis_engine import add_vulture_classification_outputs, build_analysis_with_local_model  # noqa: E402
+from analysis_engine import add_owl_classification_outputs, build_analysis_with_local_model  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", choices=["sparrow", "vulture"], required=True)
+    parser.add_argument("--task", choices=["sparrow", "theme", "owl"], required=True)
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--feedback-col", default="Verbatim Feedback")
@@ -64,7 +64,7 @@ def main() -> int:
             progress_callback=report_progress,
         )
     else:
-        result = add_vulture_classification_outputs(
+        result = add_owl_classification_outputs(
             df,
             feedback_col=args.feedback_col,
             model_path=args.model_path,

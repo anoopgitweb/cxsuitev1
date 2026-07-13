@@ -1,4 +1,4 @@
-﻿const state = {
+const state = {
   baseColumns: [],
   baseColumnStats: {},
   lookupColumnStats: {},
@@ -381,6 +381,7 @@ function activateView(viewId) {
   updateDashboardGuideForView(resolvedViewId);
   if (resolvedViewId === "boardpdf") renderBoardPdfOptionCards();
   if (resolvedViewId === "rawdata") renderAnalysisRawDataPage();
+  if (resolvedViewId === "analysissummary") renderAnalysisSummaryPage();
   if (resolvedViewId === "performancequestions") setMasterLensIntroVisible(true);
   workspace?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   requestAnimationFrame(() => {
@@ -411,6 +412,7 @@ const DASHBOARD_HANDOFF_VIEWS = new Set([
   "sentimentbriefing",
   "insightsreadout",
   "columnexplorer",
+  "analysissummary",
   "executive",
   "executivelens",
   "customdims",
@@ -765,7 +767,7 @@ function loadingStageCaptions(status) {
       "Feedback is still being processed on this system while the app prepares the CSAT outputs.",
     ];
   }
-  if (normalized.includes("vulture")) {
+  if (normalized.includes("owl")) {
     return [
       "Owl is running now: it is classifying verbatims into Theme, ACPT, and Resolution Status.",
       "Current stage: theme classification. Next stage: the app will build executive, agent, manager, quartile, and analysis summaries.",
@@ -911,7 +913,7 @@ function conversationalLoadingMessage(status, pct = 0) {
   if (activeRowStage === "local rules" || normalized.includes("local rules")) {
     return `I am applying the local CSAT rules now and confirming rows with the rule-based analysis you selected. Estimated time left: ${remaining}.`;
   }
-  if (normalized.includes("vulture")) {
+  if (normalized.includes("owl")) {
     return `Owl is reading themes now. This part can take a little while because it checks feedback line by line. Estimated time left: ${remaining}.`;
   }
   if (normalized.includes("dashboard") || normalized.includes("summary") || normalized.includes("assembly")) {
@@ -956,7 +958,7 @@ function parseRowProgress(text) {
   const match = String(text || "").match(/(?:Sparrow|Owl|Theme Builder|Local Rules)[^:]*:?\s*([\d,]+)\s*\/\s*([\d,]+)\s*rows/i);
   if (!match) return null;
   const lower = String(text).toLowerCase();
-  const stage = lower.includes("theme builder") ? "Theme Builder" : lower.includes("local rules") ? "Local Rules" : lower.includes("vulture") || lower.includes("owl") ? "Owl" : "Sparrow";
+  const stage = lower.includes("theme builder") ? "Theme Builder" : lower.includes("local rules") ? "Local Rules" : lower.includes("owl") || lower.includes("owl") ? "Owl" : "Sparrow";
   return {
     stage,
     done: Number(match[1].replaceAll(",", "")) || 0,
@@ -1178,7 +1180,7 @@ function friendlyTickerStatus(status, pct = 0) {
   if (normalized.includes("starting local csat analysis")) return "Starting the CSAT analysis";
   if (normalized.includes("sparrow")) return "Reading sentiment with Sparrow";
   if (activeRowStage === "local rules" || normalized.includes("local rules")) return "Applying local CSAT rules";
-  if (normalized.includes("vulture")) return "Reading themes with Owl";
+  if (normalized.includes("owl")) return "Reading themes with Owl";
   if (normalized.includes("browser handoff")) return "Preparing the results screen";
   if (normalized.includes("browser preparation")) return "Preparing the results screen";
   if ((normalized.includes("dashboard") || normalized.includes("summary") || normalized.includes("assembly")) && Number(pct || 0) >= 99) return "Finalizing your results";
@@ -1880,6 +1882,8 @@ function wireGuidedRunAnalysis() {
   });
   $("confirmIntelligenceBtn")?.addEventListener("click", () => {
     if ($("sentimentEngine") && $("guidedSentimentEngine")) $("sentimentEngine").value = $("guidedSentimentEngine").value || "local";
+    if ($("sparrowModelPath") && $("guidedSparrowModelPath")) $("sparrowModelPath").value = $("guidedSparrowModelPath").value.trim();
+    if ($("owlModelPath") && $("guidedThemeModelPath")) $("owlModelPath").value = $("guidedThemeModelPath").value.trim();
     syncThemeOutputControls();
     markSetupStepComplete(8, ".guided-run-options");
   });
@@ -9484,6 +9488,164 @@ function rawDataRowCount() {
   );
 }
 
+function analysisSummaryEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function analysisSummaryValue(value, fallback = "Not available") {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (Array.isArray(value)) return value.length ? value.join(", ") : fallback;
+  if (typeof value === "number") return Number.isFinite(value) ? value.toLocaleString() : fallback;
+  if (typeof value === "object") return Object.keys(value).length ? JSON.stringify(value) : fallback;
+  return String(value);
+}
+
+function analysisSummaryDomValue(...ids) {
+  for (const id of ids) {
+    const el = $(id);
+    if (!el) continue;
+    const value = "value" in el ? el.value : el.textContent;
+    if (value && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+function analysisSummaryFileName(...ids) {
+  for (const id of ids) {
+    const el = $(id);
+    if (el?.files?.[0]?.name) return el.files[0].name;
+  }
+  return "";
+}
+
+function analysisSummaryEngineLabel(value) {
+  const raw = String(value || "").trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return "Not selected";
+  if (lower.includes("sparrow")) return "Sparrow Model";
+  if (lower.includes("owl") || lower.includes("vulture")) return "Owl Model";
+  if (lower.includes("local")) return "Local Rules";
+  return raw;
+}
+
+function analysisSummaryRow(label, value) {
+  return `<div class="analysis-summary-row"><span class="analysis-summary-label">${analysisSummaryEscape(label)}</span><span class="analysis-summary-value">${analysisSummaryEscape(analysisSummaryValue(value))}</span></div>`;
+}
+
+function analysisSummarySection(title, rows) {
+  return `<article class="analysis-summary-card"><h3>${analysisSummaryEscape(title)}</h3>${rows.map(([label, value]) => analysisSummaryRow(label, value)).join("")}</article>`;
+}
+
+function renderAnalysisSummaryPage() {
+  const target = $("analysisSummaryContent");
+  if (!target) return;
+  const analysis = state.analysis || {};
+  const setup = state.setup || {};
+  const setupCache = readSetupCache();
+  const mapping = analysis.mapping || setupCache.mapping || state.mapping || state.columnMapping || analysis.setup?.mapping || {};
+  const engines = setup.engines || state.engines || analysis.engines || {};
+  const summary = analysis.summary || {};
+  const counts = state.statsRowCounts || analysis.counts || {};
+  const timings = analysis.timings || analysis.timing || state.analysisTimings || {};
+  const trainingResult = state.sparrowTraining?.result || {};
+  const modelQuality = { ...trainingResult, ...(state.modelMetrics || {}), ...(analysis.modelMetrics || {}), ...(analysis.modelQuality || {}) };
+  const savedRules = analysis.businessRules || setupCache.businessRules || {};
+  const selectedDimensions = state.customDimensions || state.selectedDimensions || analysis.selectedDimensions || analysis.dimensions || [];
+  const baseRows = counts.baseRows || counts.analyzedRows || summary.total || summary.Total || analysis.totalRows || state.baseRowCount || "";
+  const lookupRows = counts.lookupRows || analysis.lookupRows || state.lookupRowCount || "";
+  const outputRows = counts.outputRows || counts.analyzedRows || analysis.outputCount || analysis.fullOutputCount || rawDataRowCount();
+  const sentimentEngine = analysisSummaryEngineLabel(engines.sentiment || state.sentimentEngine || analysis.sentimentEngine || analysisSummaryDomValue("sentimentMethod", "sentimentEngine", "sentimentSelect"));
+  const themeEngine = analysisSummaryEngineLabel(engines.theme || engines.owl || state.themeEngine || analysis.themeEngine || analysisSummaryDomValue("themeMethod", "themeEngine", "themeSelect"));
+  const sparrowPath = engines.sparrowPath || state.sparrowModelPath || analysis.sparrowModelPath || analysisSummaryDomValue("sparrowModelPath", "sentimentModelPath");
+  const owlPath = engines.owlPath || engines.themePath || state.owlModelPath || state.themeModelPath || analysis.owlModelPath || analysis.themeModelPath || analysisSummaryDomValue("owlModelPath", "themeModelPath");
+  const runConfig = {
+    mode: "csat",
+    engines: { sentiment: sentimentEngine, theme: themeEngine },
+    enginePaths: { sparrow: sparrowPath || "Not provided", owl: owlPath || "Not provided" },
+    mapping,
+    selectedDimensions,
+    source: {
+      baseFile: analysisSummaryFileName("baseFile", "baseFileInput", "baseUploadInput") || state.baseFileName || analysis.baseFileName || analysis.source?.baseFile || setupCache.baseFile || "File name unavailable",
+      lookupFile: analysisSummaryFileName("lookupFile", "lookupFileInput", "lookupUploadInput") || state.lookupFileName || analysis.lookupFileName || analysis.source?.lookupFile || setupCache.lookupFile || ((state.lookupColumns || []).length ? "File name unavailable" : "Not used (base file was complete)"),
+      baseRows,
+      lookupRows,
+      outputRows,
+    },
+    businessRules: {
+      target: savedRules.target ?? setup.target ?? state.target ?? analysisSummaryDomValue("guidedCsatTarget"),
+      scoreScale: savedRules.scoreScale || setup.scoreScale || state.scoreScale || analysisSummaryDomValue("guidedCsatScoreScale", "csatScoreScale"),
+      satisfiedStartsAt: savedRules.satisfiedStartsAt ?? analysisSummaryDomValue("guidedCsatSatisfiedMin", "csatSatisfiedMin"),
+      neutralStartsAt: savedRules.neutralStartsAt ?? analysisSummaryDomValue("guidedCsatNeutralMin", "csatNeutralMin"),
+      weekStart: savedRules.weekStart || analysis.calendar?.weekStartDay || analysis.calendar?.weekStart || analysisSummaryDomValue("setupWeekStartDay"),
+      fiscalStart: savedRules.fiscalStart || analysis.calendar?.fiscalStartMonth || analysis.calendar?.fiscalYearStartMonth || analysisSummaryDomValue("setupFiscalStartMonth"),
+    },
+    timing: timings,
+    modelQuality,
+    generatedAt: analysis.generatedAt || analysis.completedAt || analysis.runCompletedAt || new Date().toLocaleString(),
+  };
+
+  target.innerHTML = `
+    <div class="analysis-summary-hero">
+      <h2>CSAT analysis run reference</h2>
+      <p>Review how this analysis was created: selected engines, source files, mapping choices, model paths, business rules, run timings, and available model-quality evidence.</p>
+    </div>
+    <div class="analysis-summary-grid">
+      ${analysisSummarySection("Run Overview", [
+        ["Mode", "CSAT"],
+        ["Generated At", runConfig.generatedAt],
+        ["Analyzed Rows", outputRows],
+        ["Selected Dimensions", selectedDimensions],
+      ])}
+      ${analysisSummarySection("Engine Details", [
+        ["Sentiment Engine", sentimentEngine],
+        ["Theme Engine", themeEngine],
+        ["Sparrow Path", sparrowPath || "Not provided"],
+        ["Owl Path", owlPath || "Not provided"],
+      ])}
+      ${analysisSummarySection("Input Data", [
+        ["Base File", runConfig.source.baseFile],
+        ["Base Rows", baseRows],
+        ["Lookup File", runConfig.source.lookupFile],
+        ["Lookup Rows", lookupRows],
+      ])}
+      ${analysisSummarySection("Column Mapping", [
+        ["Feedback", mapping.feedback || analysisSummaryDomValue("feedbackCol")],
+        ["Score", mapping.score || analysisSummaryDomValue("scoreCol")],
+        ["Satisfaction", mapping.satisfaction || analysisSummaryDomValue("satisfactionCol")],
+        ["Agent", mapping.agent || analysisSummaryDomValue("agentCol")],
+        ["Manager", mapping.manager || analysisSummaryDomValue("managerCol")],
+        ["Date", mapping.date || analysisSummaryDomValue("dateCol")],
+        ["Wave", mapping.wave || analysisSummaryDomValue("waveCol")],
+        ["Tenure", mapping.tenure || analysisSummaryDomValue("tenureCol")],
+      ])}
+      ${analysisSummarySection("Business Rules", [
+        ["Target", runConfig.businessRules.target],
+        ["Score Scale", runConfig.businessRules.scoreScale],
+        ["Satisfied Starts At", runConfig.businessRules.satisfiedStartsAt],
+        ["Neutral Starts At", runConfig.businessRules.neutralStartsAt],
+        ["Week Start", runConfig.businessRules.weekStart],
+        ["Fiscal Start", runConfig.businessRules.fiscalStart],
+      ])}
+      ${analysisSummarySection("Model Quality & Timing", [
+        ["Total Runtime", timings.totalSeconds != null ? `${timings.totalSeconds} seconds` : "Not recorded for this run"],
+        ["Sentiment Method", sentimentEngine],
+        ["Theme Method", themeEngine],
+        ["Training Accuracy", modelQuality.accuracy ?? modelQuality.eval_accuracy ?? "No training metrics recorded"],
+        ["Macro F1", modelQuality.macroF1 ?? modelQuality.macro_f1 ?? "No training metrics recorded"],
+        ["Weighted F1", modelQuality.weightedF1 ?? modelQuality.weighted_f1 ?? "No training metrics recorded"],
+      ])}
+    </div>
+    <article class="analysis-summary-card analysis-summary-json-card">
+      <h3>Run Configuration JSON</h3>
+      <pre class="analysis-summary-json">${analysisSummaryEscape(JSON.stringify(runConfig, null, 2))}</pre>
+    </article>
+  `;
+}
 function renderAnalysisRawDataPage() {
   const rowCount = rawDataRowCount();
   const columns = state.analysis?.columns || state.analysis?.analyzedColumns || Object.keys((state.analysis?.feedbackRows || state.analysis?.preview || [{}])[0] || {});
@@ -9859,7 +10021,7 @@ function selectedOptionsSnapshot() {
       sentimentEngine: valueOf("sentimentEngine"),
       themeEngine: valueOf("themeEngine"),
       sparrowModelPath: valueOf("sparrowModelPath"),
-      vultureModelPath: valueOf("vultureModelPath"),
+      owlModelPath: valueOf("owlModelPath"),
     },
     dateRange: $("dateLabel")?.textContent || "All Time",
   };
@@ -10893,7 +11055,8 @@ function closeArtifact() {
 function handleDownload(kind) {
   const map = {
     feedback: [state.analysis.feedbackTableRows || [], "feedback_intelligence.csv"],
-    vulture: [state.analysis.themeRows || [], "vulture_intelligence.csv"],
+    theme: [state.analysis.themeRows || [], "owl_theme_intelligence.csv"],
+    theme: [state.analysis.themeRows || [], "owl_theme_intelligence.csv"],
     quartile: [state.analysis.quartiles || [], "quartile_intelligence.csv"],
     wave: [state.analysis.wave || [], "wave_intelligence.csv"],
     tenure: [state.analysis.tenure || [], "tenure_intelligence.csv"],
@@ -17276,7 +17439,7 @@ function performanceOtherInsightRawRows(analysis, context) {
 function performanceOtherIsRawColumn(key) {
   const text = String(key || "").trim();
   if (!text || text.startsWith("__")) return false;
-  return !/(sentiment|theme|vulture|sparrow|classification|driver|reason|alert|word cloud|positive|negative|neutral risk|silent detractor)/i.test(text);
+  return !/(sentiment|theme|owl|sparrow|classification|driver|reason|alert|word cloud|positive|negative|neutral risk|silent detractor)/i.test(text);
 }
 
 function performanceOtherColumnProfiles(rows) {
@@ -21187,7 +21350,7 @@ async function bindOwlModelSelectors() {
   const models = await owlModelManifest();
   if (!models.length) return;
   [
-    { inputId: "vultureModelPath", selectId: "owlModelSelect" },
+    { inputId: "owlModelPath", selectId: "owlModelSelect" },
     { inputId: "guidedThemeModelPath", selectId: "guidedOwlModelSelect" },
   ].forEach(({ inputId, selectId }) => {
     const input = $(inputId);
@@ -21212,10 +21375,10 @@ function syncThemeOutputControls() {
   if ($("themeEngine")) $("themeEngine").value = selected ? "theme" : "local";
   if ($("guidedThemeEngine")) $("guidedThemeEngine").value = guidedSelected ? "theme" : "local";
   $("themeModelPathField")?.classList.toggle("hidden", !selected);
-  $("guidedThemeModelPathField")?.classList.toggle("hidden", !guidedSelected);
-  const defaultPath = state.modelPaths.theme || state.modelPaths.vulture || "models/theme_acpt_resolution_model";
-  if ($("vultureModelPath") && selected && !$("vultureModelPath").value) $("vultureModelPath").value = defaultPath;
-  if ($("guidedThemeModelPath") && guidedSelected && !$("guidedThemeModelPath").value) $("guidedThemeModelPath").value = $("vultureModelPath")?.value || defaultPath;
+  $("guidedThemeModelPathField")?.classList.remove("hidden");
+  const defaultPath = state.modelPaths.theme || state.modelPaths.theme || "models/theme_acpt_resolution_model";
+  if ($("owlModelPath") && selected && !$("owlModelPath").value) $("owlModelPath").value = defaultPath;
+  if ($("guidedThemeModelPath") && guidedSelected && !$("guidedThemeModelPath").value) $("guidedThemeModelPath").value = $("owlModelPath")?.value || defaultPath;
   bindOwlModelSelectors();
 }
 
@@ -21239,6 +21402,7 @@ async function analyze(options = {}) {
     }
     const payload = {
       mode: "csat",
+      target: Number($("guidedCsatTarget")?.value || 85),
       mapping: {
         feedback: feedbackSelect?.value || "",
         score: $("scoreCol")?.value || "",
@@ -21255,8 +21419,8 @@ async function analyze(options = {}) {
         theme: state.activeAnalysisEngines.theme,
       },
       modelPaths: {
-        sparrow: $("sparrowModelPath")?.value || "",
-        theme: (guidedRun ? $("guidedThemeModelPath")?.value : $("vultureModelPath")?.value) || "",
+        sparrow: (guidedRun ? $("guidedSparrowModelPath")?.value : "") || $("sparrowModelPath")?.value || "",
+        theme: (guidedRun ? $("guidedThemeModelPath")?.value : $("owlModelPath")?.value) || "",
       },
       modelOutputs: state.modelOutputs,
       dynamicDimensions: state.dynamicDimensions,
@@ -21264,6 +21428,17 @@ async function analyze(options = {}) {
       baseKey: $("baseKey")?.value || "",
       lookupKey: $("lookupKey")?.value || "",
     };
+    writeSetupCache({
+      mapping: payload.mapping,
+      businessRules: {
+        target: payload.target,
+        scoreScale: payload.csatBands.scale,
+        satisfiedStartsAt: payload.csatBands.satisfiedMin,
+        neutralStartsAt: payload.csatBands.neutralMin,
+        weekStart: payload.calendar.weekStartDay,
+        fiscalStart: payload.calendar.fiscalStartMonth,
+      },
+    });
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -21312,8 +21487,8 @@ async function analyze(options = {}) {
 }
 
 async function validateModel(kind) {
-  const input = kind === "sparrow" ? $("sparrowModelPath") : $("vultureModelPath");
-  const status = kind === "sparrow" ? $("sparrowModelStatus") : $("vultureModelStatus");
+  const input = kind === "sparrow" ? $("sparrowModelPath") : $("owlModelPath");
+  const status = kind === "sparrow" ? $("sparrowModelStatus") : $("owlModelStatus");
   if (status) status.textContent = `Validating ${kind} model...`;
   const response = await fetch("/api/model/validate", {
     method: "POST",
@@ -21331,7 +21506,7 @@ async function validateModel(kind) {
 }
 
 async function browseModel(kind) {
-  const input = kind === "sparrow" ? $("sparrowModelPath") : $("vultureModelPath");
+  const input = kind === "sparrow" ? $("sparrowModelPath") : $("owlModelPath");
   const response = await fetch("/api/model/browse", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -21434,7 +21609,11 @@ async function loadStatus() {
   const hasSavedBase = serverBaseColumns.length > 0;
   if (!hasSavedBase) clearSetupCache();
   const savedAnalysis = payload.analysis || {};
+  state.sparrowTraining = payload.sparrow_training || {};
   const savedBaseName = String(payload.files?.base || "");
+  const savedLookupName = String(payload.files?.lookup || "");
+  state.baseFileName = savedBaseName || setupCache.baseFile || "";
+  state.lookupFileName = savedLookupName || setupCache.lookupFile || "";
   const savedAnalysisId = String(savedAnalysis.analysisId || "");
   if (restartRequested) {
     window.sessionStorage.removeItem("csatGuidedBaseFile");
@@ -21477,8 +21656,9 @@ async function loadStatus() {
   }
   if (payload.analysis?.modelPaths) state.modelPaths = payload.analysis.modelPaths;
   if ($("sparrowModelPath") && !$("sparrowModelPath").value) $("sparrowModelPath").value = state.modelPaths.sparrow || payload.model_status?.sparrow?.path || "";
-  if ($("vultureModelPath") && !$("vultureModelPath").value) $("vultureModelPath").value = state.modelPaths.theme || state.modelPaths.vulture || payload.model_status?.theme?.path || "";
-  if ($("guidedThemeModelPath") && !$("guidedThemeModelPath").value) $("guidedThemeModelPath").value = state.modelPaths.theme || state.modelPaths.vulture || payload.model_status?.theme?.path || "";
+  if ($("owlModelPath") && !$("owlModelPath").value) $("owlModelPath").value = state.modelPaths.theme || state.modelPaths.theme || payload.model_status?.theme?.path || "";
+  if ($("guidedSparrowModelPath") && !$("guidedSparrowModelPath").value) $("guidedSparrowModelPath").value = state.modelPaths.sparrow || payload.model_status?.sparrow?.path || "";
+  if ($("guidedThemeModelPath") && !$("guidedThemeModelPath").value) $("guidedThemeModelPath").value = state.modelPaths.theme || state.modelPaths.theme || payload.model_status?.theme?.path || "";
   syncThemeOutputControls();
   if (payload.analysis?.analysisEngines) {
     state.activeAnalysisEngines = {
@@ -21489,12 +21669,12 @@ async function loadStatus() {
     if ($("themeEngine")) $("themeEngine").value = state.activeAnalysisEngines.theme;
   }
   const sparrowReady = payload.model_status?.sparrow?.ready;
-  const vultureReady = payload.model_status?.theme?.ready;
+  const owlReady = payload.model_status?.theme?.ready;
   const themeUsesLocalRules = (state.activeAnalysisEngines?.theme || "local") === "local";
   if ($("sparrowDot")) $("sparrowDot").className = `dot ${sparrowReady ? "ready" : "missing"}`;
-  if ($("vultureDot")) $("vultureDot").className = `dot ${themeUsesLocalRules || vultureReady ? "ready" : "missing"}`;
+  if ($("owlDot")) $("owlDot").className = `dot ${themeUsesLocalRules || owlReady ? "ready" : "missing"}`;
   if ($("sparrowText")) $("sparrowText").textContent = sparrowReady ? "Ready" : "Missing";
-  if ($("vultureText")) $("vultureText").textContent = themeUsesLocalRules ? "Local Rules" : (vultureReady ? "Ready" : "Missing");
+  if ($("owlText")) $("owlText").textContent = themeUsesLocalRules ? "Local Rules" : (owlReady ? "Ready" : "Missing");
   if (!forceGuidedStart && (state.lookupColumns || []).length && !state.setupCoverageChoice) state.setupCoverageChoice = "lookup";
   if (!analysisComplete && !forceGuidedStart && (state.baseColumns || []).length && !state.setupBaseRowCount) {
     state.setupBaseRowCount = Number(payload.row_counts?.base || payload.base_rows || 0);

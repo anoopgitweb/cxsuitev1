@@ -42,6 +42,7 @@
             <button class="nav-item active" data-view="setuphome" data-icon="settings">Setup Home</button>
             <button class="nav-item" data-view="setup" data-icon="settings">Setup</button>
             <button class="nav-item" data-view="columnexplorer" data-icon="document">Column Explorer</button>
+            <button class="nav-item" data-view="analysissummary" data-icon="document">Analysis Summary</button>
           </div>
         </div>
 
@@ -164,6 +165,8 @@
             <button id="exportAnalysisProject" class="nav-item" data-icon="downloads" type="button">Export Analysis</button>
             <label class="nav-item" data-icon="document" for="importAnalysisProjectFile">Import Analysis</label>
             <input id="importAnalysisProjectFile" type="file" accept=".json,application/json" hidden />
+            <button class="nav-item" data-icon="target" data-open-training="sparrow" type="button">Train Sparrow</button>
+            <button class="nav-item" data-icon="document" data-open-training="theme" type="button">Train Owl</button>
             <button id="dateToggle" class="nav-item" data-icon="wave" type="button" title="Date Range (All Time)" aria-label="Date Range (All Time)">Date Range <span id="dateLabel">All Time</span></button>
             <button id="signOutAndStop" class="nav-item" data-icon="risk" type="button">Sign Out</button>
           </div>
@@ -398,13 +401,13 @@
                         <small>T</small>
                       </div>
                     </div>
-                    <label>Analysis Method<select id="themeEngine"><option value="local" selected>Local</option><option value="vulture">Owl Model</option></select></label>
-                    <label>Owl Model Path<input id="vultureModelPath" /></label>
+                    <label>Analysis Method<select id="themeEngine"><option value="local" selected>Local</option><option value="theme">Owl Model</option></select></label>
+                    <label>Owl Model Path<input id="owlModelPath" /></label>
                     <div class="model-actions">
                       <button id="browseOwlModel" class="button button-secondary" type="button">Browse</button>
                       <button id="validateOwlModel" class="button button-secondary" type="button">Validate</button>
                     </div>
-                    <small id="vultureModelStatus">Default: Local analysis.</small>
+                    <small id="owlModelStatus">Default: Local analysis.</small>
                   </div>
                 </div>
                 <button id="analyzeBtn" class="button button-primary wide guided-advanced-setup" disabled>Analyze Feedback</button>
@@ -493,8 +496,14 @@
                   <label>Themes
                     <select id="guidedThemeEngine">
                       <option value="local" selected>Local Rules</option>
-                      <option value="vulture">Owl Model</option>
+                      <option value="theme">Owl Model</option>
                     </select>
+                  </label>
+                  <label>Sparrow Model Path
+                    <input id="guidedSparrowModelPath" placeholder="Optional: trained Sparrow path" />
+                  </label>
+                  <label>Owl Model Path
+                    <input id="guidedOwlModelPath" placeholder="Optional: trained Owl path" />
                   </label>
                   <button id="confirmIntelligenceBtn" class="button button-secondary setup-confirm-button" type="button">Confirm Intelligence</button>
                 </div>
@@ -685,7 +694,7 @@
               <img src="assets/NPS%20Analyzer%20Person%20Standing.jpg" alt="" />
               <div class="model-status">
                 <div><span id="sparrowDot" class="dot"></span>Sparrow Sentiment: <strong id="sparrowText">Checking</strong></div>
-                <div><span id="vultureDot" class="dot"></span>Owl Themes: <strong id="vultureText">Checking</strong></div>
+                <div><span id="owlDot" class="dot"></span>Owl Themes: <strong id="owlText">Checking</strong></div>
               </div>
               <div class="standalone-assurance">
                 <h3>Local Standalone Assurance</h3>
@@ -745,7 +754,19 @@
 
         <section id="executivesummary" class="view data-view result-page-view">
           <div class="panel">
-            <div class="panel-title-row"><h2>Executive Read</h2><span id="resultExecutiveSummaryStatus">Run analysis to populate this result.</span></div>
+            <div class="panel-title-row executive-read-title-row">
+              <div><h2>Executive Read</h2><span id="resultExecutiveSummaryStatus">Run analysis to populate this result.</span></div>
+              <label class="executive-read-lens-control">Read lens
+                <select id="executiveReadLens">
+                  <option value="overall">Overall Performance Lens</option>
+                  <option value="qa">QA Lens</option>
+                  <option value="team-leader">Team Leader Lens</option>
+                  <option value="operations-manager">Operations Manager Lens</option>
+                  <option value="vp">VP Lens</option>
+                  <option value="client">Client Lens</option>
+                </select>
+              </label>
+            </div>
             <div class="result-export-actions" aria-label="Executive Read exports">
               <button id="exportExecutiveSummaryTxt" class="pill-button small" type="button">Export TXT</button>
               <button id="exportExecutiveSummaryPdf" class="pill-button small" type="button">Export PDF</button>
@@ -1653,10 +1674,21 @@
           </div>
         </section>
 
+        <section id="analysissummary" class="view data-view analysis-summary-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Data Setup</p>
+              <h1>Analysis Summary</h1>
+              <p class="section-subtitle">Single reference point for setup choices, engine paths, data sources, mappings, and run evidence.</p>
+            </div>
+          </div>
+          <div id="analysisSummaryContent" class="analysis-summary-content"></div>
+        </section>
+
         <section id="theme" class="view data-view">
           <div class="section-title">
             <div><p class="eyebrow">Owl Classification</p><h1>Theme Classification</h1></div>
-            <button class="button button-secondary" data-download="vulture" type="button">Export CSV</button>
+            <button class="button button-secondary" data-download="theme" type="button">Export CSV</button>
           </div>
           <p class="insight-text">Row-level Owl output with primary, secondary, tertiary drivers, people/process/tech sentiment, issue type, impact, and resolution status.</p>
           <div class="table-wrap fit-table compact-report-table"><table id="themeTable"></table></div>
@@ -2393,7 +2425,7 @@
     <script>
       (function () {
         const resultAliases = {};
-        const allowed = new Set(["setuphome", "setup", "datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout", "columnexplorer", "executive", "executivelens", "dimensionlens", "customdims", "analysis", "feedback", "performancequestions", "agent", "manager", "customdashboards"]);
+        const allowed = new Set(["setuphome", "setup", "analysissummary", "datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout", "columnexplorer", "executive", "executivelens", "dimensionlens", "customdims", "analysis", "feedback", "performancequestions", "agent", "manager", "customdashboards"]);
         const aliases = { movingaverages: "movingaverageslaunch", quartile: "quartilelaunch", customstats: "customstatslaunch" };
         const view = new URLSearchParams(window.location.search).get("view") || "";
         if (!allowed.has(view)) return;

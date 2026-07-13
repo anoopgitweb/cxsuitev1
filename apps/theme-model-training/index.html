@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Theme Model Training App</title>
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
   <main class="app-shell">
@@ -29,6 +29,9 @@
         <label>Model Name
           <input id="modelName" type="text" value="Adobe Theme Model">
         </label>
+        <label>Model Save Folder
+          <input id="saveFolder" type="text" value="models/theme_acpt_resolution_model">
+        </label>
         <label>Feedback Column
           <select id="feedbackColumn"><option value="">Auto-detect after upload</option></select>
         </label>
@@ -37,6 +40,9 @@
         </label>
         <label>Human ACPT Column
           <select id="acptColumn"><option value="">Optional</option></select>
+        </label>
+        <label>Human Sentiment Column
+          <select id="sentimentColumn"><option value="">Optional</option></select>
         </label>
         <label>Human Resolution Status Column
           <select id="resolutionColumn"><option value="">Optional</option></select>
@@ -98,15 +104,51 @@
       </div>
       <div id="modelTestResults" class="table-wrap empty-state">Retrieve models, select up to three, then test one verbatim.</div>
     </section>
+
+    <section class="panel">
+      <h2><span class="step-num">5</span>Bulk Data Test</h2>
+      <p>Upload a feedback workbook, choose the verbatim column and trained Owl model, then save the classified output to a folder on this computer.</p>
+
+      <label class="file-drop bulk-file-drop">
+        <input id="bulkFileInput" type="file" accept=".csv,.xlsx,.xls,.xlsm">
+        <span>Choose CSV/XLSX</span>
+        <strong id="bulkFileName">No file selected</strong>
+      </label>
+
+      <div class="field-grid bulk-field-grid">
+        <label>Feedback Column
+          <select id="bulkFeedbackColumn"><option value="">Upload a file first</option></select>
+        </label>
+        <label>Model
+          <select id="bulkModelSelect"><option value="">Retrieve models first</option></select>
+        </label>
+        <label>Save Folder
+          <input id="bulkSaveFolder" type="text" placeholder="C:\Users\manju\Documents\My Owl Outputs">
+        </label>
+        <label>Output File Name
+          <input id="bulkOutputName" type="text" value="owl_bulk_analysis.xlsx">
+        </label>
+      </div>
+
+      <div class="button-row">
+        <button class="btn primary" id="bulkRunBtn" type="button">Run Bulk Analysis</button>
+      </div>
+      <div id="bulkResult" class="bulk-result empty-state">Upload a file and choose a model to create a full bulk output.</div>
+    </section>
   </main>
   <div class="loading-overlay" id="loadingOverlay" hidden>
     <div class="loading-card">
       <div class="spinner"></div>
       <h2>Training model...</h2>
       <p id="loadingStep">Preparing labeled feedback.</p>
-      <div class="loading-bar"><span></span></div>
+      <div class="loading-meta">
+        <span id="loadingPercent">0%</span>
+        <span id="loadingElapsed">Elapsed 00:00</span>
+        <span id="loadingRemaining">Remaining ~--:--</span>
+      </div>
+      <div class="loading-bar"><span id="loadingBarFill"></span></div>
     </div>
   </div>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
