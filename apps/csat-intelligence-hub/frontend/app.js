@@ -48,6 +48,9 @@ const state = {
   columnExplorer: { search: "", source: "All", type: "All", role: "All" },
   executiveLensBenchmark: { question: "", result: null, status: "" },
   summaryBuilder: { definitions: [] },
+  weeklyTrendDashboards: { definitions: [], preview: null, sourceId: "" },
+  weeklyTrendDashboard2: { definitions: [], preview: null, sourceId: "" },
+  weeklyTrendChart: { item: null, selected: [], primary: 0, showLabels: false },
   summaryMetricDrafts: [{ id: "metric-1", name: "Tickets", calc: "count", field: "__none__", successValue: "" }],
   baseUploadComplete: false,
   filePreview: { kind: "base", page: 1, pageSize: 100, search: "", pageCount: 1 },
@@ -303,9 +306,9 @@ function openNavSectionForItem(button) {
 }
 
 const ANALYSIS_REQUIRED_VIEWS = new Set([
-  "datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout",
+  "datasetsummary", "performanceoverview", "weeklytrenddashboards", "weeklytrenddashboard2", "monthlytrendcreator", "monthlymatrixcreator", "performancecoachingcreator", "driverssentimentcreator", "customkpicreator", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout",
   "executive", "executivelens", "agent", "manager", "customdashboards", "boardpdf", "rawdata", "downloads",
-  "performancequestions", "movingaverageslaunch", "movingaverages", "quartilelaunch", "quartile", "statistics", "customstatslaunch", "customstats",
+  "performancequestions", "movingaverageslaunch", "movingaverages", "quartilelaunch", "quartile", "evidencerelationship", "statistics", "customstatslaunch", "customstats",
   "feedback", "sentimentcompare", "themebuilder", "themecompare",
   "wave", "tenure", "dimensionlens", "customdims",
   "themesoverview", "acptoverview", "rootcause", "Satisfieddna", "alerts", "analysis",
@@ -382,7 +385,11 @@ function activateView(viewId) {
   if (resolvedViewId === "boardpdf") renderBoardPdfOptionCards();
   if (resolvedViewId === "rawdata") renderAnalysisRawDataPage();
   if (resolvedViewId === "analysissummary") renderAnalysisSummaryPage();
+  if (resolvedViewId === "weeklytrenddashboards") refreshWeeklyTrendBuilder();
+  if (resolvedViewId === "weeklytrenddashboard2") refreshWeeklyTrend2Builder();
+  if (["monthlytrendcreator", "monthlymatrixcreator", "performancecoachingcreator", "driverssentimentcreator", "customkpicreator"].includes(resolvedViewId) && typeof window.refreshDashboardMakerStudio === "function") window.refreshDashboardMakerStudio(resolvedViewId);
   if (resolvedViewId === "performancequestions") setMasterLensIntroVisible(true);
+  if (resolvedViewId === "evidencerelationship" && typeof window.renderEvidenceRelationshipIntelligence === "function") window.renderEvidenceRelationshipIntelligence();
   workspace?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   requestAnimationFrame(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -405,6 +412,13 @@ const DASHBOARD_HANDOFF_VIEWS = new Set([
   "setup",
   "datasetsummary",
   "performanceoverview",
+  "weeklytrenddashboards",
+  "weeklytrenddashboard2",
+  "monthlytrendcreator",
+  "monthlymatrixcreator",
+  "performancecoachingcreator",
+  "driverssentimentcreator",
+  "customkpicreator",
   "executivesummary",
   "decisionguide",
   "dimensions",
@@ -419,6 +433,7 @@ const DASHBOARD_HANDOFF_VIEWS = new Set([
   "analysis",
   "feedback",
   "performancequestions",
+  "evidencerelationship",
   "themesoverview",
   "acptoverview",
   "agent",
@@ -494,6 +509,7 @@ function dashboardGuideMessageForView(viewId = "") {
     movingaverages: `Moving Averages shows smoothed movement over time. Compare this with the weekly trend before calling a sustained improvement or decline.`,
     quartilelaunch: `Quartile Intelligence separates performance into groups. Use it to see top, middle, and bottom cohorts more fairly than a single ranked list.`,
     quartile: `Quartile Intelligence is useful for performance segmentation. Look for movement between quartiles, not just who is currently highest or lowest.`,
+    evidencerelationship: `Evidence & Relationship Intelligence tests evidence strength across every Setup-selected dimension. Use effect size for categorical fields and correlation or regression only where the field is genuinely numeric.`,
     statistics: `Statistics gives the numeric evidence behind the dashboards. Use it when you need confidence, variance, significance, or defensible comparisons.`,
     customstatslaunch: `Custom Statistics lets you choose a field and metric for a targeted statistical view. Use it when a stakeholder asks a specific comparison question.`,
     customstats: `Custom Statistics is your ad hoc evidence builder. Select the metric and comparison field, then review whether the result is strong enough to act on.`,
@@ -510,7 +526,7 @@ function dashboardGuideMessageForView(viewId = "") {
     Promoterdna: `Promoter DNA highlights what stronger experiences have in common. Use it to find behaviors, channels, or themes associated with promoters.`,
     alerts: `Alert Badges help identify records or groups that deserve attention. Use them as triage markers, not as final conclusions without evidence.`,
     analysis: `Compare lets you place groups side by side. Use it when you need to explain what changed, where it changed, and how large the gap is.`,
-    boardpdf: `Board Room PDF creates a shareable executive artifact. Use it when the dashboard story is ready to package for review.`,
+    boardpdf: `Board Room HTML creates a shareable interactive executive artifact with built-in PDF and HTML downloads. Use it when the dashboard story is ready to package for review.`,
     downloads: `Downloads is where you collect exports and evidence files. Use it when you need to share or archive the completed analysis.`
   };
   return messages[viewId] || `${dashboardGuideTitleForView(viewId)} is ready. Use this view to inspect the completed ${metric} analysis from this angle, then use Help Me if you want a shortcut to another dashboard section.`;
@@ -1284,6 +1300,7 @@ function renderDynamicDimensionChips() {
   target.querySelectorAll("[data-remove-dimension]").forEach((button) => {
     button.addEventListener("click", () => {
       state.dynamicDimensions = state.dynamicDimensions.filter((column) => column !== button.dataset.removeDimension);
+      writeSetupCache({ dynamicDimensions: state.dynamicDimensions });
       refreshDynamicDimensionPicker();
     });
   });
@@ -7245,6 +7262,508 @@ function setSelectOptions(select, options, preferred = "") {
   return select.value;
 }
 
+function weeklyTrendMode() {
+  return resultScoreName(state.analysis || {}).toLowerCase() === "csat" ? "csat" : "nps";
+}
+
+function dashboardMakerSetupDimensionColumns() {
+  const analysis = state.analysis || {};
+  const setupCache = readSetupCache();
+  const mapping = analysis.mapping || setupCache.mapping || analysis.setup?.mapping || {};
+  const payloadDimensions = (analysis.dynamicDimensions || []).map((item) => typeof item === "string" ? item : item?.name);
+  const mappedDimensions = [
+    ($("agentCol")?.value || mapping.agent) ? "Agent Name" : "",
+    ($("managerCol")?.value || mapping.manager) ? "Manager/TL" : "",
+    ($("waveCol")?.value || mapping.wave) ? "Wave" : "",
+    ($("tenureCol")?.value || mapping.tenure) ? "Tenure" : "",
+  ];
+  return Array.from(new Set([...(analysis.selectedDimensionColumns || []), ...(analysis.evidenceRelationship?.selectedDimensions || []), ...payloadDimensions, ...(state.dynamicDimensions || []), ...(setupCache.dynamicDimensions || []), ...mappedDimensions]
+    .map((column) => String(column || "").trim())
+    .filter(Boolean)));
+}
+
+function weeklyTrendDimensionColumns() {
+  const rows = resultAllRows();
+  const scoreName = resultScoreName();
+  const setupDimensions = dashboardMakerSetupDimensionColumns();
+  if (setupDimensions.length) return setupDimensions.slice().sort((a, b) => a.localeCompare(b));
+  const columns = setupDimensions.length
+    ? setupDimensions
+    : Array.from(new Set(rows.slice(0, 500).flatMap((row) => Object.keys(row || {}))));
+  return columns.filter((column) => {
+    if (resultDimensionExcludeColumn(column, scoreName)) return false;
+    const values = new Set(rows.slice(0, 5000).map((row) => String(row?.[column] ?? "").trim()).filter(Boolean));
+    return values.size > 0 && values.size <= 250;
+  }).sort((a, b) => a.localeCompare(b));
+}
+
+function refreshWeeklyTrendDimensionValues() {
+  const dimension = $("weeklyTrendDimension")?.value || "__overall__";
+  const options = [{ value: "__all__", label: dimension === "__overall__" ? "All analyzed rows" : "Compare all values" }];
+  if (dimension !== "__overall__") {
+    const values = Array.from(new Set(resultAllRows().map((row) => String(row?.[dimension] ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    options.push(...values.map((value) => ({ value, label: value })));
+  }
+  setSelectOptions($("weeklyTrendDimensionValue"), options, "__all__");
+  if ($("weeklyTrendDimensionValue")) $("weeklyTrendDimensionValue").disabled = dimension === "__overall__";
+}
+
+function refreshWeeklyTrendBuilder() {
+  if (!$("weeklyTrendDimension")) return;
+  const rows = resultAllRows();
+  const sourceId = `${state.analysis?.generatedAt || state.analysis?.status || ""}:${state.analysis?.population?.rows || rows.length}`;
+  if (state.weeklyTrendDashboards.sourceId && state.weeklyTrendDashboards.sourceId !== sourceId) {
+    state.weeklyTrendDashboards = { definitions: [], preview: null, sourceId };
+  } else state.weeklyTrendDashboards.sourceId = sourceId;
+  const dimensions = [{ value: "__overall__", label: "Overall (no dimension filter)" }].concat(weeklyTrendDimensionColumns().map((column) => ({ value: column, label: resultDimensionDisplayName(column) === column ? column : `${resultDimensionDisplayName(column)} (${column})` })));
+  setSelectOptions($("weeklyTrendDimension"), dimensions, "__overall__");
+  refreshWeeklyTrendDimensionValues();
+  const score = resultScoreName();
+  if ($("weeklyTrendStatus")) $("weeklyTrendStatus").textContent = rows.length ? `${Number(state.analysis?.population?.rows || rows.length).toLocaleString()} analyzed rows available.` : "Run analysis to build weekly scorecards.";
+  if ($("weeklyTrendTitle") && !$("weeklyTrendTitle").dataset.edited) $("weeklyTrendTitle").value = `Weekly ${score} Performance`;
+}
+
+function weeklyTrendConfig() {
+  return {
+    title: $("weeklyTrendTitle")?.value?.trim() || `Weekly ${resultScoreName()} Performance`,
+    mode: weeklyTrendMode(), weeks: Number($("weeklyTrendWeeks")?.value || 12),
+    metricSet: $("weeklyTrendMetricSet")?.value || "full",
+    dimension: $("weeklyTrendDimension")?.value || "__overall__",
+    dimensionValue: $("weeklyTrendDimensionValue")?.value || "__all__",
+    order: $("weeklyTrendOrder")?.value || "newest",
+  };
+}
+
+async function weeklyTrendRequest(config) {
+  const response = await fetch("/api/weekly-trend-dashboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(result.error || "Unable to build the weekly dashboard.");
+  return result;
+}
+
+function weeklyTrendCell(value, format) {
+  if (value === null || value === undefined || value === "") return "—";
+  if ((format === "score-volume" || format === "percent-volume") && typeof value === "object") {
+    const metricFormat = format === "percent-volume" ? "percent" : "score";
+    return `${weeklyTrendCell(value.value, metricFormat)} (${weeklyTrendCell(value.volume, "integer")})`;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) return escapeHtml(String(value));
+  if (format === "integer") return Math.round(number).toLocaleString();
+  if (format === "percent") return `${number.toFixed(number % 1 ? 1 : 0)}%`;
+  return number.toFixed(1);
+}
+
+function weeklyTrendMetricNumber(value) {
+  const raw = value && typeof value === "object" ? value.value : value;
+  const number = Number(raw);
+  return Number.isFinite(number) ? number : NaN;
+}
+
+function weeklyTrendMetricDirection(metric = {}) {
+  const label = String(metric.label || "").toLowerCase();
+  if (/passive|neutral/.test(label)) return 0;
+  if (/detractor|dissatisfied|negative/.test(label)) return -1;
+  if (metric.format === "score" || metric.format === "score-volume" || /\bnps\b|\bcsat\b|promoter|satisfied|positive/.test(label)) return 1;
+  return 0;
+}
+
+function weeklyTrendChangeClass(metric, values, index, order = "newest") {
+  const direction = weeklyTrendMetricDirection(metric);
+  if (!direction) return "";
+  const previousIndex = order === "oldest" ? index - 1 : index + 1;
+  if (previousIndex < 0 || previousIndex >= values.length) return "weekly-trend-no-comparison";
+  const current = weeklyTrendMetricNumber(values[index]);
+  const previous = weeklyTrendMetricNumber(values[previousIndex]);
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return "";
+  const movement = (current - previous) * direction;
+  if (movement > 0.0001) return "weekly-trend-improved";
+  if (movement < -0.0001) return "weekly-trend-declined";
+  return "weekly-trend-unchanged";
+}
+
+function weeklyTrendMetricFamily(metric = {}) {
+  const parts = String(metric.label || "").split(" · ");
+  return parts.length > 1 ? parts.slice(1).join(" · ").trim().toLowerCase() : String(metric.label || "").trim().toLowerCase();
+}
+
+function weeklyTrendRankBadges(data, metric, weekIndex) {
+  if (!data || !weeklyTrendMetricDirection(metric)) return "";
+  const direction = weeklyTrendMetricDirection(metric);
+  const volumeMetric = (data.metrics || []).find((candidate) => String(candidate.label || "").toLowerCase() === "survey volume");
+  let candidates;
+  let currentRaw = metric.values?.[weekIndex];
+  let currentVolume;
+  if (data.dimensionComparison) {
+    const family = weeklyTrendMetricFamily(metric);
+    candidates = (data.metrics || []).filter((candidate) => weeklyTrendMetricFamily(candidate) === family).map((candidate) => {
+      const raw = candidate.values?.[weekIndex];
+      const volume = raw && typeof raw === "object" ? Number(raw.volume) : 1;
+      return { value: weeklyTrendMetricNumber(raw), volume };
+    });
+    currentVolume = currentRaw && typeof currentRaw === "object" ? Number(currentRaw.volume) : 1;
+  } else {
+    candidates = (metric.values || []).map((raw, index) => {
+      const embeddedVolume = raw && typeof raw === "object" ? Number(raw.volume) : NaN;
+      const volume = Number.isFinite(embeddedVolume) ? embeddedVolume : Number(volumeMetric?.values?.[index] ?? 1);
+      return { value: weeklyTrendMetricNumber(raw), volume };
+    });
+    const embeddedVolume = currentRaw && typeof currentRaw === "object" ? Number(currentRaw.volume) : NaN;
+    currentVolume = Number.isFinite(embeddedVolume) ? embeddedVolume : Number(volumeMetric?.values?.[weekIndex] ?? 1);
+  }
+  candidates = candidates.filter((candidate) => Number.isFinite(candidate.value) && candidate.volume > 0);
+  if (candidates.length < 2) return "";
+  const current = weeklyTrendMetricNumber(currentRaw);
+  if (!Number.isFinite(current) || currentVolume <= 0) return "";
+  const ranked = candidates.map((candidate) => candidate.value * direction);
+  const currentRank = current * direction;
+  const best = Math.max(...ranked);
+  const worst = Math.min(...ranked);
+  const badges = [];
+  const scope = data.dimensionComparison ? "dimension this week" : "week for this metric";
+  if (Math.abs(currentRank - best) < 0.0001) badges.push(`<span class="weekly-trend-rank-badge best" title="Best ${scope}" aria-label="Best ${scope}">★</span>`);
+  if (Math.abs(currentRank - worst) < 0.0001) badges.push(`<span class="weekly-trend-rank-badge worst" title="Lowest ${scope}" aria-label="Lowest ${scope}">▼</span>`);
+  return badges.length ? `<span class="weekly-trend-cell-badges">${badges.join("")}</span>` : "";
+}
+
+const WEEKLY_TREND_CHART_COLORS = ["#007d83", "#e08c3a", "#5b6fc7", "#bf4c69", "#2f9b63", "#8b62b3", "#417d9b", "#cfb13f"];
+
+function weeklyTrendChartItem(cardId) {
+  if (cardId === "preview") return state.weeklyTrendDashboards.preview;
+  if (cardId === "weekly2-preview" || String(cardId).startsWith("weekly2-")) {
+    const source = cardId === "weekly2-preview" ? state.weeklyTrendDashboard2.preview : (state.weeklyTrendDashboard2.definitions || []).find((item) => item.id === cardId);
+    if (!source?.data) return null;
+    return { ...source, data: { ...source.data, weeks: (source.data.columns || []).map((column) => ({ label: column.label })), filterLabel: `${source.data.dimension} · ${source.data.weekLabel}` } };
+  }
+  return (state.weeklyTrendDashboards.definitions || []).find((item) => item.id === cardId) || null;
+}
+
+function weeklyTrendChartSvg(item, selected = []) {
+  const data = item?.data || item || {};
+  const metrics = data.metrics || [];
+  const series = selected.map((index, colorIndex) => ({ metric: metrics[index], index, colorIndex, color: WEEKLY_TREND_CHART_COLORS[colorIndex % WEEKLY_TREND_CHART_COLORS.length] })).filter((entry) => entry.metric);
+  if (!series.length || !(data.weeks || []).length) return '<div class="weekly-trend-chart-empty">Select at least one metric.</div>';
+  const width = 980; const height = 390; const left = 62; const right = 62; const top = 34 + Math.max(0, Math.ceil(series.length / 4) - 1) * 18; const bottom = 62;
+  const plotWidth = width - left - right; const plotHeight = height - top - bottom;
+  const isCount = (metric) => metric.format === "integer" || /volume|count|responses|tickets/i.test(metric.label || "");
+  const valueFor = (value) => weeklyTrendMetricNumber(value);
+  const leftValues = series.filter((entry) => !isCount(entry.metric)).flatMap((entry) => (entry.metric.values || []).map(valueFor)).filter(Number.isFinite);
+  const rightValues = series.filter((entry) => isCount(entry.metric)).flatMap((entry) => (entry.metric.values || []).map(valueFor)).filter(Number.isFinite);
+  let leftMin = leftValues.length ? Math.min(...leftValues) : 0; let leftMax = leftValues.length ? Math.max(...leftValues) : 100;
+  if (leftMin < 0 || series.some((entry) => /\bnps\b/i.test(entry.metric.label || ""))) { leftMin = Math.min(-100, leftMin); leftMax = Math.max(100, leftMax); }
+  else { leftMin = Math.min(0, leftMin); leftMax = Math.max(100, leftMax); }
+  if (leftMax === leftMin) leftMax = leftMin + 1;
+  const rightMax = Math.max(1, ...(rightValues.length ? rightValues : [1]));
+  const x = (index) => left + ((data.weeks.length === 1 ? .5 : index / (data.weeks.length - 1)) * plotWidth);
+  const y = (value, countAxis) => countAxis ? top + plotHeight - (Math.max(0, value) / rightMax) * plotHeight : top + plotHeight - ((value - leftMin) / (leftMax - leftMin)) * plotHeight;
+  const grid = Array.from({ length: 5 }, (_, index) => { const ratio = index / 4; const py = top + ratio * plotHeight; const label = leftMax - ratio * (leftMax - leftMin); return `<line x1="${left}" y1="${py}" x2="${width - right}" y2="${py}"/><text x="${left - 10}" y="${py + 4}" text-anchor="end">${label.toFixed(0)}</text>${rightValues.length ? `<text x="${width - right + 10}" y="${py + 4}" text-anchor="start">${Math.round(rightMax * (1 - ratio))}</text>` : ""}`; }).join("");
+  const showLabels = Boolean(state.weeklyTrendChart?.showLabels);
+  const lines = series.map((entry) => { const countAxis = isCount(entry.metric); const points = (entry.metric.values || []).map((value, index) => ({ x: x(index), y: y(valueFor(value), countAxis), value: valueFor(value) })).filter((point) => Number.isFinite(point.value)); const path = points.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" "); return `<path class="weekly-trend-chart-line ${countAxis ? "count-axis" : ""}" d="${path}" stroke="${entry.color}"/>${points.map((point) => `<circle cx="${point.x}" cy="${point.y}" r="4" fill="${entry.color}"><title>${escapeHtml(entry.metric.label)}: ${point.value.toFixed(2)}</title></circle>${showLabels ? `<text class="weekly-trend-data-label" x="${point.x}" y="${point.y + (entry.colorIndex % 2 ? 18 : -10)}" text-anchor="middle" style="fill:${entry.color}">${point.value.toFixed(2)}</text>` : ""}`).join("")}`; }).join("");
+  const labels = data.weeks.map((week, index) => `<text class="x-label" x="${x(index)}" y="${height - 25}" text-anchor="middle">${escapeHtml(week.label)}</text>`).join("");
+  const legend = series.map((entry, index) => `<g transform="translate(${left + (index % 4) * 210},${16 + Math.floor(index / 4) * 18})"><circle cx="0" cy="0" r="5" fill="${entry.color}"/><text x="10" y="4">${escapeHtml(entry.metric.label)}</text></g>`).join("");
+  return `<svg class="weekly-trend-series-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Weekly trend chart"><g class="chart-grid">${grid}</g>${legend}${lines}${labels}<text class="axis-title" transform="translate(16 ${top + plotHeight / 2}) rotate(-90)" text-anchor="middle">Score / Percent</text>${rightValues.length ? `<text class="axis-title" transform="translate(${width - 10} ${top + plotHeight / 2}) rotate(90)" text-anchor="middle">Count / Volume</text>` : ""}</svg>`;
+}
+
+function downloadWeeklyTrendChartSnapshot() {
+  const svg = $("weeklyTrendChartOverlay")?.querySelector(".weekly-trend-series-chart");
+  if (!svg) return;
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  style.textContent = `.chart-grid line{stroke:#dce6ec;stroke-width:1} text{fill:#617789;font:11px 'Segoe UI',Arial,sans-serif}.x-label{font-size:10px;font-weight:700}.axis-title{font-size:10px;font-weight:800}.weekly-trend-chart-line{fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.count-axis{stroke-dasharray:7 5}.weekly-trend-data-label{font-size:9px;font-weight:800}`;
+  clone.insertBefore(style, clone.firstChild);
+  const source = new XMLSerializer().serializeToString(clone);
+  const svgUrl = URL.createObjectURL(new Blob([source], { type: "image/svg+xml;charset=utf-8" }));
+  const image = new Image();
+  image.onload = () => {
+    const canvas = document.createElement("canvas"); canvas.width = 1960; canvas.height = 780;
+    const context = canvas.getContext("2d"); context.fillStyle = "#ffffff"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(svgUrl);
+    const link = document.createElement("a");
+    const title = state.weeklyTrendChart?.item?.title || "weekly-trend-chart";
+    link.download = `${title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "weekly-trend-chart"}.png`;
+    link.href = canvas.toDataURL("image/png"); link.click();
+  };
+  image.onerror = () => URL.revokeObjectURL(svgUrl);
+  image.src = svgUrl;
+}
+
+function renderWeeklyTrendChartOverlay() {
+  const chartState = state.weeklyTrendChart || {};
+  const item = chartState.item; const data = item?.data || item;
+  if (!item || !data) return;
+  let overlay = $("weeklyTrendChartOverlay");
+  if (!overlay) { overlay = document.createElement("div"); overlay.id = "weeklyTrendChartOverlay"; overlay.className = "weekly-trend-chart-overlay"; document.body.appendChild(overlay); }
+  const selected = chartState.selected || [];
+  const available = (data.metrics || []).map((metric, index) => ({ metric, index })).filter((entry) => !selected.includes(entry.index));
+  overlay.innerHTML = `<div class="weekly-trend-chart-dialog"><div class="weekly-trend-chart-head"><div><span>Creator 1 · Interactive Graph</span><h2>${escapeHtml(item.title || "Weekly Trend")}</h2><p>${escapeHtml(data.filterLabel || "Overall")}</p></div><button id="weeklyTrendChartClose" type="button" aria-label="Close graph">×</button></div><div class="weekly-trend-chart-controls"><label>Add Metric / Series<select id="weeklyTrendChartAddSelect">${available.map((entry) => `<option value="${entry.index}">${escapeHtml(entry.metric.label)}</option>`).join("")}</select></label><button id="weeklyTrendChartAddButton" class="button button-secondary button-compact" type="button" ${available.length ? "" : "disabled"}>Add Metric</button><div class="weekly-trend-chart-chips">${selected.map((index, colorIndex) => `<span style="--series-color:${WEEKLY_TREND_CHART_COLORS[colorIndex % WEEKLY_TREND_CHART_COLORS.length]}">${escapeHtml(data.metrics[index]?.label || "Metric")}${selected.length > 1 ? `<button type="button" data-weekly-chart-remove="${index}" aria-label="Remove ${escapeHtml(data.metrics[index]?.label || "metric")}">×</button>` : ""}</span>`).join("")}</div><div class="weekly-trend-chart-tools"><label class="weekly-trend-label-toggle"><input id="weeklyTrendDataLabels" type="checkbox" ${chartState.showLabels ? "checked" : ""}/><span aria-hidden="true"></span><b>Data labels</b></label><button id="weeklyTrendChartSnapshot" class="button button-secondary button-compact" type="button">Snapshot PNG</button></div></div><div class="weekly-trend-chart-stage">${weeklyTrendChartSvg(item, selected)}</div><div class="weekly-trend-chart-note">Counts and survey volume use the right axis. Scores and percentages use the left axis. Data labels are rounded to two decimals.</div></div>`;
+  overlay.classList.add("open");
+  $("weeklyTrendChartClose")?.addEventListener("click", closeWeeklyTrendChart);
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) closeWeeklyTrendChart(); }, { once: true });
+  $("weeklyTrendChartAddButton")?.addEventListener("click", () => { const index = Number($("weeklyTrendChartAddSelect")?.value); if (Number.isInteger(index) && !state.weeklyTrendChart.selected.includes(index)) state.weeklyTrendChart.selected.push(index); renderWeeklyTrendChartOverlay(); });
+  $("weeklyTrendDataLabels")?.addEventListener("change", (event) => { state.weeklyTrendChart.showLabels = Boolean(event.target.checked); renderWeeklyTrendChartOverlay(); });
+  $("weeklyTrendChartSnapshot")?.addEventListener("click", downloadWeeklyTrendChartSnapshot);
+  overlay.querySelectorAll("[data-weekly-chart-remove]").forEach((button) => button.addEventListener("click", () => { state.weeklyTrendChart.selected = state.weeklyTrendChart.selected.filter((index) => index !== Number(button.dataset.weeklyChartRemove)); renderWeeklyTrendChartOverlay(); }));
+}
+
+function openWeeklyTrendChart(cardId, metricIndex) {
+  const item = weeklyTrendChartItem(cardId); if (!item) return;
+  state.weeklyTrendChart = { item, selected: [Number(metricIndex)], primary: Number(metricIndex), showLabels: false };
+  renderWeeklyTrendChartOverlay();
+}
+
+function closeWeeklyTrendChart() { $("weeklyTrendChartOverlay")?.classList.remove("open"); }
+
+function weeklyTrendCardMarkup(item, removable = false) {
+  const data = item.data || item;
+  const title = item.title || `Weekly ${data.scoreName} Performance`;
+  const summary = data.summary || {};
+  const movement = summary.movement === null || summary.movement === undefined || summary.movement === "" ? NaN : Number(summary.movement);
+  const kpis = [
+    [`${data.dimensionComparison ? "Overall latest " : "Latest "}${data.scoreName}`, weeklyTrendCell(summary.latestScore, "score")],
+    ["Week-on-week", Number.isFinite(movement) ? `${movement > 0 ? "+" : ""}${movement.toFixed(1)}` : "—"],
+    ["Latest volume", weeklyTrendCell(summary.latestVolume, "integer")],
+    ["Average weekly volume", weeklyTrendCell(summary.averageVolume, "score")],
+  ];
+  return `<article class="weekly-trend-card" data-weekly-trend-id="${escapeHtml(item.id || "preview")}">
+    <div class="weekly-trend-card-head"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(data.filterLabel || "Overall")} · ${Number(data.rowsUsed || 0).toLocaleString()} analyzed rows${data.comparisonOmitted ? ` · Top ${data.comparisonCount} shown (${data.comparisonOmitted} lower-volume values omitted)` : ""}</p><div class="weekly-trend-rank-legend"><span class="weekly-trend-rank-badge best">★</span> Best <span class="weekly-trend-rank-badge worst">▼</span> Lowest <small>Ties are all marked</small></div></div>${removable ? `<div class="weekly-trend-card-actions"><button class="button button-secondary button-compact" data-weekly-export="${escapeHtml(item.id)}" type="button">Export CSV</button><button class="button button-secondary button-compact" data-weekly-remove="${escapeHtml(item.id)}" type="button">Remove</button></div>` : ""}</div>
+    <div class="weekly-trend-kpis">${kpis.map(([label, value], index) => `<div class="${index === 1 && Number.isFinite(movement) ? (movement > 0 ? "positive" : movement < 0 ? "negative" : "") : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div>
+    <div class="weekly-trend-table-wrap"><table class="weekly-trend-table"><thead><tr><th>${data.dimensionComparison ? escapeHtml(item.dimension || "Dimension") + " / Metric" : "Metric"}</th>${(data.weeks || []).map((week) => `<th>${escapeHtml(week.label)}</th>`).join("")}</tr></thead><tbody>${(data.metrics || []).map((metric, metricIndex) => `<tr class="${metric.emphasis || metric.label === data.scoreName ? "weekly-trend-score-row" : ""} ${metric.groupStart ? "weekly-trend-group-start" : ""}"><th><span class="weekly-trend-row-label"><button class="weekly-trend-row-chart" type="button" data-weekly-chart-card="${escapeHtml(item.id || "preview")}" data-weekly-chart-metric="${metricIndex}" title="Graph ${escapeHtml(metric.label)}" aria-label="Graph ${escapeHtml(metric.label)}"><svg viewBox="0 0 20 20"><path d="M3 16h14M5 13l3-4 3 2 4-6"/></svg></button><span>${escapeHtml(metric.label)}</span></span></th>${(metric.values || []).map((value, index) => `<td class="${weeklyTrendChangeClass(metric, metric.values || [], index, item.order || "newest")}"><span class="weekly-trend-cell-value">${weeklyTrendCell(value, metric.format)}</span>${weeklyTrendRankBadges(data, metric, index)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+  </article>`;
+}
+
+async function previewWeeklyTrend() {
+  const host = $("weeklyTrendPreview");
+  if (!host) return;
+  host.innerHTML = '<div class="weekly-trend-loading">Building weekly trend from the completed analysis…</div>';
+  if ($("weeklyTrendMessage")) $("weeklyTrendMessage").textContent = "Aggregating the selected weeks…";
+  try {
+    const config = weeklyTrendConfig();
+    const data = await weeklyTrendRequest(config);
+    state.weeklyTrendDashboards.preview = { ...config, data };
+    host.innerHTML = weeklyTrendCardMarkup({ ...config, data });
+    if ($("weeklyTrendMessage")) $("weeklyTrendMessage").textContent = data.dimensionComparison ? `${data.weeks.length} weeks compared across ${data.comparisonCount} ${config.dimension} values.` : `${data.weeks.length} weeks displayed for ${data.filterLabel}.`;
+  } catch (error) {
+    host.innerHTML = "";
+    if ($("weeklyTrendMessage")) $("weeklyTrendMessage").textContent = error.message;
+  }
+}
+
+async function addWeeklyTrendDashboard() {
+  const config = weeklyTrendConfig();
+  try {
+    if ($("weeklyTrendMessage")) $("weeklyTrendMessage").textContent = "Adding dashboard…";
+    const data = await weeklyTrendRequest(config);
+    state.weeklyTrendDashboards.definitions.push({ ...config, id: `weekly-${Date.now()}`, data });
+    state.weeklyTrendDashboards.preview = { ...config, data };
+    $("weeklyTrendPreview").innerHTML = weeklyTrendCardMarkup({ ...config, data });
+    renderWeeklyTrendDashboard();
+    if ($("weeklyTrendMessage")) $("weeklyTrendMessage").textContent = "Dashboard added. Change the dimension or value to add another view.";
+  } catch (error) { if ($("weeklyTrendMessage")) $("weeklyTrendMessage").textContent = error.message; }
+}
+
+function renderWeeklyTrendDashboard() {
+  const host = $("weeklyTrendDashboard");
+  if (!host) return;
+  const definitions = state.weeklyTrendDashboards.definitions || [];
+  host.innerHTML = definitions.length ? definitions.map((item) => weeklyTrendCardMarkup(item, true)).join("") : '<div class="weekly-trend-empty">No weekly dashboards added yet.</div>';
+  if ($("weeklyTrendDashboardMeta")) $("weeklyTrendDashboardMeta").textContent = definitions.length ? `${definitions.length} weekly dashboard${definitions.length === 1 ? "" : "s"} added.` : "Add one or more views to compare business dimensions.";
+}
+
+function exportWeeklyTrendCsv(id) {
+  const item = (state.weeklyTrendDashboards.definitions || []).find((entry) => entry.id === id);
+  if (!item) return;
+  const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const lines = [["Metric", ...(item.data.weeks || []).map((week) => week.label)].map(quote).join(",")];
+  (item.data.metrics || []).forEach((metric) => lines.push([metric.label, ...(metric.values || []).map((value) => weeklyTrendCell(value, metric.format))].map(quote).join(",")));
+  const url = URL.createObjectURL(new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a"); link.href = url; link.download = `${item.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "weekly-trend"}.csv`; link.click(); URL.revokeObjectURL(url);
+}
+
+function weeklyTrend2MetricDefinitions() {
+  const csat = weeklyTrendMode() === "csat";
+  const positive = csat ? "Satisfied" : "Promoters";
+  const middle = csat ? "Neutral" : "Passives";
+  const negative = csat ? "Dissatisfied" : "Detractors";
+  return [
+    ["volume", "Survey Volume", true], ["positiveCount", positive, true], ["middleCount", middle, true], ["negativeCount", negative, true],
+    ["positivePct", `${positive} %`, true], ["middlePct", `${middle} %`, true], ["negativePct", `${negative} %`, true], ["score", csat ? "CSAT" : "NPS", true],
+    ["sentimentPositivePct", "Positive Sentiment %", false], ["sentimentNeutralPct", "Neutral Sentiment %", false], ["sentimentNegativePct", "Negative Sentiment %", false],
+  ];
+}
+
+function weeklyTrend2WeekKey(value) {
+  const text = String(value ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function weeklyTrend2WeekLabel(key) {
+  const parts = String(key).split("-").map(Number);
+  if (parts.length !== 3) return key;
+  const end = new Date(parts[0], parts[1] - 1, parts[2] + 6);
+  return `WE ${end.getDate()} ${end.toLocaleString("en", { month: "short" })}`;
+}
+
+function weeklyTrend2Weeks() {
+  const keys = new Set();
+  resultAllRows().forEach((row) => {
+    const key = weeklyTrend2WeekKey(resultFirstValue(row, ["Week", "Week Start", "Reporting Week"], ""));
+    if (key) keys.add(key);
+  });
+  (state.analysis?.weekly || []).forEach((row) => {
+    const key = weeklyTrend2WeekKey(resultFirstValue(row, ["Week", "Week Start", "Reporting Week"], ""));
+    if (key) keys.add(key);
+  });
+  return Array.from(keys).sort().reverse().map((key) => ({ value: key, label: weeklyTrend2WeekLabel(key) }));
+}
+
+function renderWeeklyTrend2MetricOptions() {
+  const host = $("weeklyTrend2MetricOptions");
+  if (!host) return;
+  const previous = new Set(Array.from(host.querySelectorAll('input[type="checkbox"]:checked')).map((input) => input.value));
+  const hasPrevious = host.querySelectorAll('input[type="checkbox"]').length > 0;
+  host.innerHTML = weeklyTrend2MetricDefinitions().map(([value, label, selected]) => `<label><input type="checkbox" value="${value}" ${hasPrevious ? (previous.has(value) ? "checked" : "") : (selected ? "checked" : "")} /><span>${escapeHtml(label)}</span></label>`).join("");
+}
+
+function refreshWeeklyTrend2Builder() {
+  if (!$("weeklyTrend2Dimension")) return;
+  const rows = resultAllRows();
+  const sourceId = `${state.analysis?.generatedAt || state.analysis?.status || ""}:${state.analysis?.population?.rows || rows.length}`;
+  if (state.weeklyTrendDashboard2.sourceId && state.weeklyTrendDashboard2.sourceId !== sourceId) state.weeklyTrendDashboard2 = { definitions: [], preview: null, sourceId };
+  else state.weeklyTrendDashboard2.sourceId = sourceId;
+  setSelectOptions($("weeklyTrend2Week"), weeklyTrend2Weeks(), weeklyTrend2Weeks()[0]?.value || "");
+  const dimensions = weeklyTrendDimensionColumns().map((column) => ({ value: column, label: resultDimensionDisplayName(column) === column ? column : `${resultDimensionDisplayName(column)} (${column})` }));
+  setSelectOptions($("weeklyTrend2Dimension"), dimensions, dimensions[0]?.value || "");
+  const numeric = summaryBuilderNumericColumns(rows).filter((column) => !/nps|csat|score|rating|sentiment|percent|pct|count|volume|row|index/i.test(column));
+  setSelectOptions($("weeklyTrend2ValueField"), [{ value: "", label: "None" }].concat(numeric.map((column) => ({ value: column, label: column }))), "");
+  renderWeeklyTrend2MetricOptions();
+  if ($("weeklyTrend2Aggregation")) $("weeklyTrend2Aggregation").disabled = !$("weeklyTrend2ValueField")?.value;
+  const score = resultScoreName();
+  if ($("weeklyTrend2Title") && !$("weeklyTrend2Title").dataset.edited) $("weeklyTrend2Title").value = `Weekly ${score} Dimension Matrix`;
+  if ($("weeklyTrend2Status")) $("weeklyTrend2Status").textContent = rows.length ? `${Number(state.analysis?.population?.rows || rows.length).toLocaleString()} analyzed rows available.` : "Run analysis to build a weekly dimension matrix.";
+}
+
+function weeklyTrend2Config() {
+  return {
+    title: $("weeklyTrend2Title")?.value?.trim() || `Weekly ${resultScoreName()} Dimension Matrix`, mode: weeklyTrendMode(),
+    week: $("weeklyTrend2Week")?.value || "", dimension: $("weeklyTrend2Dimension")?.value || "",
+    maxColumns: Number($("weeklyTrend2MaxColumns")?.value || 15), sort: $("weeklyTrend2Sort")?.value || "volume",
+    metrics: Array.from($("weeklyTrend2MetricOptions")?.querySelectorAll('input[type="checkbox"]:checked') || []).map((input) => input.value),
+    valueField: $("weeklyTrend2ValueField")?.value || "", aggregation: $("weeklyTrend2Aggregation")?.value || "average",
+  };
+}
+
+function weeklyTrend2RowMatchesWeek(row, weekKey) {
+  const direct = weeklyTrend2WeekKey(resultFirstValue(row, ["Week", "Week Start", "Reporting Week"], ""));
+  if (direct) return direct === weekKey;
+  const rawDate = resultFirstValue(row, ["Feedback Date", "Survey Date", "Response Date", "Date"], "");
+  const rowDate = new Date(rawDate);
+  const parts = String(weekKey || "").split("-").map(Number);
+  if (Number.isNaN(rowDate.getTime()) || parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return false;
+  const start = new Date(parts[0], parts[1] - 1, parts[2]);
+  const end = new Date(parts[0], parts[1] - 1, parts[2] + 7);
+  const normalized = new Date(rowDate.getFullYear(), rowDate.getMonth(), rowDate.getDate());
+  return normalized >= start && normalized < end;
+}
+
+function weeklyTrend2LocalMatrix(config) {
+  const selectedRows = resultAllRows().filter((row) => weeklyTrend2RowMatchesWeek(row, config.week));
+  const dimensionRows = selectedRows.filter((row) => String(row?.[config.dimension] ?? "").trim());
+  if (!dimensionRows.length) throw new Error(`No values are available for ${config.dimension} in the selected week.`);
+  const groups = new Map();
+  dimensionRows.forEach((row) => { const value = String(row[config.dimension]).trim(); if (!groups.has(value)) groups.set(value, []); groups.get(value).push(row); });
+  let values = Array.from(groups.keys());
+  values.sort(config.sort === "name" ? ((a, b) => a.localeCompare(b)) : ((a, b) => groups.get(b).length - groups.get(a).length || a.localeCompare(b)));
+  if (config.maxColumns) values = values.slice(0, config.maxColumns);
+  const csat = config.mode === "csat";
+  const names = csat ? { positive: "Satisfied", middle: "Neutral", negative: "Dissatisfied", score: "CSAT" } : { positive: "Promoters", middle: "Passives", negative: "Detractors", score: "NPS" };
+  const definitions = { volume: ["Survey Volume", "integer"], positiveCount: [names.positive, "integer"], middleCount: [names.middle, "integer"], negativeCount: [names.negative, "integer"], positivePct: [`${names.positive} %`, "percent"], middlePct: [`${names.middle} %`, "percent"], negativePct: [`${names.negative} %`, "percent"], score: [names.score, "score"], sentimentPositivePct: ["Positive Sentiment %", "percent"], sentimentNeutralPct: ["Neutral Sentiment %", "percent"], sentimentNegativePct: ["Negative Sentiment %", "percent"] };
+  const metrics = config.metrics.map((key) => ({ key, label: definitions[key][0], format: definitions[key][1], values: [] }));
+  values.forEach((value) => {
+    const rows = groups.get(value); const total = rows.length;
+    let positive = 0; let middle = 0; let negative = 0; let sentimentPositive = 0; let sentimentNeutral = 0; let sentimentNegative = 0;
+    rows.forEach((row) => {
+      const type = String(resultFirstValue(row, csat ? ["CSAT Type", "CSAT Segment", "Satisfaction Segment"] : ["NPS Type", "NPS Segment"], "")).trim().toLowerCase();
+      if ((csat && ["satisfied", "promoter"].includes(type)) || (!csat && type === "promoter")) positive += 1;
+      else if ((csat && ["neutral", "passive"].includes(type)) || (!csat && type === "passive")) middle += 1;
+      else if ((csat && ["dissatisfied", "detractor"].includes(type)) || (!csat && type === "detractor")) negative += 1;
+      const sentiment = String(resultFirstValue(row, ["Sentiment", "Sentiment Label", "Overall Sentiment"], "")).trim().toLowerCase();
+      if (sentiment === "positive") sentimentPositive += 1; else if (sentiment === "neutral") sentimentNeutral += 1; else if (sentiment === "negative") sentimentNegative += 1;
+    });
+    const positivePct = total ? positive / total * 100 : 0; const middlePct = total ? middle / total * 100 : 0; const negativePct = total ? negative / total * 100 : 0;
+    const metricValues = { volume: total, positiveCount: positive, middleCount: middle, negativeCount: negative, positivePct, middlePct, negativePct, score: csat ? positivePct : positivePct - negativePct, sentimentPositivePct: total ? sentimentPositive / total * 100 : 0, sentimentNeutralPct: total ? sentimentNeutral / total * 100 : 0, sentimentNegativePct: total ? sentimentNegative / total * 100 : 0 };
+    metrics.forEach((metric) => metric.values.push(Math.round(metricValues[metric.key] * 100) / 100));
+  });
+  if (config.valueField) {
+    const customValues = values.map((value) => { const nums = groups.get(value).map((row) => Number(row?.[config.valueField])).filter(Number.isFinite); if (!nums.length) return null; return Math.round((config.aggregation === "sum" ? nums.reduce((sum, number) => sum + number, 0) : nums.reduce((sum, number) => sum + number, 0) / nums.length) * 100) / 100; });
+    metrics.push({ key: "customValue", label: `${config.aggregation === "sum" ? "Sum" : "Average"} ${config.valueField}`, format: "number", values: customValues });
+  }
+  return { ok: true, mode: config.mode, scoreName: names.score, dimension: config.dimension, week: config.week, weekLabel: weeklyTrend2WeekLabel(config.week), columns: values.map((value) => ({ key: value, label: value, volume: groups.get(value).length })), metrics, rowsUsed: dimensionRows.length, totalDimensionValues: groups.size, compatibilityMode: true };
+}
+
+async function weeklyTrend2Request(config) {
+  const response = await fetch("/api/weekly-trend-matrix", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
+  const result = await response.json();
+  if (!response.ok || !result.ok) {
+    if (response.status === 404 || /unknown endpoint|no values are available/i.test(result.error || "")) return weeklyTrend2LocalMatrix(config);
+    throw new Error(result.error || "Unable to build the weekly dimension matrix.");
+  }
+  return result;
+}
+
+function weeklyTrend2Rank(data, metric, index) {
+  const direction = weeklyTrendMetricDirection(metric);
+  if (!direction || Number(data.columns?.[index]?.volume || 0) <= 0) return { className: "", badges: "" };
+  const candidates = (metric.values || []).map((value, valueIndex) => ({ value: weeklyTrendMetricNumber(value), volume: Number(data.columns?.[valueIndex]?.volume || 0) })).filter((item) => Number.isFinite(item.value) && item.volume > 0);
+  if (candidates.length < 2) return { className: "", badges: "" };
+  const current = weeklyTrendMetricNumber(metric.values?.[index]);
+  const ranked = candidates.map((item) => item.value * direction);
+  const currentRank = current * direction;
+  const best = Math.max(...ranked); const worst = Math.min(...ranked);
+  const isBest = Math.abs(currentRank - best) < 0.0001; const isWorst = Math.abs(currentRank - worst) < 0.0001;
+  const badges = `${isBest ? '<span class="weekly-trend-rank-badge best" title="Best value">★</span>' : ""}${isWorst ? '<span class="weekly-trend-rank-badge worst" title="Lowest value">▼</span>' : ""}`;
+  return { className: isBest ? "weekly-trend-improved" : (isWorst ? "weekly-trend-declined" : ""), badges: badges ? `<span class="weekly-trend-cell-badges">${badges}</span>` : "" };
+}
+
+function weeklyTrend2CardMarkup(item, removable = false) {
+  const data = item.data || item;
+  return `<article class="weekly-trend-card weekly-trend-matrix-card"><div class="weekly-trend-card-head"><div><h3>${escapeHtml(item.title || "Weekly Dimension Matrix")}</h3><p>${escapeHtml(data.dimension)} · ${escapeHtml(data.weekLabel)} · ${Number(data.rowsUsed || 0).toLocaleString()} surveys${data.totalDimensionValues > data.columns.length ? ` · ${data.columns.length} of ${data.totalDimensionValues} values shown` : ""}</p><div class="weekly-trend-rank-legend"><span class="weekly-trend-rank-badge best">★</span> Best <span class="weekly-trend-rank-badge worst">▼</span> Lowest <small>Ties are all marked</small></div></div>${removable ? `<div class="weekly-trend-card-actions"><button class="button button-secondary button-compact" data-weekly2-export="${escapeHtml(item.id)}" type="button">Export CSV</button><button class="button button-secondary button-compact" data-weekly2-remove="${escapeHtml(item.id)}" type="button">Remove</button></div>` : ""}</div><div class="weekly-trend-table-wrap"><table class="weekly-trend-table weekly-trend-matrix-table"><thead><tr><th rowspan="2">Metric</th>${data.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr><tr>${data.columns.map(() => `<th>${escapeHtml(data.weekLabel)}</th>`).join("")}</tr></thead><tbody>${data.metrics.map((metric, metricIndex) => `<tr class="${metric.key === "score" ? "weekly-trend-score-row" : ""}"><th><span class="weekly-trend-row-label"><button class="weekly-trend-row-chart" type="button" data-weekly-chart-card="${escapeHtml(item.id || "weekly2-preview")}" data-weekly-chart-metric="${metricIndex}" title="Graph ${escapeHtml(metric.label)}" aria-label="Graph ${escapeHtml(metric.label)}"><svg viewBox="0 0 20 20"><path d="M3 16h14M5 13l3-4 3 2 4-6"/></svg></button><span>${escapeHtml(metric.label)}</span></span></th>${metric.values.map((value, index) => { const rank = weeklyTrend2Rank(data, metric, index); return `<td class="${rank.className}"><span class="weekly-trend-cell-value">${weeklyTrendCell(value, metric.format)}</span>${rank.badges}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div></article>`;
+}
+
+async function previewWeeklyTrend2() {
+  const host = $("weeklyTrend2Preview"); if (!host) return;
+  const config = weeklyTrend2Config();
+  if (!config.metrics.length) { $("weeklyTrend2Message").textContent = "Select at least one metric row."; return; }
+  host.innerHTML = '<div class="weekly-trend-loading">Building weekly dimension matrix…</div>';
+  try { const data = await weeklyTrend2Request(config); state.weeklyTrendDashboard2.preview = { ...config, data }; host.innerHTML = weeklyTrend2CardMarkup({ ...config, data }); $("weeklyTrend2Message").textContent = `${data.columns.length} ${data.dimension} values displayed for ${data.weekLabel}.`; }
+  catch (error) { host.innerHTML = ""; $("weeklyTrend2Message").textContent = error.message; }
+}
+
+async function addWeeklyTrend2Dashboard() {
+  const config = weeklyTrend2Config();
+  if (!config.metrics.length) { $("weeklyTrend2Message").textContent = "Select at least one metric row."; return; }
+  try { const data = await weeklyTrend2Request(config); const item = { ...config, id: `weekly2-${Date.now()}`, data }; state.weeklyTrendDashboard2.definitions.push(item); state.weeklyTrendDashboard2.preview = item; $("weeklyTrend2Preview").innerHTML = weeklyTrend2CardMarkup(item); renderWeeklyTrend2Dashboard(); $("weeklyTrend2Message").textContent = "Matrix dashboard added."; }
+  catch (error) { $("weeklyTrend2Message").textContent = error.message; }
+}
+
+function renderWeeklyTrend2Dashboard() {
+  const host = $("weeklyTrend2Dashboard"); if (!host) return;
+  const definitions = state.weeklyTrendDashboard2.definitions || [];
+  host.innerHTML = definitions.length ? definitions.map((item) => weeklyTrend2CardMarkup(item, true)).join("") : '<div class="weekly-trend-empty">No matrix dashboards added yet.</div>';
+  if ($("weeklyTrend2DashboardMeta")) $("weeklyTrend2DashboardMeta").textContent = definitions.length ? `${definitions.length} matrix dashboard${definitions.length === 1 ? "" : "s"} added.` : "Add one or more weekly dimension matrices.";
+}
+
+function exportWeeklyTrend2Csv(id) {
+  const item = (state.weeklyTrendDashboard2.definitions || []).find((entry) => entry.id === id); if (!item) return;
+  const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const lines = [["Metric", ...item.data.columns.map((column) => `${column.label} · ${item.data.weekLabel}`)].map(quote).join(",")];
+  item.data.metrics.forEach((metric) => lines.push([metric.label, ...metric.values.map((value) => weeklyTrendCell(value, metric.format))].map(quote).join(",")));
+  const url = URL.createObjectURL(new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = `${item.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "weekly-matrix"}.csv`; link.click(); URL.revokeObjectURL(url);
+}
+
 function summaryBuilderMetricFieldOptions(columns) {
   return [{ value: "__none__", label: "Not needed" }].concat((columns || []).map((column) => ({ value: column, label: column })));
 }
@@ -10030,7 +10549,7 @@ function selectedOptionsSnapshot() {
 function buildGenAiJsonExport() {
   const tableIds = [
     "previewTable", "sentimentCompareTable", "sentimentThemeTable", "themeTable", "themeBuilderTable", "themeCompareTable", "waveTable", "tenureTable", "agentTable", "managerTable",
-    "quartileTable", "statsFormulaTable", "analysisCompareTable", "analysisSummaryTable",
+    "quartileTable", "evidenceRelationshipTable", "statsFormulaTable", "analysisCompareTable", "analysisSummaryTable",
     "analysisTable", "analysisManagerTable", "analysisAgentTable", "analysisSentimentTable",
     "analysisConsistencyTable",
   ];
@@ -10068,9 +10587,28 @@ function buildGenAiJsonExport() {
   };
 }
 
+function overallPerformanceReadForExport() {
+  const source = $("resultExecutiveSummaryBox")?.querySelector(".result-executive-summary") || $("resultExecutiveSummaryBox");
+  if (!source || !source.textContent.trim()) return { title: "Overall Performance Lens", sections: [] };
+  const sections = [];
+  source.querySelectorAll("h3, h4").forEach((heading) => {
+    const items = [];
+    let node = heading.nextElementSibling;
+    while (node && !/^H[34]$/.test(node.tagName)) {
+      if (node.matches("ul, ol")) node.querySelectorAll(":scope > li").forEach((item) => items.push(item.textContent.trim()));
+      else if (node.matches("p") && node.textContent.trim()) items.push(node.textContent.trim());
+      node = node.nextElementSibling;
+    }
+    if (items.length) sections.push({ heading: heading.textContent.trim(), items });
+  });
+  return { title: "Overall Performance Lens", sections };
+}
+
 function enrichedAnalysisForExport() {
   return {
     ...(state.analysis || {}),
+    leadershipQuestions: Array.isArray(state.leadershipQuestions) ? state.leadershipQuestions : [],
+    overallPerformanceRead: overallPerformanceReadForExport(),
     sentimentCompareRows: sentimentWowRows(),
     sentimentThemeRows: sentimentThemeWowRows(),
     themeBuilderRows: themeBuilderExportRows(),
@@ -11105,6 +11643,7 @@ const PDF_TAB_TITLES = {
   performancequestions: "Master Lens",
   movingaverages: "Moving Averages",
   quartile: "Quartile Intelligence",
+  evidencerelationship: "Evidence & Relationship Intelligence",
   statistics: "Statistics",
   customstats: "Custom Statistics",
   columnexplorer: "Column Explorer",
@@ -11138,6 +11677,7 @@ const BOARD_PDF_RECOMMENDED_TABS = [
   "agent",
   "manager",
   "quartile",
+  "evidencerelationship",
   "feedback",
   "sentimentcompare",
   "themecompare",
@@ -11148,7 +11688,7 @@ const BOARD_PDF_RECOMMENDED_TABS = [
 const BOARD_ROOM_MENU_GROUPS = [
   { label: "Analysis Results", tabs: ["datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout"] },
   { label: "Dashboard Suite", tabs: ["executive", "agent", "manager", "customdashboards"] },
-  { label: "Performance Lens", tabs: ["performancequestions", "movingaverages", "quartile", "statistics", "customstats"] },
+  { label: "Performance Lens", tabs: ["performancequestions", "movingaverages", "quartile", "evidencerelationship", "statistics", "customstats"] },
   { label: "Sentiment Engine", tabs: ["feedback", "sentimentcompare"] },
   { label: "Theme Intelligence", tabs: ["themesoverview", "acptoverview", "themebuilder", "themecompare", "theme", "rootcause"] },
   { label: "Dimension Studio", tabs: ["wave", "tenure", "dimensionlens", "customdims"] },
@@ -11176,6 +11716,7 @@ const BOARD_PDF_SECTION_GUIDES = {
   agent: "Agent-level performance, coaching opportunities, sentiment patterns, and customer experience signals.",
   manager: "Manager/TL level performance, team consistency, accountability signals, and operational focus areas.",
   quartile: "Q1-Q4 performance spread, best quartile, recovery pockets, and coaching concentration.",
+  evidencerelationship: "Evidence strength, confidence interval, Setup-selected dimension coverage, effect-size ranking, correlation, and regression evidence.",
   statistics: "Standard statistical reads, distributions, numeric relationships, and performance diagnostics.",
   feedback: "Sentiment mix, categorized verbatims, customer tone, and review-ready feedback records.",
   sentimentcompare: "Week-over-week sentiment movement and custom theme sentiment shifts where available.",
@@ -11826,16 +12367,170 @@ function interactiveExecutiveSignalsSectionHtml() {
   </section>`;
 }
 
-function createInteractiveHtmlReport() {
+function showInteractiveHtmlPreflightDialog(warnings = [], onProceed) {
+  $("interactiveHtmlPreflightDialog")?.remove();
+  const shown = warnings.slice(0, 12);
+  const remaining = warnings.length - shown.length;
+  const overlay = document.createElement("div");
+  overlay.id = "interactiveHtmlPreflightDialog";
+  overlay.className = "html-preflight-overlay";
+  overlay.innerHTML = `<div class="html-preflight-dialog" role="dialog" aria-modal="true" aria-labelledby="htmlPreflightTitle">
+    <div class="html-preflight-head">
+      <div><p>Interactive HTML quality check</p><h2 id="htmlPreflightTitle">Empty content was found</h2></div>
+      <button class="html-preflight-close" data-html-preflight-review type="button" aria-label="Close warning">×</button>
+    </div>
+    <p class="html-preflight-copy">The following cards may appear empty in the generated HTML:</p>
+    <div class="html-preflight-list">${shown.map((warning) => `<div><span>!</span><p>${escapeHtml(warning)}</p></div>`).join("")}${remaining > 0 ? `<div><span>+</span><p>Plus ${remaining} more issue${remaining === 1 ? "" : "s"}.</p></div>` : ""}</div>
+    <p class="html-preflight-note">Review the affected cards, remove an empty custom dashboard, or deselect a report section. You may also continue and generate the HTML with these empty views.</p>
+    <div class="html-preflight-actions">
+      <button class="button button-secondary" data-html-preflight-review type="button">OK, Review</button>
+      <button class="button button-primary" data-html-preflight-proceed type="button">Proceed &amp; Generate HTML</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelectorAll("[data-html-preflight-review]").forEach((button) => button.addEventListener("click", close));
+  overlay.querySelector("[data-html-preflight-proceed]")?.addEventListener("click", () => { close(); onProceed?.(); });
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
+  overlay.querySelector("[data-html-preflight-proceed]")?.focus();
+}
+
+function interactiveHtmlPreflightWarnings(tabs = []) {
+  const warnings = [];
+  const noDataPattern = /^(?:no\s+(?:data|rows?|records?|results?|values?|responses?|surveys?|chartable values?|dashboards?)(?:\s+(?:is|are|were))?(?:\s+available)?(?:\s+yet)?[.!]?|not available|n\/?a|run (?:an )?analysis(?: first)?[.!]?|nothing to display|—|-)$/i;
+  const addWarning = (section, item, reason) => {
+    const message = `${section} — ${item}: ${reason}`;
+    if (!warnings.includes(message)) warnings.push(message);
+  };
+  const inspectRoot = (root, sectionLabel) => {
+    if (!root) return;
+    root.querySelectorAll("table").forEach((table, index) => {
+      const rows = [...table.querySelectorAll("tbody tr")];
+      const rowTexts = rows.map((row) => String(row.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+      if (!rows.length || !rowTexts.length || rowTexts.every((text) => noDataPattern.test(text))) {
+        const card = table.closest(".panel, .card, .chart-card, .metric-card, .stat-card, article") || table;
+        const title = card.querySelector("h1, h2, h3, h4, caption")?.textContent?.trim() || `Table ${index + 1}`;
+        addWarning(sectionLabel, title, "table has no populated rows");
+      }
+    });
+    root.querySelectorAll(".weekly-trend-empty, .studio-empty, .empty-state, .no-data, [data-empty-state]").forEach((empty, index) => {
+      const text = String(empty.textContent || "").replace(/\s+/g, " ").trim();
+      if (!text || /no |not available|run .*analysis|nothing/i.test(text)) {
+        const card = empty.closest(".panel, .card, .chart-card, .metric-card, .stat-card, article") || empty;
+        const title = card.querySelector("h1, h2, h3, h4")?.textContent?.trim() || `Empty view ${index + 1}`;
+        addWarning(sectionLabel, title, text || "no content is available");
+      }
+    });
+    root.querySelectorAll(".metric-card, .stat-card, .kpi-card, .studio-kpi-tile").forEach((card) => {
+      const values = [...card.querySelectorAll(".metric-value, .stat-value, .kpi-value, .studio-big-kpi strong")].map((value) => String(value.textContent || "").trim()).filter(Boolean);
+      if (values.length && values.every((value) => noDataPattern.test(value))) {
+        const title = card.querySelector("h1, h2, h3, h4, span")?.textContent?.trim() || "Metric card";
+        addWarning(sectionLabel, title, "card has no populated value");
+      }
+    });
+  };
+  const availableTabs = boardPdfAvailableTabs();
+  tabs.forEach((tab) => {
+    const cardIndex = availableTabs.indexOf(tab);
+    const cardNumber = String(cardIndex >= 0 ? cardIndex + 1 : tabs.indexOf(tab) + 1).padStart(2, "0");
+    inspectRoot($(tab), `Card ${cardNumber} — ${PDF_TAB_TITLES[tab] || tab}`);
+  });
+  const customSources = [
+    ["Weekly Trend Creator", "#weeklyTrendDashboard > .weekly-trend-card"],
+    ["Dimension Matrix Creator (Weeks)", "#weeklyTrend2Dashboard > .weekly-trend-card"],
+    ["Monthly Trend Creator", '[data-dashboard-studio="monthlyTrend"] [data-studio-added] > .studio-added-dashboard'],
+    ["Dimension Matrix Creator (Months)", '[data-dashboard-studio="monthlyMatrix"] [data-studio-added] > .studio-added-dashboard'],
+    ["Performance & Coaching Creator", '[data-dashboard-studio="performanceCoaching"] [data-studio-added] > .studio-added-dashboard'],
+    ["Drivers & Sentiment Creator", '[data-dashboard-studio="driversSentiment"] [data-studio-added] > .studio-added-dashboard'],
+    ["Custom KPI Canvas", '[data-dashboard-studio="kpiCanvas"] [data-studio-added] .studio-kpi-tile'],
+  ];
+  let customCardNumber = 0;
+  customSources.forEach(([label, selector]) => document.querySelectorAll(selector).forEach((card) => {
+    customCardNumber += 1;
+    inspectRoot(card, `Custom Dashboard ${String(customCardNumber).padStart(2, "0")} — ${label}`);
+  }));
+  return warnings;
+}
+
+function interactiveCustomDashboardCollection() {
+  const sources = [
+    { title: "Weekly Trend Creator", container: "#weeklyTrendDashboard", items: ":scope > .weekly-trend-card" },
+    { title: "Dimension Matrix Creator (Weeks)", container: "#weeklyTrend2Dashboard", items: ":scope > .weekly-trend-card" },
+    { title: "Monthly Trend Creator", container: '[data-dashboard-studio="monthlyTrend"] [data-studio-added]', items: ":scope > .studio-added-dashboard" },
+    { title: "Dimension Matrix Creator (Months)", container: '[data-dashboard-studio="monthlyMatrix"] [data-studio-added]', items: ":scope > .studio-added-dashboard" },
+    { title: "Performance & Coaching Creator", container: '[data-dashboard-studio="performanceCoaching"] [data-studio-added]', items: ":scope > .studio-added-dashboard" },
+    { title: "Drivers & Sentiment Creator", container: '[data-dashboard-studio="driversSentiment"] [data-studio-added]', items: ":scope > .studio-added-dashboard" },
+    { title: "Custom KPI Canvas", container: '[data-dashboard-studio="kpiCanvas"] [data-studio-added]', items: ".studio-kpi-tile" },
+  ];
+  let sequence = 0;
+  const groups = sources.map((source) => {
+    const container = document.querySelector(source.container);
+    const nodes = container ? [...container.querySelectorAll(source.items)] : [];
+    const items = nodes.map((node, index) => {
+      const clone = node.cloneNode(true);
+      clone.querySelectorAll("button, input, select, textarea, .studio-graph-hint").forEach((control) => control.remove());
+      clone.querySelectorAll(".studio-chart-source[hidden]").forEach((chart) => chart.removeAttribute("hidden"));
+      clone.querySelectorAll("[id]").forEach((element) => element.removeAttribute("id"));
+      clone.classList.add("interactive-custom-dashboard-card");
+      const title = node.querySelector("h3")?.textContent?.trim() || `${source.title} ${index + 1}`;
+      sequence += 1;
+      return { anchor: `interactive-custom-dashboard-${sequence}`, title, markup: clone.outerHTML };
+    });
+    return { title: source.title, items };
+  }).filter((group) => group.items.length);
+  const count = groups.reduce((total, group) => total + group.items.length, 0);
+  const menuHtml = groups.length
+    ? groups.map((group) => `<div class="interactive-dropdown-section"><strong>${escapeHtml(group.title)}</strong>${group.items.map((item) => `<a href="#${item.anchor}">${escapeHtml(item.title)}</a>`).join("")}</div>`).join("")
+    : '<div class="interactive-dropdown-section"><strong>Dashboard Maker</strong><span class="interactive-dropdown-empty">No custom dashboards were added before this report was created.</span></div>';
+  const sectionsHtml = groups.length
+    ? groups.map((group) => `<section class="interactive-section interactive-custom-dashboard-group"><div class="interactive-section-toolbar"><a class="interactive-section-top-link" href="#interactive-home">Move to top</a></div><p class="interactive-eyebrow">Custom Dashboards</p><h2>${escapeHtml(group.title)}</h2><div class="interactive-custom-dashboard-grid">${group.items.map((item) => `<div id="${item.anchor}" class="interactive-custom-dashboard-item">${item.markup}</div>`).join("")}</div></section>`).join("")
+    : "";
+  return { count, firstAnchor: groups[0]?.items[0]?.anchor || "interactive-custom-dashboards", menuHtml, sectionsHtml };
+}
+
+function boardRoomPdfCustomDashboardData() {
+  const sources = [
+    ["Weekly Trend Creator", "#weeklyTrendDashboard > .weekly-trend-card"],
+    ["Dimension Matrix Creator (Weeks)", "#weeklyTrend2Dashboard > .weekly-trend-card"],
+    ["Monthly Trend Creator", '[data-dashboard-studio="monthlyTrend"] [data-studio-added] > .studio-added-dashboard'],
+    ["Dimension Matrix Creator (Months)", '[data-dashboard-studio="monthlyMatrix"] [data-studio-added] > .studio-added-dashboard'],
+    ["Performance & Coaching Creator", '[data-dashboard-studio="performanceCoaching"] [data-studio-added] > .studio-added-dashboard'],
+    ["Drivers & Sentiment Creator", '[data-dashboard-studio="driversSentiment"] [data-studio-added] > .studio-added-dashboard'],
+    ["Custom KPI Canvas", '[data-dashboard-studio="kpiCanvas"] [data-studio-added] .studio-kpi-tile'],
+  ];
+  const dashboards = [];
+  sources.forEach(([creator, selector]) => document.querySelectorAll(selector).forEach((node, index) => {
+    const table = node.querySelector("table");
+    const matrix = table ? [...table.querySelectorAll("tr")].slice(0, 17).map((row) => [...row.querySelectorAll("th, td")].slice(0, 8).map((cell) => cell.textContent.trim())) : [];
+    const width = Math.max(0, ...matrix.map((row) => row.length));
+    const headers = matrix[0]?.length ? matrix[0] : Array.from({ length: width }, (_, columnIndex) => `Column ${columnIndex + 1}`);
+    const rows = matrix.slice(1).map((row) => Object.fromEntries(headers.map((header, columnIndex) => [header || `Column ${columnIndex + 1}`, row[columnIndex] || ""])));
+    dashboards.push({
+      creator,
+      title: node.querySelector("h3")?.textContent?.trim() || `${creator} ${index + 1}`,
+      rows,
+      text: node.innerText.replace(/\s+/g, " ").trim().slice(0, 1200),
+    });
+  }));
+  return dashboards;
+}
+
+function createInteractiveHtmlReport(options = {}) {
   const tabs = selectedBoardPdfTabs();
-  if (!tabs.length) {
-    alert("Select at least one section for the Interactive HTML.");
+  const customDashboards = interactiveCustomDashboardCollection();
+  if (!tabs.length && !customDashboards.count) {
+    alert("Select at least one report section or add a custom dashboard before creating the Interactive HTML.");
     return;
   }
   const analysis = state.analysis || {};
   const rows = analysis.feedbackRows || analysis.preview || [];
   if (!rows.length && !analysis.summary) {
     alert("Run analysis first. The Interactive HTML will be available as soon as CSAT analysis is complete.");
+    return;
+  }
+  const preflightWarnings = options.skipEmptyContentCheck ? [] : interactiveHtmlPreflightWarnings(tabs);
+  if (preflightWarnings.length) {
+    showInteractiveHtmlPreflightDialog(preflightWarnings, () => createInteractiveHtmlReport({ skipEmptyContentCheck: true }));
     return;
   }
   const reportWindow = window.open("", "_blank");
@@ -11859,8 +12554,18 @@ function createInteractiveHtmlReport() {
     title: $("boardPdfHeaderTitle")?.value?.trim() || "CSAT Leadership Report",
     accountName: $("boardPdfAccountName")?.value?.trim() || "",
     preparedFor: $("boardPdfPreparedFor")?.value?.trim() || "Leadership Review",
+    footerNote: $("boardPdfFooterNote")?.value?.trim() || "Confidential - Krestrel Analysis Suite Review",
     homeImage: state.boardPdfHomeImage || "",
+    separatorImages: Array.isArray(state.boardPdfSeparatorImages) ? state.boardPdfSeparatorImages : [],
+    appUrl: `${window.location.origin}${window.location.pathname}`,
   };
+  const boardRoomPdfPayloadJson = JSON.stringify({
+    metric: "CSAT",
+    tabs,
+    analysis: enrichedAnalysisForExport(),
+    options: htmlOptions,
+    customDashboards: boardRoomPdfCustomDashboardData(),
+  }).replace(/</g, "\\u003c");
   const snapshot = analysisCompleteSummaryHtml(analysisCompleteSummary(analysis));
   reportWindow.document.open();
   reportWindow.document.write(`<!doctype html>
@@ -11882,21 +12587,30 @@ function createInteractiveHtmlReport() {
           .interactive-brand-mark span { width: 38px; height: 38px; border-radius: 12px; display: inline-grid; place-items: center; background: linear-gradient(135deg,#1fd5cf,#008b95); color: #ffffff; font-weight: 900; box-shadow: 0 12px 28px rgba(0,0,0,.18); }
           .interactive-brand-mark strong { font-size: 22px; font-weight: 800; line-height: 1; }
           .interactive-account-name { margin-left: 18px; padding: 8px 14px; border-left: 1px solid rgba(47,228,214,.45); color: #dff7f5; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; font-weight: 400; }
-          .interactive-nav-menu { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+          .interactive-nav-menu { display: flex; align-items: center; gap: 10px; margin-left: auto; }
           .interactive-menu { position: relative; padding-bottom: 12px; margin-bottom: -12px; }
           .interactive-menu > a { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 8px 14px; border: 1px solid rgba(47,228,214,.42); border-radius: 999px; color: #f5fbfc; text-decoration: none; font-size: 13px; font-weight: 400; background: rgba(255,255,255,.05); }
           .interactive-menu > a::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid #2fe4d6; border-bottom: 1.5px solid #2fe4d6; transform: rotate(45deg) translateY(-2px); }
           .interactive-menu:hover > a, .interactive-menu:focus-within > a { color: #ffd22e; border-color: rgba(255,210,46,.8); background: rgba(255,210,46,.08); }
-          .interactive-dropdown { position: absolute; top: calc(100% - 2px); right: 0; z-index: 20; width: min(720px, 74vw); max-height: 58vh; overflow: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; padding: 18px 20px; border: 1px solid rgba(47,228,214,.36); border-radius: 22px; background: rgba(247,252,252,.98); box-shadow: 0 24px 60px rgba(0,0,0,.28); opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity .16s ease, transform .16s ease; scrollbar-width: thin; scrollbar-color: rgba(0,156,156,.76) rgba(0,72,84,.08); }
+          .interactive-dropdown { position: fixed; top: 72px; left: auto; right: 28px; z-index: 20; width: min(760px, calc(100vw - 48px)); max-height: 54vh; overflow: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 13px; border: 1px solid rgba(47,228,214,.42); border-radius: 18px; background: rgba(248,252,252,.99); box-shadow: 0 22px 54px rgba(0,0,0,.26); opacity: 0; transform: translateY(7px) scale(.985); transform-origin: top right; pointer-events: none; transition: opacity .16s ease, transform .16s ease; scrollbar-width: thin; scrollbar-color: rgba(0,156,156,.76) rgba(0,72,84,.08); }
           .interactive-dropdown::-webkit-scrollbar { width: 8px; height: 8px; }
           .interactive-dropdown::-webkit-scrollbar-track { background: rgba(0,72,84,.07); border-radius: 999px; margin: 14px 0; }
           .interactive-dropdown::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #2fe4d6, #008c8d); border: 2px solid rgba(247,252,252,.98); border-radius: 999px; }
           .interactive-dropdown::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #ffd22e, #00a7a7); }
-          .interactive-menu:hover .interactive-dropdown, .interactive-menu:focus-within .interactive-dropdown { opacity: 1; transform: translateY(0); pointer-events: auto; }
-          .interactive-dropdown-section strong { display: block; margin: 0 0 8px; color: #008c8d; text-transform: uppercase; letter-spacing: .14em; font-size: 10px; font-weight: 600; }
-          .interactive-dropdown-section a { display: block; padding: 7px 0; border-top: 1px solid rgba(0,72,84,.10); color: #0c2340; text-decoration: none; font-size: 13px; line-height: 1.25; font-weight: 400; }
+          .interactive-menu:hover .interactive-dropdown, .interactive-menu:focus-within .interactive-dropdown, .interactive-menu.is-open .interactive-dropdown { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+          .interactive-dropdown-section { min-width: 0; padding: 10px 11px; border: 1px solid rgba(0,126,132,.12); border-radius: 12px; background: linear-gradient(180deg,#ffffff,#f5fafb); }
+          .interactive-dropdown-section strong { display: block; margin: 0 0 6px; color: #008c8d; text-transform: uppercase; letter-spacing: .12em; font-size: 9px; font-weight: 700; }
+          .interactive-dropdown-section a { display: block; overflow: hidden; padding: 6px 2px; border-top: 1px solid rgba(0,72,84,.09); color: #0c2340; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1.2; font-weight: 400; }
           .interactive-dropdown-section a:first-of-type { border-top: 0; }
           .interactive-dropdown-section a:hover { color: #008c8d; }
+          .interactive-custom-dashboard-menu .interactive-dropdown { width: min(520px, calc(100vw - 48px)); grid-template-columns: repeat(2, minmax(0,1fr)); }
+          .interactive-dropdown-empty { display: block; padding: 8px 0; color: #60798b; font-size: 12px; line-height: 1.45; }
+          .interactive-custom-dashboard-group { margin: 22px auto; max-width: 1320px; }
+          .interactive-custom-dashboard-group > h2 { margin: 4px 0 18px; color: #003d5b; font-size: 30px; }
+          .interactive-custom-dashboard-grid { display: grid; gap: 20px; }
+          .interactive-custom-dashboard-item { scroll-margin-top: 150px; padding: 18px; border: 1px solid #c8dce5; border-radius: 20px; background: #ffffff; color: #0c2340; box-shadow: 0 16px 38px rgba(0,36,52,.10); }
+          .interactive-custom-dashboard-item .studio-chart-source { overflow-x: auto; }
+          .interactive-custom-dashboard-item .dashboard-studio-chart { display: block; width: 100%; min-width: 720px; height: auto; }
           .interactive-download-action { border: 1px solid #ffd22e; color: #ffd22e !important; font-weight: 500; text-decoration: none; padding: 10px 14px; border-radius: 999px; white-space: nowrap; }
           .interactive-download-action.secondary { border-color: rgba(47,228,214,.58); color: #dff7f5 !important; }
           .interactive-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); gap: 54px; align-items: start; min-height: 650px; padding: 150px 7vw 56px; overflow: hidden; }
@@ -12065,12 +12779,16 @@ function createInteractiveHtmlReport() {
           @media (max-width: 980px) {
             .interactive-site-nav { padding: 12px 18px; flex-wrap: wrap; min-height: 96px; }
             .interactive-nav-menu { width: 100%; overflow-x: auto; }
+            .interactive-dropdown { top: 112px; right: 16px; width: min(640px, calc(100vw - 32px)); grid-template-columns: repeat(2, minmax(0,1fr)); max-height: 58vh; }
             .interactive-hero { grid-template-columns: 1fr; gap: 24px; padding: 165px 22px 34px; }
             .interactive-news-card { max-height: none; }
             .interactive-hero-visual { inset: auto 0 0 12vw; height: 230px; opacity: .28; }
             .interactive-section-intro { grid-template-columns: 1fr; padding: 30px; }
             .interactive-intro-image, .interactive-intro-image img { min-height: 220px; }
             .interactive-kpi-strip, .interactive-index-grid, .interactive-signals-grid, .interactive-report-section .metric-grid, .interactive-report-section .dashboard-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+          }
+          @media (max-width: 620px) {
+            .interactive-dropdown { top: 112px; right: 10px; width: calc(100vw - 20px); grid-template-columns: 1fr; max-height: 64vh; padding: 10px; }
           }
           @media print {
             @page { size: A4 landscape; margin: 9mm; }
@@ -12081,6 +12799,10 @@ function createInteractiveHtmlReport() {
             }
             body,
             .interactive-shell {
+              background: #ffffff !important;
+            }
+            .interactive-index,
+            .interactive-executive-read {
               background: #003b46 !important;
             }
             .interactive-hero {
@@ -12114,6 +12836,22 @@ function createInteractiveHtmlReport() {
               min-height: 182mm !important;
               padding: 24px !important;
               overflow: hidden !important;
+            }
+            .interactive-index {
+              min-height: auto !important;
+              overflow: visible !important;
+              padding: 18px !important;
+            }
+            .interactive-index-grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+              gap: 8px !important;
+              align-items: start !important;
+            }
+            .interactive-index-grid > a {
+              min-height: 30mm !important;
+              break-inside: avoid-page !important;
+              page-break-inside: avoid !important;
+              box-shadow: none !important;
             }
             .interactive-section {
               padding: 16px !important;
@@ -12158,10 +12896,32 @@ function createInteractiveHtmlReport() {
             .interactive-report-section .card,
             .interactive-report-section .master-lens-question,
             .interactive-report-section .master-lens-export-visuals > div {
-              break-inside: avoid !important;
+              break-inside: avoid-page !important;
               page-break-inside: avoid !important;
               box-shadow: none !important;
               overflow: hidden !important;
+            }
+            .interactive-print-keep,
+            .interactive-custom-dashboard-item,
+            .interactive-kpi-strip > div,
+            .interactive-signals-grid > div,
+            .interactive-report-section .metric-grid > *,
+            .interactive-report-section .kpi-grid > *,
+            .interactive-report-section .dashboard-grid > *,
+            .interactive-report-section .chart-grid > *,
+            .interactive-report-section .analysis-chart-grid > *,
+            .interactive-report-section .stats-chart-grid > *,
+            .interactive-report-section .quartile-kpi-grid > *,
+            .interactive-report-section .quartile-professional-grid > * {
+              break-inside: avoid-page !important;
+              page-break-inside: avoid !important;
+            }
+            .interactive-report-section h1,
+            .interactive-report-section h2,
+            .interactive-report-section h3,
+            .interactive-report-section h4 {
+              break-after: avoid-page !important;
+              page-break-after: avoid !important;
             }
             .interactive-report-section .chart-card,
             .interactive-report-section .panel {
@@ -12196,6 +12956,10 @@ function createInteractiveHtmlReport() {
               overflow: hidden !important;
               text-overflow: ellipsis !important;
             }
+            .interactive-report-section tr {
+              break-inside: avoid-page !important;
+              page-break-inside: avoid !important;
+            }
             body.interactive-pdf-printing .interactive-report-section tbody tr:nth-child(n+13),
             body.interactive-pdf-printing .master-lens-export-table tbody tr:nth-child(n+13) {
               display: none !important;
@@ -12229,7 +12993,7 @@ function createInteractiveHtmlReport() {
             ${htmlOptions.accountName ? `<span class="interactive-account-name">${escapeHtml(htmlOptions.accountName)}</span>` : ""}
             <div class="interactive-nav-menu">
               <div class="interactive-menu interactive-report-menu" aria-label="Report menu">
-                <a href="#interactive-index">Report Menu</a>
+                <a href="#interactive-index" onclick="toggleInteractiveMenu(event, this); return false;">Report Menu</a>
                 <div class="interactive-dropdown">
                   <div class="interactive-dropdown-section">
                     <strong>Start</strong>
@@ -12241,7 +13005,11 @@ function createInteractiveHtmlReport() {
                   ${reportMenuGroupsHtml}
                 </div>
               </div>
-              <a class="interactive-download-action secondary" href="#" onclick="prepareInteractivePdfPrint(); return false;">Download PDF</a>
+              ${customDashboards.count ? `<div class="interactive-menu interactive-custom-dashboard-menu" aria-label="Custom dashboards menu">
+                <a href="#${customDashboards.firstAnchor}" onclick="toggleInteractiveMenu(event, this); return false;">Custom Dashboards</a>
+                <div class="interactive-dropdown">${customDashboards.menuHtml}</div>
+              </div>` : ""}
+              <a class="interactive-download-action secondary" href="#" onclick="downloadBoardRoomPdf(); return false;">Download PDF</a>
               <a class="interactive-download-action" href="#" onclick="downloadInteractiveHtml(); return false;">Download HTML</a>
             </div>
           </nav>
@@ -12258,8 +13026,10 @@ function createInteractiveHtmlReport() {
           </section>
           ${interactiveExecutiveSignalsSectionHtml()}
           ${sections}
+          ${customDashboards.sectionsHtml}
         </main>
         <script>
+          const boardRoomPdfPayload = ${boardRoomPdfPayloadJson};
           async function imageToDataUrl(src) {
             if (!src || src.startsWith("data:") || src.startsWith("blob:")) return src;
             const response = await fetch(new URL(src, document.baseURI).href);
@@ -12305,13 +13075,65 @@ function createInteractiveHtmlReport() {
             link.click();
             setTimeout(() => { URL.revokeObjectURL(link.href); link.remove(); }, 800);
           }
+          async function downloadBoardRoomPdf() {
+            const action = document.querySelector('.interactive-download-action.secondary');
+            const originalText = action?.textContent || 'Download PDF';
+            if (action) { action.textContent = 'Creating PDF...'; action.style.pointerEvents = 'none'; }
+            try {
+              const response = await fetch('/api/export/boardroom-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(boardRoomPdfPayload),
+              });
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail.error || 'The board-room PDF could not be created.');
+              }
+              const blob = await response.blob();
+              const link = document.createElement('a');
+              link.href = URL.createObjectURL(blob);
+              link.download = 'CSAT_Board_Room_Leadership_Report.pdf';
+              document.body.appendChild(link);
+              link.click();
+              setTimeout(() => { URL.revokeObjectURL(link.href); link.remove(); }, 1200);
+            } catch (error) {
+              alert(error.message || 'The board-room PDF could not be created.');
+            } finally {
+              if (action) { action.textContent = originalText; action.style.pointerEvents = ''; }
+            }
+          }
           function cleanupInteractivePdfPrint() {
             document.body.classList.remove("interactive-pdf-printing");
             document.querySelectorAll(".interactive-print-table-note").forEach((item) => item.remove());
+            document.querySelectorAll(".interactive-print-keep").forEach((item) => item.classList.remove("interactive-print-keep"));
           }
+          function toggleInteractiveMenu(event, trigger) {
+            event.preventDefault();
+            event.stopPropagation();
+            const menu = trigger.closest(".interactive-menu");
+            if (!menu) return;
+            document.querySelectorAll(".interactive-menu.is-open").forEach((item) => {
+              if (item !== menu) item.classList.remove("is-open");
+            });
+            menu.classList.toggle("is-open");
+          }
+          document.addEventListener("click", (event) => {
+            if (!event.target.closest(".interactive-menu")) {
+              document.querySelectorAll(".interactive-menu.is-open").forEach((item) => item.classList.remove("is-open"));
+            }
+          });
+          document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+              document.querySelectorAll(".interactive-menu.is-open").forEach((item) => item.classList.remove("is-open"));
+            }
+          });
+          document.querySelectorAll(".interactive-dropdown a").forEach((link) => {
+            link.addEventListener("click", () => link.closest(".interactive-menu")?.classList.remove("is-open"));
+          });
           function prepareInteractivePdfPrint() {
             cleanupInteractivePdfPrint();
             document.body.classList.add("interactive-pdf-printing");
+            document.querySelectorAll(".interactive-index-grid > a, .interactive-custom-dashboard-item, .interactive-report-section .metric-card, .interactive-report-section .stat-card, .interactive-report-section .quartile-kpi, .interactive-report-section .chart-card, .interactive-report-section .panel, .interactive-report-section .card, .interactive-report-section .master-lens-question").forEach((item) => item.classList.add("interactive-print-keep"));
             document.querySelectorAll(".interactive-table-wrap, .master-lens-table-wrap, .table-wrap").forEach((wrap) => {
               const table = wrap.querySelector("table");
               if (!table) return;
@@ -21147,6 +21969,7 @@ function renderAnalysis(analysis, options = {}) {
   if (typeof renderDataViews === "function") renderDataViews(analysis);
   renderPerformanceLens(analysis);
   renderMovingAveragesView(analysis);
+  if (typeof window.renderEvidenceRelationshipIntelligence === "function") window.renderEvidenceRelationshipIntelligence();
   renderAgentDashboard();
   renderManagerDashboard();
   renderQuartileDashboard();
@@ -21156,6 +21979,10 @@ function renderAnalysis(analysis, options = {}) {
   renderCustomStatsShell();
   refreshSummaryBuilder();
   renderSummaryBuilderDashboard();
+  refreshWeeklyTrendBuilder();
+  renderWeeklyTrendDashboard();
+  refreshWeeklyTrend2Builder();
+  renderWeeklyTrend2Dashboard();
   renderColumnExplorer();
   renderAnalysisRawDataPage();
   if (typeof renderExecutiveLens === "function") renderExecutiveLens(analysis);
@@ -21430,6 +22257,7 @@ async function analyze(options = {}) {
     };
     writeSetupCache({
       mapping: payload.mapping,
+      dynamicDimensions: state.dynamicDimensions || [],
       businessRules: {
         target: payload.target,
         scoreScale: payload.csatBands.scale,
@@ -21609,6 +22437,12 @@ async function loadStatus() {
   const hasSavedBase = serverBaseColumns.length > 0;
   if (!hasSavedBase) clearSetupCache();
   const savedAnalysis = payload.analysis || {};
+  const savedDynamicDimensions = (savedAnalysis.dynamicDimensions || []).map((item) => typeof item === "string" ? item : item?.name).filter(Boolean);
+  state.dynamicDimensions = Array.from(new Set([
+    ...(payload.dynamic_dimensions || payload.dynamicDimensions || []),
+    ...savedDynamicDimensions,
+    ...(setupCache.dynamicDimensions || []),
+  ].map((item) => String(item || "").trim()).filter(Boolean)));
   state.sparrowTraining = payload.sparrow_training || {};
   const savedBaseName = String(payload.files?.base || "");
   const savedLookupName = String(payload.files?.lookup || "");
@@ -21794,6 +22628,7 @@ $("addDynamicDimension")?.addEventListener("click", () => {
   const value = $("dynamicDimensionSelect")?.value || "";
   if (value && !state.dynamicDimensions.includes(value)) {
     state.dynamicDimensions.push(value);
+    writeSetupCache({ dynamicDimensions: state.dynamicDimensions });
     refreshDynamicDimensionPicker();
   }
 });
@@ -21857,7 +22692,7 @@ function movingAveragesViewContext() {
     : parseMetricNumber($("perfWeekStartDay")?.value || 1);
   const end = Number.isFinite(parseMetricNumber($("movingWeekEndDay")?.value))
     ? parseMetricNumber($("movingWeekEndDay")?.value)
-    : parseMetricNumber($("perfWeekEndDay")?.value || 6);
+    : parseMetricNumber($("perfWeekEndDay")?.value || 0);
   return {
     currentStart: $("perfCurrentStart")?.value || "",
     currentEnd: $("perfCurrentEnd")?.value || "",
@@ -21865,7 +22700,7 @@ function movingAveragesViewContext() {
     previousEnd: $("perfPreviousEnd")?.value || "",
     targetScore: Number.isFinite(targetScore) ? targetScore : 85,
     weekStartDay: Number.isFinite(start) ? start : 1,
-    weekEndDay: Number.isFinite(end) ? end : 6,
+    weekEndDay: Number.isFinite(end) ? end : 0,
   };
 }
 
@@ -22221,6 +23056,19 @@ document.querySelectorAll("[data-custom-stats-tab]").forEach((button) => {
     renderCustomStatsShell();
   });
 });
+$("weeklyTrendDimension")?.addEventListener("change", () => { refreshWeeklyTrendDimensionValues(); previewWeeklyTrend(); });
+["weeklyTrendWeeks", "weeklyTrendMetricSet", "weeklyTrendDimensionValue", "weeklyTrendOrder"].forEach((id) => $(id)?.addEventListener("change", previewWeeklyTrend));
+$("weeklyTrendTitle")?.addEventListener("input", () => { $("weeklyTrendTitle").dataset.edited = "true"; });
+$("weeklyTrendPreviewButton")?.addEventListener("click", previewWeeklyTrend);
+$("weeklyTrendAddButton")?.addEventListener("click", addWeeklyTrendDashboard);
+$("weeklyTrendClear")?.addEventListener("click", () => { state.weeklyTrendDashboards.definitions = []; renderWeeklyTrendDashboard(); });
+$("weeklyTrend2Title")?.addEventListener("input", () => { $("weeklyTrend2Title").dataset.edited = "true"; });
+["weeklyTrend2Week", "weeklyTrend2Dimension", "weeklyTrend2MaxColumns", "weeklyTrend2Sort", "weeklyTrend2Aggregation"].forEach((id) => $(id)?.addEventListener("change", previewWeeklyTrend2));
+$("weeklyTrend2ValueField")?.addEventListener("change", () => { if ($("weeklyTrend2Aggregation")) $("weeklyTrend2Aggregation").disabled = !$("weeklyTrend2ValueField").value; previewWeeklyTrend2(); });
+$("weeklyTrend2MetricOptions")?.addEventListener("change", previewWeeklyTrend2);
+$("weeklyTrend2PreviewButton")?.addEventListener("click", previewWeeklyTrend2);
+$("weeklyTrend2AddButton")?.addEventListener("click", addWeeklyTrend2Dashboard);
+$("weeklyTrend2Clear")?.addEventListener("click", () => { state.weeklyTrendDashboard2.definitions = []; renderWeeklyTrend2Dashboard(); });
 ["summaryBuilderSource", "summaryBuilderLayout", "summaryBuilderGroup", "summaryBuilderColumn", "summaryBuilderMeasure", "summaryBuilderValueField", "summaryBuilderSortDirection"].forEach((id) => {
   $(id)?.addEventListener("change", () => {
     if (id === "summaryBuilderSource") refreshSummaryBuilder();
@@ -22251,6 +23099,23 @@ $("summaryBuilderClear")?.addEventListener("click", () => {
   renderSummaryBuilderDashboard();
 });
 document.addEventListener("click", (event) => {
+  const weeklyChartButton = event.target.closest("[data-weekly-chart-card]");
+  if (weeklyChartButton) {
+    openWeeklyTrendChart(weeklyChartButton.dataset.weeklyChartCard, Number(weeklyChartButton.dataset.weeklyChartMetric));
+    return;
+  }
+  const weekly2Export = event.target.closest("[data-weekly2-export]");
+  if (weekly2Export) { exportWeeklyTrend2Csv(weekly2Export.dataset.weekly2Export); return; }
+  const weekly2Remove = event.target.closest("[data-weekly2-remove]");
+  if (weekly2Remove) { state.weeklyTrendDashboard2.definitions = (state.weeklyTrendDashboard2.definitions || []).filter((item) => item.id !== weekly2Remove.dataset.weekly2Remove); renderWeeklyTrend2Dashboard(); return; }
+  const weeklyExport = event.target.closest("[data-weekly-export]");
+  if (weeklyExport) { exportWeeklyTrendCsv(weeklyExport.dataset.weeklyExport); return; }
+  const weeklyRemove = event.target.closest("[data-weekly-remove]");
+  if (weeklyRemove) {
+    state.weeklyTrendDashboards.definitions = (state.weeklyTrendDashboards.definitions || []).filter((item) => item.id !== weeklyRemove.dataset.weeklyRemove);
+    renderWeeklyTrendDashboard();
+    return;
+  }
   if (event.target.closest("#guidedStoryContinue")) {
     continueGuidedStoryInvestigation();
     return;
@@ -22273,6 +23138,9 @@ document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-summary-remove]");
   if (!button) return;
   removeSummaryBuilderDefinition(button.dataset.summaryRemove);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && $("weeklyTrendChartOverlay")?.classList.contains("open")) closeWeeklyTrendChart();
 });
 document.addEventListener("change", (event) => {
   const select = event.target.closest("[data-summary-filter]");
@@ -22364,6 +23232,7 @@ if ((document.querySelector(".view.active")?.id || "") === "setuphome") {
 renderPerformanceLens(state.analysis || {});
 setMasterLensIntroVisible(state.masterLensIntroVisible);
 renderMovingAveragesView(state.analysis || {});
+if (typeof window.renderEvidenceRelationshipIntelligence === "function") window.renderEvidenceRelationshipIntelligence();
 renderExecutiveLens(state.analysis || {});
 renderQuartileDashboard();
 renderRootCauseClouds();

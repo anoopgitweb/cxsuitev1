@@ -1692,6 +1692,314 @@ def _read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     return json.loads(raw.decode("utf-8"))
 
 
+def _weekly_trend_dashboard(payload: dict[str, Any]) -> dict[str, Any]:
+    """Aggregate the completed analysis into a configurable weekly scorecard."""
+    with STATE_LOCK:
+        source = STATE.analyzed_df.copy()
+        calendar = dict(STATE.calendar_settings)
+    if source.empty:
+        return {"ok": False, "error": "Run an analysis before building a weekly trend dashboard."}
+
+    work = _apply_date_filter(source)
+    if work.empty:
+        return {"ok": False, "error": "No analyzed rows are available for the current date filter."}
+    if "Week" not in work.columns:
+        if "Feedback Date" not in work.columns:
+            return {"ok": False, "error": "Weekly trends require a mapped feedback date."}
+        work["Week"] = week_period_start(work["Feedback Date"], _calendar_settings({"calendar": calendar})["weekStart"])
+
+    mode = str(payload.get("mode") or "nps").strip().lower()
+    mode = "csat" if mode == "csat" else "nps"
+    dimension = str(payload.get("dimension") or "__overall__").strip()
+    dimension_value = str(payload.get("dimensionValue") or "__all__").strip()
+    if dimension != "__overall__":
+        if dimension not in work.columns:
+            return {"ok": False, "error": f"Dimension '{dimension}' is not available in this analysis."}
+        if dimension_value != "__all__":
+            work = work[work[dimension].fillna("").astype(str).str.strip().eq(dimension_value)].copy()
+    if work.empty:
+        return {"ok": False, "error": "No analyzed rows match the selected dimension value."}
+
+    work["__week"] = pd.to_datetime(work["Week"], errors="coerce").dt.normalize()
+    work = work.dropna(subset=["__week"])
+    if work.empty:
+        return {"ok": False, "error": "No valid week values were found in the analyzed data."}
+    all_weeks = sorted(work["__week"].drop_duplicates().tolist())
+    try:
+        requested_weeks = max(0, int(payload.get("weeks") or 0))
+    except (TypeError, ValueError):
+        requested_weeks = 12
+    selected_weeks = all_weeks[-requested_weeks:] if requested_weeks else all_weeks
+    work = work[work["__week"].isin(selected_weeks)]
+
+    metric_set = str(payload.get("metricSet") or "full").strip().lower()
+    sentiment_col = next((name for name in ["Sentiment", "Sentiment Label", "Overall Sentiment"] if name in work.columns), "")
+    type_candidates = ["CSAT Type", "CSAT Segment", "Satisfaction Segment"] if mode == "csat" else ["NPS Type", "NPS Segment"]
+    type_col = next((name for name in type_candidates if name in work.columns), "")
+
+    metrics: list[dict[str, Any]] = []
+    volume_values: list[int] = []
+    score_values: list[float | None] = []
+    if metric_set == "sentiment":
+        definitions = [("Positive", "positive"), ("Neutral", "neutral"), ("Negative", "negative")]
+        count_rows = {label: [] for label, _ in definitions}
+        pct_rows = {label: [] for label, _ in definitions}
+        for week in selected_weeks:
+            frame = work[work["__week"].eq(week)]
+            total = int(len(frame)); volume_values.append(total)
+            values = frame[sentiment_col].fillna("").astype(str).str.strip().str.lower() if sentiment_col else pd.Series([], dtype=str)
+            for label, key in definitions:
+                count = int(values.eq(key).sum())
+                count_rows[label].append(count)
+                pct_rows[label].append(round((count / total * 100.0), 2) if total else 0.0)
+        metrics.append({"label": "Survey Volume", "format": "integer", "values": volume_values})
+        for label, _ in definitions:
+            metrics.append({"label": label, "format": "integer", "values": count_rows[label]})
+        for label, _ in definitions:
+            metrics.append({"label": f"{label} %", "format": "percent", "values": pct_rows[label]})
+        score_values = pct_rows["Positive"]
+        score_name = "Positive %"
+    else:
+        if mode == "csat":
+            definitions = [("Satisfied", {"satisfied", "promoter"}), ("Neutral", {"neutral", "passive"}), ("Dissatisfied", {"dissatisfied", "detractor"})]
+            score_name = "CSAT"
+        else:
+            definitions = [("Promoters", {"promoter"}), ("Passives", {"passive"}), ("Detractors", {"detractor"})]
+            score_name = "NPS"
+        count_rows = {label: [] for label, _ in definitions}
+        pct_rows = {label: [] for label, _ in definitions}
+        for week in selected_weeks:
+            frame = work[work["__week"].eq(week)]
+            total = int(len(frame)); volume_values.append(total)
+            values = frame[type_col].fillna("").astype(str).str.strip().str.lower() if type_col else pd.Series([], dtype=str)
+            for label, accepted in definitions:
+                count = int(values.isin(accepted).sum())
+                count_rows[label].append(count)
+                pct_rows[label].append(round((count / total * 100.0), 2) if total else 0.0)
+        if mode == "csat":
+            score_values = list(pct_rows["Satisfied"])
+        else:
+            score_values = [round(p - d, 2) for p, d in zip(pct_rows["Promoters"], pct_rows["Detractors"])]
+        if metric_set in {"full", "score"}:
+            metrics.append({"label": "Survey Volume", "format": "integer", "values": volume_values})
+        if metric_set in {"full", "segments"}:
+            for label, _ in definitions:
+                metrics.append({"label": label, "format": "integer", "values": count_rows[label]})
+            for label, _ in definitions:
+                metrics.append({"label": f"{label} %", "format": "percent", "values": pct_rows[label]})
+        if metric_set in {"full", "score"}:
+            metrics.append({"label": score_name, "format": "score", "values": score_values})
+
+    comparison_count = 0
+    comparison_omitted = 0
+    if dimension != "__overall__" and dimension_value == "__all__":
+        clean_dimension = work[dimension].fillna("").astype(str).str.strip()
+        ranked_values = clean_dimension[clean_dimension.ne("")].value_counts()
+        comparison_count = min(20, int(len(ranked_values)))
+        comparison_omitted = max(0, int(len(ranked_values)) - comparison_count)
+        comparison_values = [str(value) for value in ranked_values.head(20).index.tolist()]
+        comparison_metrics: list[dict[str, Any]] = []
+        segment_definitions = (
+            [("Satisfied %", {"satisfied", "promoter"}), ("Neutral %", {"neutral", "passive"}), ("Dissatisfied %", {"dissatisfied", "detractor"})]
+            if mode == "csat"
+            else [("Promoters %", {"promoter"}), ("Passives %", {"passive"}), ("Detractors %", {"detractor"})]
+        )
+        for value in comparison_values:
+            value_frame = work[clean_dimension.eq(value)]
+            group_volume: list[int] = []
+            group_score: list[float] = []
+            group_segments = {label: [] for label, _ in segment_definitions}
+            group_sentiments = {label: [] for label in ["Positive %", "Neutral %", "Negative %"]}
+            for week in selected_weeks:
+                frame = value_frame[value_frame["__week"].eq(week)]
+                total = int(len(frame))
+                group_volume.append(total)
+                if metric_set == "sentiment":
+                    labels = frame[sentiment_col].fillna("").astype(str).str.strip().str.lower() if sentiment_col else pd.Series([], dtype=str)
+                    for label, key in [("Positive %", "positive"), ("Neutral %", "neutral"), ("Negative %", "negative")]:
+                        group_sentiments[label].append(round(float(labels.eq(key).sum()) / total * 100.0, 2) if total else 0.0)
+                else:
+                    labels = frame[type_col].fillna("").astype(str).str.strip().str.lower() if type_col else pd.Series([], dtype=str)
+                    for label, accepted in segment_definitions:
+                        group_segments[label].append(round(float(labels.isin(accepted).sum()) / total * 100.0, 2) if total else 0.0)
+                    if mode == "csat":
+                        group_score.append(group_segments["Satisfied %"][-1])
+                    else:
+                        group_score.append(round(group_segments["Promoters %"][-1] - group_segments["Detractors %"][-1], 2))
+            if metric_set == "sentiment":
+                for label in ["Positive %", "Neutral %", "Negative %"]:
+                    comparison_metrics.append({
+                        "label": f"{value} · {label}", "format": "percent-volume",
+                        "values": [{"value": metric_value, "volume": volume} for metric_value, volume in zip(group_sentiments[label], group_volume)],
+                        "groupStart": label == "Positive %",
+                    })
+            elif metric_set == "segments":
+                for label, _ in segment_definitions:
+                    comparison_metrics.append({
+                        "label": f"{value} · {label}", "format": "percent-volume",
+                        "values": [{"value": metric_value, "volume": volume} for metric_value, volume in zip(group_segments[label], group_volume)],
+                        "groupStart": label == segment_definitions[0][0],
+                    })
+            else:
+                comparison_metrics.append({
+                    "label": f"{value} · {score_name}", "format": "score-volume",
+                    "values": [{"value": score, "volume": volume} for score, volume in zip(group_score, group_volume)],
+                    "emphasis": True, "groupStart": True,
+                })
+        metrics = comparison_metrics
+
+    chronological_score = list(score_values)
+    chronological_volume = list(volume_values)
+    week_items = [{"key": week.strftime("%Y-%m-%d"), "label": f"WE {(week + pd.Timedelta(days=6)).strftime('%-d %b') if os.name != 'nt' else str((week + pd.Timedelta(days=6)).day) + ' ' + (week + pd.Timedelta(days=6)).strftime('%b')}"} for week in selected_weeks]
+    if str(payload.get("order") or "newest").lower() == "newest":
+        week_items.reverse()
+        for metric in metrics:
+            metric["values"] = list(reversed(metric["values"]))
+    latest = chronological_score[-1] if chronological_score else None
+    previous = chronological_score[-2] if len(chronological_score) > 1 else None
+    filter_label = "Overall"
+    if dimension != "__overall__":
+        filter_label = f"{dimension}: {dimension_value if dimension_value != '__all__' else f'Comparing {comparison_count} values'}"
+    return {
+        "ok": True, "mode": mode, "scoreName": score_name, "filterLabel": filter_label,
+        "weeks": week_items, "metrics": metrics, "rowsUsed": int(len(work)),
+        "dimensionComparison": dimension != "__overall__" and dimension_value == "__all__",
+        "comparisonCount": comparison_count, "comparisonOmitted": comparison_omitted,
+        "summary": {
+            "latestScore": latest, "previousScore": previous,
+            "movement": round(latest - previous, 2) if latest is not None and previous is not None else None,
+            "latestVolume": chronological_volume[-1] if chronological_volume else 0,
+            "averageVolume": round(sum(chronological_volume) / len(chronological_volume), 1) if chronological_volume else 0,
+        },
+    }
+
+
+def _weekly_trend_matrix(payload: dict[str, Any]) -> dict[str, Any]:
+    """Build a one-week matrix with dimension values across the columns."""
+    with STATE_LOCK:
+        source = STATE.analyzed_df.copy()
+        calendar = dict(STATE.calendar_settings)
+    if source.empty:
+        return {"ok": False, "error": "Run an analysis before building a weekly matrix dashboard."}
+    work = _apply_date_filter(source)
+    if "Week" not in work.columns:
+        if "Feedback Date" not in work.columns:
+            return {"ok": False, "error": "Weekly dashboards require a mapped feedback date."}
+        work["Week"] = week_period_start(work["Feedback Date"], _calendar_settings({"calendar": calendar})["weekStart"])
+    work["__week"] = pd.to_datetime(work["Week"], errors="coerce").dt.normalize()
+    work = work.dropna(subset=["__week"])
+    if work.empty:
+        return {"ok": False, "error": "No valid reporting weeks were found."}
+
+    all_weeks = sorted(work["__week"].drop_duplicates().tolist())
+    week_items = []
+    for week in reversed(all_weeks):
+        week_end = week + pd.Timedelta(days=6)
+        week_items.append({"key": week.strftime("%Y-%m-%d"), "label": f"WE {week_end.day} {week_end.strftime('%b')}"})
+    requested_week = pd.to_datetime(str(payload.get("week") or ""), errors="coerce")
+    selected_week = requested_week.normalize() if not pd.isna(requested_week) else all_weeks[-1]
+    if selected_week not in all_weeks:
+        selected_week = all_weeks[-1]
+    week_frame = work[work["__week"].eq(selected_week)].copy()
+
+    dimension = str(payload.get("dimension") or "").strip()
+    if not dimension or dimension not in week_frame.columns:
+        return {"ok": False, "error": "Select an available dimension field."}
+    dimension_aliases: list[str] = [dimension]
+    dimension_key = dimension.lower()
+    if any(token in dimension_key for token in ["agent", "advisor", "employee"]):
+        dimension_aliases.extend(["Agent Name", "Agent", "AgentName", "Advisor Name", "Employee Name", "Associate"])
+    elif any(token in dimension_key for token in ["manager", "supervisor", "team lead", "tl"]):
+        dimension_aliases.extend(["Manager/TL", "Manager", "Manager Name", "TL Name", "Team Lead", "Supervisor"])
+    resolved_dimension = dimension
+    clean_dimension = week_frame[dimension].fillna("").astype(str).str.strip()
+    for candidate in dict.fromkeys(dimension_aliases):
+        if candidate not in week_frame.columns:
+            continue
+        candidate_values = week_frame[candidate].fillna("").astype(str).str.strip()
+        if candidate_values.ne("").any():
+            resolved_dimension = candidate
+            clean_dimension = candidate_values
+            break
+    week_frame = week_frame[clean_dimension.ne("")].copy()
+    if week_frame.empty:
+        return {"ok": False, "error": f"No values are available for {dimension} in the selected week."}
+    week_frame["__dimension"] = week_frame[resolved_dimension].fillna("").astype(str).str.strip()
+    volumes = week_frame["__dimension"].value_counts()
+    sort_mode = str(payload.get("sort") or "volume").strip().lower()
+    dimension_values = sorted(volumes.index.tolist(), key=lambda value: str(value).lower()) if sort_mode == "name" else volumes.index.tolist()
+    try:
+        max_columns = max(0, min(50, int(payload.get("maxColumns") or 15)))
+    except (TypeError, ValueError):
+        max_columns = 15
+    if max_columns:
+        dimension_values = dimension_values[:max_columns]
+
+    mode = "csat" if str(payload.get("mode") or "nps").strip().lower() == "csat" else "nps"
+    type_candidates = ["CSAT Type", "CSAT Segment", "Satisfaction Segment"] if mode == "csat" else ["NPS Type", "NPS Segment"]
+    type_col = next((name for name in type_candidates if name in week_frame.columns), "")
+    sentiment_col = next((name for name in ["Sentiment", "Sentiment Label", "Overall Sentiment"] if name in week_frame.columns), "")
+    requested_metrics = payload.get("metrics") if isinstance(payload.get("metrics"), list) else []
+    default_metrics = ["volume", "positiveCount", "middleCount", "negativeCount", "positivePct", "middlePct", "negativePct", "score"]
+    metric_keys = [str(item) for item in requested_metrics] or default_metrics
+    allowed_metrics = {"volume", "positiveCount", "middleCount", "negativeCount", "positivePct", "middlePct", "negativePct", "score", "sentimentPositivePct", "sentimentNeutralPct", "sentimentNegativePct"}
+    metric_keys = [key for key in metric_keys if key in allowed_metrics]
+    if not metric_keys:
+        return {"ok": False, "error": "Select at least one metric row."}
+
+    if mode == "csat":
+        positive_label, middle_label, negative_label, score_label = "Satisfied", "Neutral", "Dissatisfied", "CSAT"
+        positive_values, middle_values, negative_values = {"satisfied", "promoter"}, {"neutral", "passive"}, {"dissatisfied", "detractor"}
+    else:
+        positive_label, middle_label, negative_label, score_label = "Promoters", "Passives", "Detractors", "NPS"
+        positive_values, middle_values, negative_values = {"promoter"}, {"passive"}, {"detractor"}
+    row_definitions = {
+        "volume": ("Survey Volume", "integer"),
+        "positiveCount": (positive_label, "integer"), "middleCount": (middle_label, "integer"), "negativeCount": (negative_label, "integer"),
+        "positivePct": (f"{positive_label} %", "percent"), "middlePct": (f"{middle_label} %", "percent"), "negativePct": (f"{negative_label} %", "percent"),
+        "score": (score_label, "score"),
+        "sentimentPositivePct": ("Positive Sentiment %", "percent"), "sentimentNeutralPct": ("Neutral Sentiment %", "percent"), "sentimentNegativePct": ("Negative Sentiment %", "percent"),
+    }
+    rows = [{"key": key, "label": row_definitions[key][0], "format": row_definitions[key][1], "values": []} for key in metric_keys]
+    for value in dimension_values:
+        frame = week_frame[week_frame["__dimension"].eq(value)]
+        total = int(len(frame))
+        types = frame[type_col].fillna("").astype(str).str.strip().str.lower() if type_col else pd.Series([], dtype=str)
+        positive = int(types.isin(positive_values).sum()); middle = int(types.isin(middle_values).sum()); negative = int(types.isin(negative_values).sum())
+        positive_pct = round(positive / total * 100.0, 2) if total else 0.0
+        middle_pct = round(middle / total * 100.0, 2) if total else 0.0
+        negative_pct = round(negative / total * 100.0, 2) if total else 0.0
+        score = positive_pct if mode == "csat" else round(positive_pct - negative_pct, 2)
+        sentiments = frame[sentiment_col].fillna("").astype(str).str.strip().str.lower() if sentiment_col else pd.Series([], dtype=str)
+        values = {
+            "volume": total, "positiveCount": positive, "middleCount": middle, "negativeCount": negative,
+            "positivePct": positive_pct, "middlePct": middle_pct, "negativePct": negative_pct, "score": score,
+            "sentimentPositivePct": round(float(sentiments.eq("positive").sum()) / total * 100.0, 2) if total else 0.0,
+            "sentimentNeutralPct": round(float(sentiments.eq("neutral").sum()) / total * 100.0, 2) if total else 0.0,
+            "sentimentNegativePct": round(float(sentiments.eq("negative").sum()) / total * 100.0, 2) if total else 0.0,
+        }
+        for row in rows:
+            row["values"].append(values[row["key"]])
+
+    value_field = str(payload.get("valueField") or "").strip()
+    aggregation = str(payload.get("aggregation") or "average").strip().lower()
+    if value_field and value_field in week_frame.columns:
+        custom_values = []
+        for value in dimension_values:
+            numeric = pd.to_numeric(week_frame.loc[week_frame["__dimension"].eq(value), value_field], errors="coerce").dropna()
+            result = float(numeric.sum()) if aggregation == "sum" else (float(numeric.mean()) if not numeric.empty else None)
+            custom_values.append(round(result, 2) if result is not None else None)
+        rows.append({"key": "customValue", "label": f"{'Sum' if aggregation == 'sum' else 'Average'} {value_field}", "format": "number", "values": custom_values})
+
+    selected_week_end = selected_week + pd.Timedelta(days=6)
+    return {
+        "ok": True, "mode": mode, "scoreName": score_label, "dimension": dimension,
+        "week": selected_week.strftime("%Y-%m-%d"), "weekLabel": f"WE {selected_week_end.day} {selected_week_end.strftime('%b')}", "availableWeeks": week_items,
+        "columns": [{"key": str(value), "label": str(value), "volume": int(volumes.get(value, 0))} for value in dimension_values],
+        "metrics": rows, "rowsUsed": int(len(week_frame)), "totalDimensionValues": int(len(volumes)),
+    }
+
+
 def _set_upload_progress(upload_id: str, percent: float, stage: str, message: str, complete: bool = False) -> None:
     if not upload_id:
         return
@@ -3663,6 +3971,1503 @@ def _build_report_pptx(selected: list[str], analysis_payload: dict[str, Any] | N
     return output.getvalue()
 
 
+def _build_boardroom_reference_pdf(payload: dict[str, Any]) -> bytes:
+    """Build a concise, native PDF leadership pack without printing browser HTML."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.platypus import (
+        KeepTogether,
+        LongTable,
+        PageBreak,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
+    )
+    from reportlab.graphics.shapes import Circle, Drawing, Line, PolyLine, Rect, String
+    from xml.sax.saxutils import escape as xml_escape
+
+    analysis = payload.get("analysis") if isinstance(payload.get("analysis"), dict) else {}
+    selected = [str(item) for item in payload.get("tabs", []) if str(item).strip()]
+    metric = str(payload.get("metric") or "NPS").strip().upper()
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    title = str(options.get("title") or f"{metric} Leadership Report").strip()
+    account = str(options.get("accountName") or "Customer Intelligence Team").strip()
+    prepared_for = str(options.get("preparedFor") or "Leadership Review").strip()
+    footer_note = str(options.get("footerNote") or "Confidential - Krestrel Analysis Suite Review").strip()
+    generated_at = _dt.datetime.now().strftime("%d %b %Y, %I:%M %p")
+    frames = _report_tab_frames_from_payload(selected, analysis) if analysis else _report_tab_frames(selected)
+    custom_dashboards = payload.get("customDashboards") if isinstance(payload.get("customDashboards"), list) else []
+
+    output = BytesIO()
+    page_size = landscape(A4)
+    page_width, page_height = page_size
+    margin_x = 15 * mm
+    margin_top = 18 * mm
+    margin_bottom = 15 * mm
+    content_width = page_width - (2 * margin_x)
+    navy = colors.HexColor("#003D5B")
+    dark_teal = colors.HexColor("#004B57")
+    teal = colors.HexColor("#009B9B")
+    aqua = colors.HexColor("#2FE4D6")
+    pale = colors.HexColor("#EEF7F8")
+    pale_blue = colors.HexColor("#E8F1F6")
+    ink = colors.HexColor("#0C2340")
+    muted = colors.HexColor("#5D7185")
+    line = colors.HexColor("#C8DCE4")
+    positive = colors.HexColor("#0A8F74")
+    negative = colors.HexColor("#C84B63")
+
+    doc = SimpleDocTemplate(
+        output,
+        pagesize=page_size,
+        leftMargin=margin_x,
+        rightMargin=margin_x,
+        topMargin=margin_top,
+        bottomMargin=margin_bottom,
+        title=title,
+        author="Krestrel Analysis Suite",
+        subject=f"{metric} board-room leadership report",
+    )
+    styles = getSampleStyleSheet()
+    cover_eyebrow = ParagraphStyle("CoverEyebrow", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=10, leading=13, textColor=aqua, spaceAfter=10, uppercase=True)
+    cover_title = ParagraphStyle("CoverTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=30, leading=34, textColor=colors.white, spaceAfter=12)
+    cover_subtitle = ParagraphStyle("CoverSubtitle", parent=styles["Normal"], fontName="Helvetica", fontSize=12, leading=17, textColor=colors.HexColor("#D8F1F2"), spaceAfter=8)
+    section_title = ParagraphStyle("SectionTitle", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=21, leading=25, textColor=ink, spaceAfter=5)
+    section_intro = ParagraphStyle("SectionIntro", parent=styles["Normal"], fontName="Helvetica", fontSize=9.5, leading=14, textColor=muted, spaceAfter=10)
+    small = ParagraphStyle("Small", parent=styles["Normal"], fontName="Helvetica", fontSize=8, leading=10.5, textColor=muted)
+    table_head = ParagraphStyle("TableHead", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7.3, leading=9, textColor=colors.white)
+    table_cell = ParagraphStyle("TableCell", parent=styles["Normal"], fontName="Helvetica", fontSize=7.2, leading=9, textColor=ink)
+    kpi_label = ParagraphStyle("KpiLabel", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=teal, spaceAfter=5)
+    kpi_value = ParagraphStyle("KpiValue", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=18, leading=21, textColor=ink)
+    index_ref = ParagraphStyle("IndexRef", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=teal)
+    index_name = ParagraphStyle("IndexName", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=9, leading=11, textColor=ink)
+
+    def clean(value: Any, limit: int = 180) -> str:
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            return ""
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            numeric = float(value)
+            text = f"{int(numeric):,}" if numeric.is_integer() else f"{numeric:,.2f}".rstrip("0").rstrip(".")
+        else:
+            text = re.sub(r"\s+", " ", str(value)).strip()
+        if len(text) > limit:
+            text = text[: max(0, limit - 3)].rstrip() + "..."
+        return xml_escape(text)
+
+    def first_value(*keys: str, default: Any = 0) -> Any:
+        for source in (analysis.get("summary") or {}, analysis.get("counts") or {}, analysis.get("sentiment") or {}):
+            for key in keys:
+                value = source.get(key)
+                if value not in (None, ""):
+                    return value
+        return default
+
+    def number(value: Any, decimals: int = 1) -> str:
+        try:
+            numeric = float(value)
+            if numeric.is_integer() and decimals == 0:
+                return f"{int(numeric):,}"
+            return f"{numeric:,.{decimals}f}"
+        except Exception:
+            return str(value or "Not available")
+
+    if "executive" in frames:
+        segment_labels = ("Satisfied", "Neutral", "Dissatisfied") if metric == "CSAT" else ("Promoters", "Passives", "Detractors")
+        executive_rows = [
+            {"Metric": "Responses", "Value": first_value("total_responses", "Responses", "total", default=0)},
+            {"Metric": metric, "Value": first_value(metric.lower(), metric, "csat_score", "nps", "NPS", default=0)},
+        ]
+        for label in segment_labels:
+            executive_rows.append({"Metric": label, "Value": first_value(label, label.lower(), f"{label.lower()}_count", default=0)})
+        executive_rows.extend([
+            {"Metric": "Positive Sentiment %", "Value": first_value("Positive", "positive", default=0)},
+            {"Metric": "Neutral Sentiment %", "Value": first_value("Neutral", "neutral", default=0)},
+            {"Metric": "Negative Sentiment %", "Value": first_value("Negative", "negative", default=0)},
+        ])
+        frames["executive"] = ("Executive", pd.DataFrame(executive_rows))
+
+    def header_footer(canvas: Canvas, document) -> None:
+        canvas.saveState()
+        canvas.setFillColor(colors.white)
+        canvas.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+        canvas.setFillColor(navy)
+        canvas.rect(0, page_height - 10 * mm, page_width, 10 * mm, fill=1, stroke=0)
+        canvas.setFillColor(aqua)
+        canvas.rect(0, page_height - 10 * mm, 32 * mm, 1.2 * mm, fill=1, stroke=0)
+        canvas.setFont("Helvetica-Bold", 8.5)
+        canvas.setFillColor(colors.white)
+        canvas.drawString(margin_x, page_height - 6.4 * mm, title[:80])
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(colors.HexColor("#D4ECEE"))
+        canvas.drawRightString(page_width - margin_x, page_height - 6.4 * mm, prepared_for[:60])
+        canvas.setStrokeColor(line)
+        canvas.line(margin_x, 9 * mm, page_width - margin_x, 9 * mm)
+        canvas.setFillColor(muted)
+        canvas.setFont("Helvetica", 7)
+        canvas.drawString(margin_x, 5.7 * mm, footer_note[:110])
+        canvas.drawRightString(page_width - margin_x, 5.7 * mm, f"Page {document.page}")
+        canvas.restoreState()
+
+    def cover_page(canvas: Canvas, _document) -> None:
+        canvas.saveState()
+        canvas.setFillColor(dark_teal)
+        canvas.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+        canvas.setFillColor(colors.HexColor("#075E68"))
+        canvas.circle(page_width - 20 * mm, 18 * mm, 78 * mm, fill=1, stroke=0)
+        canvas.setFillColor(colors.HexColor("#087C82"))
+        canvas.circle(page_width - 2 * mm, page_height - 2 * mm, 42 * mm, fill=1, stroke=0)
+        canvas.setFillColor(aqua)
+        canvas.rect(margin_x, page_height - 20 * mm, 28 * mm, 1.5 * mm, fill=1, stroke=0)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(colors.HexColor("#BDE4E6"))
+        canvas.drawString(margin_x, 10 * mm, footer_note[:110])
+        canvas.drawRightString(page_width - margin_x, 10 * mm, generated_at)
+        canvas.restoreState()
+
+    def section_header(ref: str, name: str, description: str) -> list[Any]:
+        marker = Table([[Paragraph(clean(ref), index_ref), Paragraph(clean(name), section_title)]], colWidths=[18 * mm, content_width - 18 * mm])
+        marker.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BACKGROUND", (0, 0), (0, 0), pale),
+            ("BOX", (0, 0), (0, 0), 0.8, colors.HexColor("#A8D6D5")),
+            ("LEFTPADDING", (0, 0), (0, 0), 7),
+            ("RIGHTPADDING", (0, 0), (0, 0), 7),
+            ("TOPPADDING", (0, 0), (0, 0), 7),
+            ("BOTTOMPADDING", (0, 0), (0, 0), 7),
+            ("LEFTPADDING", (1, 0), (1, 0), 10),
+            ("RIGHTPADDING", (1, 0), (1, 0), 0),
+        ]))
+        return [marker, Spacer(1, 3 * mm), Paragraph(clean(description, 450), section_intro)]
+
+    def frame_table(frame: pd.DataFrame, max_rows: int = 12, max_cols: int = 7) -> list[Any]:
+        if frame.empty:
+            return [Paragraph("No populated rows were available for this section.", section_intro)]
+        working = frame.copy().iloc[:max_rows, :max_cols]
+        columns = [str(column) for column in working.columns]
+        if not columns:
+            return [Paragraph("No populated columns were available for this section.", section_intro)]
+        data: list[list[Any]] = [[Paragraph(clean(column, 45), table_head) for column in columns]]
+        for _, row in working.iterrows():
+            data.append([Paragraph(clean(row[column]), table_cell) for column in working.columns])
+        col_widths = [content_width / len(columns)] * len(columns)
+        table = LongTable(data, colWidths=col_widths, repeatRows=1, hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), navy),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.35, line),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, pale_blue]),
+        ]))
+        result: list[Any] = [table]
+        if len(frame) > max_rows or len(frame.columns) > max_cols:
+            result = [Paragraph(
+                f"Board-room view shows the first {min(len(frame), max_rows):,} of {len(frame):,} rows and {min(len(frame.columns), max_cols)} of {len(frame.columns)} columns. The Interactive HTML retains the detailed view.",
+                small,
+            ), Spacer(1, 2 * mm), table]
+        return result
+
+    def weekly_chart(rows: list[dict[str, Any]]) -> Drawing | None:
+        if not rows:
+            return None
+        score_keys = [metric, "NPS", "CSAT", "Score", "Satisfaction"]
+        score_key = next((key for key in score_keys if any(key in row for row in rows)), None)
+        label_key = next((key for key in ("Week", "Month", "Period", "Date") if any(key in row for row in rows)), None)
+        if not score_key or not label_key:
+            return None
+        points: list[tuple[str, float]] = []
+        for row in rows[-12:]:
+            try:
+                points.append((str(row.get(label_key, ""))[:12], float(row.get(score_key))))
+            except Exception:
+                continue
+        if len(points) < 2:
+            return None
+        width, height = content_width, 58 * mm
+        drawing = Drawing(width, height)
+        drawing.add(Rect(0, 0, width, height, rx=10, ry=10, fillColor=pale, strokeColor=line, strokeWidth=0.7))
+        left, right, bottom, top = 38, width - 18, 30, height - 24
+        values = [value for _, value in points]
+        low, high = min(values), max(values)
+        pad = max(5.0, (high - low) * 0.18)
+        low, high = low - pad, high + pad
+        if metric == "NPS":
+            low, high = min(-100.0, low), max(100.0, high)
+        for step in range(5):
+            y = bottom + (top - bottom) * step / 4
+            value = low + (high - low) * step / 4
+            drawing.add(Line(left, y, right, y, strokeColor=colors.HexColor("#D4E4E8"), strokeWidth=0.5))
+            drawing.add(String(6, y - 3, f"{value:.1f}", fontName="Helvetica", fontSize=6.5, fillColor=muted))
+        poly_points: list[float] = []
+        for index, (label, value) in enumerate(points):
+            x = left + (right - left) * index / max(1, len(points) - 1)
+            y = bottom + (top - bottom) * (value - low) / max(0.001, high - low)
+            poly_points.extend([x, y])
+            drawing.add(Circle(x, y, 3, fillColor=teal, strokeColor=colors.white, strokeWidth=1))
+            drawing.add(String(x, y + 7, f"{value:.1f}", textAnchor="middle", fontName="Helvetica-Bold", fontSize=6.5, fillColor=ink))
+            drawing.add(String(x, 12, label, textAnchor="middle", fontName="Helvetica", fontSize=5.5, fillColor=muted))
+        drawing.add(PolyLine(poly_points, strokeColor=teal, strokeWidth=2.2))
+        drawing.add(String(left, height - 14, f"{metric} trend - latest {len(points)} periods", fontName="Helvetica-Bold", fontSize=9, fillColor=ink))
+        return drawing
+
+    story: list[Any] = [
+        Spacer(1, 27 * mm),
+        Paragraph("KRESTREL ANALYSIS SUITE", cover_eyebrow),
+        Paragraph(clean(title, 120), cover_title),
+        Paragraph(f"Prepared for <b>{clean(prepared_for, 90)}</b>", cover_subtitle),
+        Paragraph(f"{clean(account, 90)} | Generated {clean(generated_at)}", cover_subtitle),
+        Spacer(1, 20 * mm),
+        Paragraph("A concise leadership pack generated directly from the completed analysis. Detailed interactive exploration remains available in the companion HTML report.", cover_subtitle),
+        PageBreak(),
+    ]
+
+    summary = analysis.get("summary") or {}
+    total = first_value("total_responses", "Responses", "total", default=0)
+    score = first_value(metric.lower(), metric, "csat_score", "nps", "NPS", "csat", "CSAT", default=0)
+    promoter = first_value("promoters_pct", "satisfied_pct", "Promoters", "promoters", "Satisfied", "satisfied", default=0)
+    detractor = first_value("detractors_pct", "dissatisfied_pct", "Detractors", "detractors", "Dissatisfied", "dissatisfied", default=0)
+    story.extend(section_header("01", "Executive Snapshot", "The essential performance signals for leadership review."))
+    kpis = [
+        ("SURVEY VOLUME", number(total, 0)),
+        (metric, number(score, 1)),
+        ("PROMOTER / SATISFIED", number(promoter, 1)),
+        ("DETRACTOR / DISSATISFIED", number(detractor, 1)),
+    ]
+    kpi_cells = []
+    for label, value in kpis:
+        card = Table([[Paragraph(clean(label), kpi_label)], [Paragraph(clean(value), kpi_value)]], colWidths=[content_width / 4 - 5 * mm])
+        card.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), pale),
+            ("BOX", (0, 0), (-1, -1), 0.7, line),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        kpi_cells.append(card)
+    kpi_grid = Table([kpi_cells], colWidths=[content_width / 4] * 4)
+    kpi_grid.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3)]))
+    story.extend([kpi_grid, Spacer(1, 6 * mm)])
+    weekly_rows = analysis.get("weekly") if isinstance(analysis.get("weekly"), list) else []
+    trend = weekly_chart(weekly_rows)
+    if trend:
+        story.extend([trend, Spacer(1, 4 * mm)])
+    story.append(PageBreak())
+
+    directory_rows = [[Paragraph("REF", table_head), Paragraph("SECTION", table_head), Paragraph("BOARD-ROOM CONTENT", table_head)]]
+    directory_items: list[tuple[str, str, int]] = []
+    directory_ref = 3
+    for tab in selected:
+        if tab == "customdashboards":
+            continue
+        title_item, frame = frames.get(tab, (REPORT_TAB_TITLES.get(tab, tab), pd.DataFrame()))
+        if frame.empty:
+            continue
+        directory_items.append((f"{directory_ref:02d}", title_item, len(frame)))
+        directory_ref += 1
+    for dashboard in custom_dashboards:
+        directory_items.append((f"{directory_ref:02d}", str(dashboard.get("title") or "Custom Dashboard"), len(dashboard.get("rows") or [])))
+        directory_ref += 1
+    for ref, name, row_count in directory_items:
+        directory_rows.append([Paragraph(ref, index_ref), Paragraph(clean(name), index_name), Paragraph(f"{row_count:,} supporting rows available", table_cell)])
+    story.extend(section_header("02", "Report Directory", "Selected sections included in this concise PDF pack."))
+    directory = Table(directory_rows, colWidths=[20 * mm, 82 * mm, content_width - 102 * mm], repeatRows=1)
+    directory.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), navy),
+        ("GRID", (0, 0), (-1, -1), 0.35, line),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, pale_blue]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.extend([directory, PageBreak()])
+
+    section_number = 3
+    for tab in selected:
+        if tab == "customdashboards":
+            continue
+        name, frame = frames.get(tab, (REPORT_TAB_TITLES.get(tab, tab), pd.DataFrame()))
+        if frame.empty:
+            continue
+        guide = REPORT_TAB_TITLES.get(tab, name)
+        story.extend(section_header(f"{section_number:02d}", name, f"Leadership-ready reference view for {guide}."))
+        story.extend(frame_table(frame))
+        story.append(PageBreak())
+        section_number += 1
+
+    for dashboard in custom_dashboards:
+        name = str(dashboard.get("title") or "Custom Dashboard")
+        creator = str(dashboard.get("creator") or "Dashboard Maker")
+        rows = dashboard.get("rows") if isinstance(dashboard.get("rows"), list) else []
+        frame = pd.DataFrame(rows)
+        story.extend(section_header(f"{section_number:02d}", name, f"Custom dashboard created in {creator}."))
+        if not frame.empty:
+            story.extend(frame_table(frame, max_rows=16, max_cols=8))
+        else:
+            text = clean(dashboard.get("text") or "No tabular values were available for this custom dashboard.", 900)
+            story.append(Paragraph(text, section_intro))
+        story.append(PageBreak())
+        section_number += 1
+
+    if story and isinstance(story[-1], PageBreak):
+        story.pop()
+    doc.build(story, onFirstPage=cover_page, onLaterPages=header_footer)
+    return output.getvalue()
+
+
+def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
+    """Create a narrative, data-led leadership storybook as a native PDF."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.platypus import Paragraph
+    from PIL import Image, ImageOps
+    from xml.sax.saxutils import escape as xml_escape
+
+    analysis = payload.get("analysis") if isinstance(payload.get("analysis"), dict) else {}
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    metric = str(payload.get("metric") or "NPS").strip().upper()
+    title = str(options.get("title") or f"{metric} Leadership Report").strip()
+    account = str(options.get("accountName") or "Customer Intelligence Team").strip()
+    prepared_for = str(options.get("preparedFor") or "Leadership Review").strip()
+    footer_note = str(options.get("footerNote") or "Confidential - Krestrel Analysis Suite Review").strip()
+    home_image_raw = str(options.get("homeImage") or "")
+    separator_images_raw = options.get("separatorImages") if isinstance(options.get("separatorImages"), list) else []
+    app_url = str(options.get("appUrl") or "").strip()
+    selected = [str(item) for item in payload.get("tabs", []) if str(item).strip()]
+    custom_dashboards = payload.get("customDashboards") if isinstance(payload.get("customDashboards"), list) else []
+    summary = analysis.get("summary") if isinstance(analysis.get("summary"), dict) else {}
+    counts = analysis.get("counts") if isinstance(analysis.get("counts"), dict) else {}
+    sentiment = analysis.get("sentiment") if isinstance(analysis.get("sentiment"), dict) else {}
+    weekly = analysis.get("weekly") if isinstance(analysis.get("weekly"), list) else []
+    agents = analysis.get("agents") if isinstance(analysis.get("agents"), list) else []
+    managers = analysis.get("managers") if isinstance(analysis.get("managers"), list) else []
+    quartiles = analysis.get("quartiles") if isinstance(analysis.get("quartiles"), list) else []
+    quartile_rollup = analysis.get("quartileRollup") if isinstance(analysis.get("quartileRollup"), list) else []
+    quartile_weekly = analysis.get("quartileWeekly") if isinstance(analysis.get("quartileWeekly"), list) else []
+    wave_rows = analysis.get("wave") if isinstance(analysis.get("wave"), list) else []
+    tenure_rows = analysis.get("tenure") if isinstance(analysis.get("tenure"), list) else []
+    dynamic_dimensions = analysis.get("dynamicDimensions") if isinstance(analysis.get("dynamicDimensions"), list) else []
+    sentiment_movement = analysis.get("sentimentMovement") if isinstance(analysis.get("sentimentMovement"), list) else []
+    themes = analysis.get("themes") if isinstance(analysis.get("themes"), list) else []
+    reasons = analysis.get("reasons") if isinstance(analysis.get("reasons"), list) else []
+    feedback_rows = analysis.get("feedbackRows") if isinstance(analysis.get("feedbackRows"), list) else []
+    alerts = analysis.get("alerts") if isinstance(analysis.get("alerts"), list) else []
+    business_rules = analysis.get("businessRules") if isinstance(analysis.get("businessRules"), dict) else {}
+    leadership_questions_raw = analysis.get("leadershipQuestions") if isinstance(analysis.get("leadershipQuestions"), list) else []
+    overall_performance_read = analysis.get("overallPerformanceRead") if isinstance(analysis.get("overallPerformanceRead"), dict) else {}
+    overall_performance_sections = overall_performance_read.get("sections") if isinstance(overall_performance_read.get("sections"), list) else []
+    evidence_relationship = analysis.get("evidenceRelationship") if isinstance(analysis.get("evidenceRelationship"), dict) else {}
+
+    output = BytesIO()
+    page_width, page_height = A4
+    canvas = Canvas(output, pagesize=A4, pageCompression=1)
+    canvas.setTitle(title)
+    canvas.setAuthor("Krestrel Analysis Suite")
+    navy = colors.HexColor("#263F73")
+    deep_teal = colors.HexColor("#1E646B")
+    teal = colors.HexColor("#00A3A3")
+    cyan = colors.HexColor("#2AB7D6")
+    lime = colors.HexColor("#C8E52A")
+    green = colors.HexColor("#33B986")
+    amber = colors.HexColor("#F2A43A")
+    red = colors.HexColor("#D85D72")
+    pale = colors.HexColor("#F5F7F8")
+    pale_teal = colors.HexColor("#EAF7F7")
+    pale_blue = colors.HexColor("#EDF4FA")
+    pale_red = colors.HexColor("#FCEFF2")
+    ink = colors.HexColor("#203B70")
+    muted = colors.HexColor("#536B87")
+    line = colors.HexColor("#D7E0E8")
+    white = colors.white
+    margin = 18 * mm
+    content_width = page_width - 2 * margin
+    generated_at = _dt.datetime.now().strftime("%d %b %Y, %I:%M %p")
+
+    def decode_pdf_image(value: Any) -> Any:
+        text = str(value or "")
+        if not text.startswith("data:image/") or "," not in text or len(text) > 18_000_000:
+            return None
+        try:
+            raw = base64.b64decode(text.split(",", 1)[1], validate=False)
+            if not raw or len(raw) > 13_000_000:
+                return None
+            image = Image.open(BytesIO(raw))
+            image = ImageOps.exif_transpose(image).convert("RGB")
+            if image.width < 16 or image.height < 16:
+                return None
+            return image
+        except Exception:
+            return None
+
+    home_image = decode_pdf_image(home_image_raw)
+    separator_images = [image for image in (decode_pdf_image(value) for value in separator_images_raw[:5]) if image is not None]
+    if home_image is None and separator_images:
+        home_image = separator_images[0]
+
+    def prepared_image(image: Any, width: float, height: float) -> Any:
+        if image is None:
+            return None
+        target_width = max(320, min(1400, int(width * 2.1)))
+        target_height = max(220, min(1200, int(height * 2.1)))
+        fitted = ImageOps.fit(image, (target_width, target_height), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+        buffer = BytesIO()
+        fitted.save(buffer, format="JPEG", quality=86, optimize=True, progressive=True)
+        buffer.seek(0)
+        return ImageReader(buffer)
+
+    def draw_editorial_image(image: Any, x: float, y: float, width: float, height: float, label: str = "") -> None:
+        reader = prepared_image(image, width, height)
+        if reader is None:
+            return
+        canvas.saveState()
+        clip = canvas.beginPath()
+        clip.rect(x, y, width, height)
+        canvas.clipPath(clip, stroke=0, fill=0)
+        canvas.drawImage(reader, x, y, width=width, height=height, preserveAspectRatio=False, mask="auto")
+        canvas.restoreState()
+        canvas.setStrokeColor(line)
+        canvas.setLineWidth(0.8)
+        canvas.rect(x, y, width, height, fill=0, stroke=1)
+        if label:
+            canvas.setFillColor(muted)
+            canvas.setFont("Helvetica-Bold", 6.2)
+            canvas.drawRightString(x + width, y - 3.5 * mm, label.upper()[:54])
+
+    def chapter_image(index: int) -> Any:
+        if not separator_images:
+            return None
+        return separator_images[index % len(separator_images)]
+
+    def draw_section_signature(index: int, label: str) -> None:
+        image = chapter_image(index)
+        if image is not None:
+            draw_editorial_image(image, page_width - margin - 88 * mm, 20 * mm, 88 * mm, 46 * mm, label)
+
+    body_style = ParagraphStyle("StoryBody", fontName="Helvetica", fontSize=10.2, leading=15.2, textColor=ink, alignment=TA_LEFT)
+    body_small = ParagraphStyle("StorySmall", fontName="Helvetica", fontSize=8.3, leading=12.2, textColor=muted, alignment=TA_LEFT)
+    card_title_style = ParagraphStyle("CardTitle", fontName="Helvetica-Bold", fontSize=11.2, leading=14, textColor=navy)
+    card_body_style = ParagraphStyle("CardBody", fontName="Helvetica", fontSize=8.8, leading=12.8, textColor=ink)
+    callout_style = ParagraphStyle("Callout", fontName="Helvetica", fontSize=10.2, leading=15, textColor=white)
+    appendix_question_style = ParagraphStyle("AppendixQuestion", fontName="Helvetica-Bold", fontSize=7.6, leading=9.2, textColor=navy)
+    appendix_answer_style = ParagraphStyle("AppendixAnswer", fontName="Helvetica", fontSize=6.8, leading=8.2, textColor=muted)
+
+    def safe(value: Any, limit: int = 500) -> str:
+        if value is None:
+            return ""
+        text = re.sub(r"\s+", " ", str(value)).strip()
+        return xml_escape(text[:limit])
+
+    def numeric(value: Any, default: float = 0.0) -> float:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        match = re.search(r"-?\d+(?:\.\d+)?", str(value or "").replace(",", ""))
+        return float(match.group(0)) if match else default
+
+    def pick(sources: list[dict[str, Any]], keys: list[str], default: Any = 0) -> Any:
+        for source in sources:
+            for key in keys:
+                if source.get(key) not in (None, ""):
+                    return source.get(key)
+        return default
+
+    def fmt(value: Any, decimals: int = 1, suffix: str = "") -> str:
+        number = numeric(value)
+        if decimals == 0:
+            return f"{int(round(number)):,}{suffix}"
+        return f"{number:,.{decimals}f}{suffix}"
+
+    def row_value(row: dict[str, Any], keys: list[str], default: Any = 0) -> Any:
+        return pick([row], keys, default)
+
+    total = numeric(pick([summary, counts], ["total_responses", "Responses", "total", "Total", "Survey Volume"], 0))
+    score = numeric(pick([summary], [metric.lower(), metric, "csat_score", "nps", "NPS", "CSAT"], 0))
+    segment_names = ["Satisfied", "Neutral", "Dissatisfied"] if metric == "CSAT" else ["Promoters", "Passives", "Detractors"]
+    segment_counts = [numeric(pick([counts, summary], [name, name[:-1] if name.endswith("s") else name, name.lower()], 0)) for name in segment_names]
+    if not total:
+        total = sum(segment_counts)
+    segment_shares = [(value / total * 100 if total else 0) for value in segment_counts]
+    positive = numeric(pick([sentiment], ["Positive", "positive"], 0))
+    neutral_sentiment = numeric(pick([sentiment], ["Neutral", "neutral"], 0))
+    negative = numeric(pick([sentiment], ["Negative", "negative"], 0))
+    if positive + neutral_sentiment + negative > 100.5 and total:
+        positive, neutral_sentiment, negative = (value / total * 100 for value in (positive, neutral_sentiment, negative))
+
+    score_keys = [metric, "NPS", "CSAT", "Score", "Agent NPS", "Agent CSAT"]
+    period_key = next((key for key in ["Week", "Month", "Period", "Date"] if any(key in row for row in weekly)), "Week")
+    score_key = next((key for key in score_keys if any(key in row for row in weekly)), metric)
+    trend_points: list[tuple[str, float, float]] = []
+    for row in weekly[-12:]:
+        if not isinstance(row, dict):
+            continue
+        trend_points.append((str(row.get(period_key) or "")[:14], numeric(row.get(score_key)), numeric(row.get("Responses"))))
+    latest = trend_points[-1][1] if trend_points else score
+    previous = trend_points[-2][1] if len(trend_points) > 1 else latest
+    movement = latest - previous
+    trend_values = [point[1] for point in trend_points]
+    average = sum(trend_values) / len(trend_values) if trend_values else score
+    volatility = float(pd.Series(trend_values).std()) if len(trend_values) > 1 else 0
+    best_period = max(trend_points, key=lambda point: point[1]) if trend_points else ("Not available", score, total)
+    worst_period = min(trend_points, key=lambda point: point[1]) if trend_points else ("Not available", score, total)
+
+    driver_rows = themes or reasons
+    driver_data: list[tuple[str, float, str]] = []
+    for row in driver_rows[:8]:
+        if not isinstance(row, dict):
+            continue
+        label = str(row_value(row, ["Theme", "Primary Reason", "Bucket Category", "Reason", "Category", "Driver"], "Unclassified"))
+        value = numeric(row_value(row, ["Share", "Responses", "Count", "Detractors", "Negative"], 0))
+        issue = str(row_value(row, ["Top Issue", "Owl Issue Type", "Issue"], ""))
+        driver_data.append((label, value, issue))
+    driver_data = sorted(driver_data, key=lambda item: item[1], reverse=True)[:5]
+    top_driver = driver_data[0][0] if driver_data else "No classified driver available"
+
+    minimum_sample = int(numeric(pick([business_rules], ["minimumSample", "minSample", "minimum_sample"], 5), 5)) or 5
+
+    def people_rank(rows: list[dict[str, Any]], entity_keys: list[str]) -> list[tuple[str, float, float]]:
+        ranked: list[tuple[str, float, float]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            name = str(row_value(row, entity_keys, "Unknown"))
+            responses = numeric(row_value(row, ["Responses", "Survey Volume", "Count", "Surveys"], 0))
+            entity_score = numeric(row_value(row, [metric, f"Agent {metric}", f"Manager {metric}", "NPS", "CSAT", "Score"], 0))
+            if responses >= minimum_sample:
+                ranked.append((name, entity_score, responses))
+        return sorted(ranked, key=lambda item: item[1], reverse=True)
+
+    ranked_agents = people_rank(agents, ["Agent Name", "Agent", "Name"])
+    ranked_managers = people_rank(managers, ["Manager/TL", "Manager", "TL Name", "Name"])
+    top_agents = ranked_agents[:3]
+    bottom_agents = list(reversed(ranked_agents[-3:])) if ranked_agents else []
+
+    def dimension_profile(name: str, rows: list[dict[str, Any]], label_keys: list[str]) -> dict[str, Any] | None:
+        values: list[tuple[str, float]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            score_value = None
+            for key in [metric, f"Agent {metric}", f"Manager {metric}", "NPS", "CSAT", "Score", "Average"]:
+                if row.get(key) not in (None, ""):
+                    score_value = numeric(row.get(key))
+                    break
+            if score_value is None:
+                continue
+            label_value = next((str(row.get(key)) for key in label_keys if row.get(key) not in (None, "")), "Unknown")
+            values.append((label_value, score_value))
+        if len(values) < 3:
+            return None
+        series = pd.Series([value for _label, value in values], dtype="float64")
+        q1_value = float(series.quantile(0.25))
+        q3_value = float(series.quantile(0.75))
+        return {
+            "name": name,
+            "iqr": q3_value - q1_value,
+            "q1": q1_value,
+            "q3": q3_value,
+            "high": max(values, key=lambda item: item[1]),
+            "low": min(values, key=lambda item: item[1]),
+            "groups": len(values),
+        }
+
+    dimension_profiles: list[dict[str, Any]] = []
+    for profile in [
+        dimension_profile("Agent", agents, ["Agent Name", "Agent", "Name"]),
+        dimension_profile("Manager / Team Leader", managers, ["Manager/TL", "Manager", "Name"]),
+        dimension_profile("Wave", wave_rows, ["Wave", "Name"]),
+        dimension_profile("Tenure", tenure_rows, ["Tenure", "Name"]),
+    ]:
+        if profile:
+            dimension_profiles.append(profile)
+    for dimension in dynamic_dimensions:
+        if not isinstance(dimension, dict):
+            continue
+        profile = dimension_profile(str(dimension.get("name") or "Custom dimension"), dimension.get("rows") if isinstance(dimension.get("rows"), list) else [], [str(dimension.get("name") or ""), "Dimension", "Name"])
+        if profile:
+            dimension_profiles.append(profile)
+    variance_dimension = max(dimension_profiles, key=lambda item: item["iqr"]) if dimension_profiles else None
+
+    quartile_source = quartiles or quartile_rollup
+    quartile_points: list[tuple[str, float, float]] = []
+    for row in quartile_source:
+        if not isinstance(row, dict):
+            continue
+        label = str(row_value(row, ["Quartile", "Segment", "Group"], "Unknown"))
+        quartile_score = numeric(row_value(row, [metric, "NPS", "CSAT", "Average", "Score"], 0))
+        quartile_volume = numeric(row_value(row, ["Rows", "Responses", "Game Changers", "Count"], 0))
+        quartile_points.append((label, quartile_score, quartile_volume))
+    best_quartile = max(quartile_points, key=lambda item: item[1]) if quartile_points else None
+    weakest_quartile = min(quartile_points, key=lambda item: item[1]) if quartile_points else None
+    quartile_gap = (best_quartile[1] - weakest_quartile[1]) if best_quartile and weakest_quartile else None
+
+    projection_slope = 0.0
+    if len(trend_values) >= 3:
+        x_mean = (len(trend_values) - 1) / 2
+        y_mean = sum(trend_values) / len(trend_values)
+        denominator = sum((index - x_mean) ** 2 for index in range(len(trend_values)))
+        if denominator:
+            projection_slope = sum((index - x_mean) * (value - y_mean) for index, value in enumerate(trend_values)) / denominator
+    score_floor, score_ceiling = (-100.0, 100.0) if metric == "NPS" else (0.0, 100.0)
+    projected_4_weeks = max(score_floor, min(score_ceiling, latest + projection_slope * 4)) if len(trend_values) >= 3 else None
+    projected_3_months = max(score_floor, min(score_ceiling, latest + projection_slope * 13)) if len(trend_values) >= 3 else None
+
+    sentiment_points: list[tuple[float, float, float]] = []
+    for row in (sentiment_movement or weekly)[-12:]:
+        if not isinstance(row, dict):
+            continue
+        positive_value = numeric(row_value(row, ["Positive", "Positive %", "positive"], 0))
+        neutral_value = numeric(row_value(row, ["Neutral", "Neutral %", "neutral"], 0))
+        negative_value = numeric(row_value(row, ["Negative", "Negative %", "negative"], 0))
+        sentiment_total = positive_value + neutral_value + negative_value
+        if sentiment_total > 100.5:
+            positive_value = positive_value / sentiment_total * 100
+            neutral_value = neutral_value / sentiment_total * 100
+            negative_value = negative_value / sentiment_total * 100
+        if sentiment_total:
+            sentiment_points.append((positive_value, neutral_value, negative_value))
+    sentiment_positive_change = sentiment_points[-1][0] - sentiment_points[0][0] if len(sentiment_points) >= 2 else None
+    sentiment_negative_change = sentiment_points[-1][2] - sentiment_points[0][2] if len(sentiment_points) >= 2 else None
+    if sentiment_positive_change is None or sentiment_negative_change is None:
+        sentiment_trend_label = "Not available"
+    elif sentiment_positive_change > 1 and sentiment_negative_change < -1:
+        sentiment_trend_label = "Improving"
+    elif sentiment_positive_change < -1 and sentiment_negative_change > 1:
+        sentiment_trend_label = "Deteriorating"
+    else:
+        sentiment_trend_label = "Mixed / stable"
+
+    word_stop_words = {
+        "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "can", "could", "did", "do", "does", "for", "from", "had", "has", "have", "he", "her", "his", "i", "in", "is", "it", "its", "me", "my", "no", "not", "of", "on", "or", "our", "she", "so", "that", "the", "their", "them", "there", "they", "this", "to", "too", "us", "was", "we", "were", "with", "you", "your",
+        "agent", "customer", "service", "call", "chat", "issue", "problem", "please", "thanks", "thank",
+    }
+    word_counts: dict[str, int] = {}
+    rows_with_words = 0
+    for row in feedback_rows:
+        if not isinstance(row, dict):
+            continue
+        text_value = " ".join(str(row.get(key) or "") for key in ["Verbatim Feedback", "Customer Comments", "Feedback", "Comments", "Comment", "Customer Feedback", "Text"])
+        tokens = {
+            token for token in re.sub(r"[^a-z0-9\s]", " ", text_value.lower()).split()
+            if len(token) > 2 and token not in word_stop_words and not token.isdigit()
+        }
+        if not tokens:
+            continue
+        rows_with_words += 1
+        for token in tokens:
+            word_counts[token] = word_counts.get(token, 0) + 1
+    top_meaningful_word = max(word_counts.items(), key=lambda item: (item[1], item[0])) if word_counts else None
+    top_word_share = (top_meaningful_word[1] / rows_with_words * 100) if top_meaningful_word and rows_with_words else None
+
+    low_positive_mismatch = 0
+    negative_high_mismatch = 0
+    for row in feedback_rows:
+        if not isinstance(row, dict):
+            continue
+        segment = str(row_value(row, ["CSAT Type", "NPS Type"], "")).lower()
+        tone = str(row.get("Sentiment") or "").lower()
+        if ("detractor" in segment or "dissatisfied" in segment) and tone in {"positive", "neutral"}:
+            low_positive_mismatch += 1
+        if ("promoter" in segment or "satisfied" in segment or "passive" in segment or "neutral" in segment) and tone == "negative":
+            negative_high_mismatch += 1
+
+    def score_read(value: float) -> str:
+        if metric == "CSAT":
+            if value >= 90:
+                return "very strong"
+            if value >= 80:
+                return "healthy"
+            if value >= 70:
+                return "mixed"
+            return "under pressure"
+        if value >= 50:
+            return "excellent"
+        if value >= 20:
+            return "positive"
+        if value >= 0:
+            return "fragile"
+        return "under pressure"
+
+    leadership_questions: list[dict[str, Any]] = []
+    for index, item in enumerate(leadership_questions_raw, start=1):
+        if not isinstance(item, dict):
+            continue
+        question_text = str(item.get("question") or "").strip()
+        answer_text = str(item.get("text") or item.get("answer") or "").strip()
+        if not question_text and not answer_text:
+            continue
+        status_text = str(item.get("status") or "Monitor").strip()
+        category_text = str(item.get("category") or item.get("area") or ("Score" if index <= 50 else "Voice of Customer")).strip()
+        leadership_questions.append({
+            "number": item.get("number") or index,
+            "category": category_text,
+            "question": question_text or "Leadership evidence check",
+            "answer": answer_text or "No answer was returned by the completed analysis.",
+            "status": status_text,
+            "method": str(item.get("method") or item.get("statistics") or "").strip(),
+            "evidence": item.get("evidence") if isinstance(item.get("evidence"), list) else [],
+        })
+
+    def question_tone(item: dict[str, Any]) -> str:
+        status_value = str(item.get("status") or "").lower()
+        answer_value = str(item.get("answer") or "").lower()
+        combined = f"{status_value} {answer_value}"
+        if any(term in combined for term in ["no evidence", "not available", "insufficient", "not returned"]):
+            return "unavailable"
+        if any(term in status_value for term in ["action", "investigate", "attention", "review", "risk"]):
+            return "attention"
+        if any(term in status_value for term in ["strong", "positive", "no action", "healthy"]):
+            return "strength"
+        return "monitor"
+
+    question_tones = [question_tone(item) for item in leadership_questions]
+    question_counts = {tone: question_tones.count(tone) for tone in ["strength", "attention", "monitor", "unavailable"]}
+    question_categories: dict[str, int] = {}
+    for item in leadership_questions:
+        category = str(item.get("category") or "Other")
+        question_categories[category] = question_categories.get(category, 0) + 1
+    question_category_rows = sorted(question_categories.items(), key=lambda pair: pair[1], reverse=True)[:4]
+    question_strengths = [item for item in leadership_questions if question_tone(item) == "strength"][:4]
+    question_attention = [item for item in leadership_questions if question_tone(item) == "attention"][:4]
+    overall_highlights: list[str] = []
+    for section in overall_performance_sections:
+        if not isinstance(section, dict):
+            continue
+        section_heading = str(section.get("heading") or "Performance insight").strip()
+        section_items = section.get("items") if isinstance(section.get("items"), list) else []
+        if section_items:
+            overall_highlights.append(f"{section_heading}: {str(section_items[0]).strip()}")
+    overall_highlights = overall_highlights[:4]
+
+    def paragraph(html: str, x: float, top: float, width: float, style=body_style, max_height: float = 120 * mm) -> float:
+        item = Paragraph(html, style)
+        _, height = item.wrap(width, max_height)
+        item.drawOn(canvas, x, top - height)
+        return top - height
+
+    def page_background() -> None:
+        canvas.setFillColor(colors.HexColor("#FBFBFC"))
+        canvas.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+        canvas.setFillColor(colors.HexColor("#DFF5F3"))
+        canvas.circle(page_width + 18 * mm, -12 * mm, 58 * mm, fill=1, stroke=0)
+        canvas.setFillColor(colors.HexColor("#E9F4FB"))
+        canvas.circle(page_width - 20 * mm, -40 * mm, 62 * mm, fill=1, stroke=0)
+        canvas.setStrokeColor(lime)
+        canvas.setLineWidth(2.2)
+        canvas.line(page_width - 70 * mm, 0, page_width, 76 * mm)
+
+    def page_header(page_number: int) -> None:
+        page_background()
+        canvas.setFont("Helvetica", 7.2)
+        canvas.setFillColor(navy)
+        canvas.drawRightString(page_width - margin, page_height - 12 * mm, f"{title}   |   {page_number}")
+        canvas.setStrokeColor(line)
+        canvas.line(page_width - margin - 1 * mm, page_height - 15 * mm, page_width - margin, page_height - 15 * mm)
+        canvas.setFont("Helvetica", 6.8)
+        canvas.setFillColor(muted)
+        canvas.drawString(margin, 8 * mm, footer_note[:95])
+
+    def heading(title_text: str, subtitle: str = "") -> float:
+        top = page_height - 28 * mm
+        canvas.setFillColor(deep_teal)
+        canvas.setFont("Helvetica-Bold", 27)
+        for index, line_text in enumerate(title_text.split("\n")):
+            canvas.drawString(margin, top - index * 10 * mm, line_text)
+        top -= max(1, len(title_text.split("\n"))) * 10 * mm + 2 * mm
+        if subtitle:
+            top = paragraph(safe(subtitle), margin, top, content_width, body_style)
+        return top
+
+    def rounded_card(x: float, y: float, width: float, height: float, fill=pale, stroke=line) -> None:
+        canvas.setFillColor(colors.HexColor("#E3E6E9"))
+        canvas.roundRect(x + 1.2 * mm, y - 1.2 * mm, width, height, 4 * mm, fill=1, stroke=0)
+        canvas.setFillColor(fill)
+        canvas.setStrokeColor(stroke)
+        canvas.setLineWidth(0.6)
+        canvas.roundRect(x, y, width, height, 4 * mm, fill=1, stroke=1)
+
+    def kpi_card(x: float, y: float, width: float, label: str, value: str, note: str, accent=teal) -> None:
+        height = 30 * mm
+        rounded_card(x, y, width, height, white)
+        canvas.setFillColor(accent)
+        canvas.rect(x, y + height - 2 * mm, width, 2 * mm, fill=1, stroke=0)
+        canvas.setFillColor(accent)
+        canvas.setFont("Helvetica-Bold", 7.3)
+        canvas.drawString(x + 5 * mm, y + height - 8 * mm, label[:30].upper())
+        canvas.setFillColor(navy)
+        value_text = str(value)
+        value_font_size = 18 if len(value_text) <= 12 else 14 if len(value_text) <= 20 else 11
+        canvas.setFont("Helvetica-Bold", value_font_size)
+        canvas.drawString(x + 5 * mm, y + 10.5 * mm, value_text)
+        paragraph(safe(note), x + 5 * mm, y + 8.5 * mm, width - 10 * mm, body_small, 8 * mm)
+
+    def callout(x: float, y: float, width: float, height: float, title_text: str, body_html: str, fill=deep_teal) -> None:
+        rounded_card(x, y, width, height, fill, fill)
+        canvas.setFillColor(white)
+        canvas.setFont("Helvetica-Bold", 11)
+        canvas.drawString(x + 6 * mm, y + height - 10 * mm, title_text)
+        paragraph(body_html, x + 6 * mm, y + height - 15 * mm, width - 12 * mm, callout_style, height - 20 * mm)
+
+    def intelligence_card(x: float, y: float, width: float, height: float, kicker: str, headline: str, body_html: str, accent=teal, fill=white) -> None:
+        rounded_card(x, y, width, height, fill)
+        canvas.setFillColor(accent)
+        canvas.rect(x, y + height - 2.2 * mm, width, 2.2 * mm, fill=1, stroke=0)
+        canvas.setFillColor(accent)
+        canvas.setFont("Helvetica-Bold", 7.2)
+        canvas.drawString(x + 6 * mm, y + height - 9 * mm, kicker.upper()[:42])
+        headline_style = ParagraphStyle("IntelligenceHeadline", fontName="Helvetica-Bold", fontSize=13, leading=15.5, textColor=navy)
+        paragraph(safe(headline, 80), x + 6 * mm, y + height - 13 * mm, width - 12 * mm, headline_style, 18 * mm)
+        paragraph(body_html, x + 6 * mm, y + height - 29 * mm, width - 12 * mm, card_body_style, height - 34 * mm)
+
+    def horizontal_bars(x: float, top: float, width: float, data: list[tuple[str, float]], palette: list[Any], percent: bool = False) -> float:
+        maximum = max([value for _, value in data] + [1])
+        for index, (label, value) in enumerate(data):
+            y = top - index * 15 * mm
+            canvas.setFillColor(ink)
+            canvas.setFont("Helvetica-Bold", 8.3)
+            canvas.drawString(x, y, label[:32])
+            canvas.setFillColor(colors.HexColor("#E4EAEE"))
+            canvas.roundRect(x, y - 7 * mm, width, 4 * mm, 2 * mm, fill=1, stroke=0)
+            bar_width = width * max(0, value) / maximum
+            canvas.setFillColor(palette[index % len(palette)])
+            canvas.roundRect(x, y - 7 * mm, max(1.5 * mm, bar_width), 4 * mm, 2 * mm, fill=1, stroke=0)
+            canvas.setFillColor(muted)
+            canvas.setFont("Helvetica-Bold", 7.5)
+            display = f"{value:.1f}%" if percent else f"{value:,.0f}"
+            canvas.drawRightString(x + width, y, display)
+        return top - len(data) * 15 * mm
+
+    def line_chart(x: float, y: float, width: float, height: float, points: list[tuple[str, float, float]]) -> None:
+        rounded_card(x, y, width, height, white)
+        if len(points) < 2:
+            paragraph("Not enough period-level data is available to draw a trend.", x + 8 * mm, y + height - 12 * mm, width - 16 * mm, body_style)
+            return
+        chart_left, chart_right = x + 12 * mm, x + width - 7 * mm
+        chart_bottom, chart_top = y + 17 * mm, y + height - 13 * mm
+        values = [item[1] for item in points]
+        low, high = min(values), max(values)
+        pad = max(4, (high - low) * 0.18)
+        low, high = low - pad, high + pad
+        if metric == "NPS":
+            low, high = min(low, -100), max(high, 100)
+        for step in range(5):
+            line_y = chart_bottom + (chart_top - chart_bottom) * step / 4
+            canvas.setStrokeColor(colors.HexColor("#E1E7EC"))
+            canvas.setLineWidth(0.5)
+            canvas.line(chart_left, line_y, chart_right, line_y)
+            canvas.setFillColor(muted)
+            canvas.setFont("Helvetica", 6.5)
+            canvas.drawRightString(chart_left - 2 * mm, line_y - 1.5 * mm, f"{low + (high-low)*step/4:.0f}")
+        coords: list[tuple[float, float]] = []
+        for index, (_label, value, _volume) in enumerate(points):
+            point_x = chart_left + (chart_right - chart_left) * index / max(1, len(points) - 1)
+            point_y = chart_bottom + (chart_top - chart_bottom) * (value - low) / max(0.001, high - low)
+            coords.append((point_x, point_y))
+        canvas.setStrokeColor(teal)
+        canvas.setLineWidth(2.1)
+        path = canvas.beginPath()
+        path.moveTo(*coords[0])
+        for point_x, point_y in coords[1:]:
+            path.lineTo(point_x, point_y)
+        canvas.drawPath(path, stroke=1, fill=0)
+        for index, ((label, value, _volume), (point_x, point_y)) in enumerate(zip(points, coords)):
+            canvas.setFillColor(teal)
+            canvas.circle(point_x, point_y, 2.2, fill=1, stroke=0)
+            canvas.setFillColor(ink)
+            canvas.setFont("Helvetica-Bold", 6.3)
+            canvas.drawCentredString(point_x, point_y + 3 * mm, f"{value:.1f}")
+            if index % 2 == 0 or len(points) <= 8:
+                canvas.setFillColor(muted)
+                canvas.setFont("Helvetica", 5.7)
+                canvas.drawCentredString(point_x, y + 7 * mm, label[:10])
+
+    def end_page() -> None:
+        canvas.showPage()
+
+    custom_page_count = min(3, len(custom_dashboards))
+    signal_horizon_page = 9
+    evidence_relationship_page = 10
+    question_summary_page = 11 if leadership_questions else 0
+    custom_start_page = 12 if leadership_questions else 11
+    question_appendix_page_count = math.ceil(len(leadership_questions) / 8) if leadership_questions else 0
+    chapters = [
+        ("Overall Performance Lens", 3),
+        ("Performance trajectory", 4),
+        ("Customer composition and sentiment", 5),
+        ("Drivers of experience", 6),
+        ("People performance and coaching", 7),
+        ("Risk and score-sentiment alignment", 8),
+        ("Signal Horizon", signal_horizon_page),
+        ("Evidence & Relationship Intelligence", evidence_relationship_page),
+    ]
+    if leadership_questions:
+        chapters.append(("100-question leadership results", question_summary_page))
+    for index in range(custom_page_count):
+        chapters.append((f"Custom dashboard insight {index + 1}", custom_start_page + index))
+    action_page = custom_start_page + custom_page_count
+    methodology_page = action_page + 1
+    appendix_start_page = methodology_page + 1
+    conclusion_page = methodology_page + question_appendix_page_count + 1
+    chapters.extend([
+        ("Recommended leadership actions", action_page),
+        ("Methodology and evidence", methodology_page),
+    ])
+    if leadership_questions:
+        chapters.append(("Detailed 100-question appendix", appendix_start_page))
+    chapters.append(("Conclusion and next steps", conclusion_page))
+
+    # Cover
+    canvas.setFillColor(colors.HexColor("#FAFAFB"))
+    canvas.rect(0, 0, page_width, page_height, fill=1, stroke=0)
+    canvas.setFillColor(colors.HexColor("#DFF5F3"))
+    canvas.circle(page_width + 10 * mm, 25 * mm, 88 * mm, fill=1, stroke=0)
+    canvas.setFillColor(colors.HexColor("#54C8DB"))
+    canvas.circle(page_width + 22 * mm, -18 * mm, 70 * mm, fill=1, stroke=0)
+    canvas.setStrokeColor(lime)
+    canvas.setLineWidth(3)
+    canvas.line(30 * mm, 34 * mm, page_width, 128 * mm)
+    if home_image is not None:
+        draw_editorial_image(home_image, page_width - 106 * mm, 60 * mm, 88 * mm, 110 * mm, "Customer experience evidence")
+    canvas.setFillColor(teal)
+    canvas.rect(margin, page_height - 36 * mm, 9 * mm, 9 * mm, fill=1, stroke=0)
+    canvas.setFillColor(cyan)
+    canvas.rect(margin + 10 * mm, page_height - 36 * mm, 9 * mm, 9 * mm, fill=1, stroke=0)
+    canvas.setFillColor(navy)
+    canvas.setFont("Helvetica-Bold", 12)
+    canvas.drawString(margin + 23 * mm, page_height - 33 * mm, "Krestrel Analysis Suite")
+    canvas.setFillColor(navy)
+    canvas.setFont("Helvetica-Bold", 37)
+    canvas.drawString(margin, page_height - 82 * mm, metric)
+    canvas.setFont("Helvetica-Bold", 27)
+    canvas.drawString(margin, page_height - 96 * mm, "Customer experience leadership read")
+    canvas.setFont("Helvetica", 14)
+    canvas.drawString(margin, page_height - 111 * mm, "From performance signals to practical action")
+    canvas.setFillColor(deep_teal)
+    canvas.setFont("Helvetica-Bold", 9)
+    canvas.drawString(margin, 57 * mm, prepared_for.upper()[:70])
+    canvas.setFillColor(muted)
+    canvas.setFont("Helvetica", 8.5)
+    canvas.drawString(margin, 49 * mm, f"{account}  |  {generated_at}")
+    canvas.drawString(margin, 15 * mm, footer_note[:100])
+    end_page()
+
+    # Contents
+    page_header(2)
+    top = heading("Contents", "A concise data story designed for leadership discussion, not dashboard replication.")
+    top -= 7 * mm
+    contents_step = min(20 * mm, 198 * mm / max(1, len(chapters)))
+    for index, (chapter, chapter_page) in enumerate(chapters, start=1):
+        y = top - (index - 1) * contents_step
+        canvas.setFillColor(teal)
+        canvas.setFont("Helvetica-Bold", 8)
+        canvas.drawString(margin, y, f"{index:02d}")
+        canvas.setFillColor(ink)
+        canvas.setFont("Helvetica-Bold", 11)
+        canvas.drawString(margin + 14 * mm, y, chapter)
+        canvas.setStrokeColor(line)
+        canvas.line(margin + 14 * mm, y - 3 * mm, page_width - margin - 12 * mm, y - 3 * mm)
+        canvas.setFillColor(muted)
+        canvas.setFont("Helvetica", 9)
+        canvas.drawRightString(page_width - margin, y, str(chapter_page))
+    end_page()
+
+    # Overall Performance Lens executive summary
+    page_header(3)
+    top = heading("Overall Performance Lens", f"Executive summary: the current {metric} picture is {score_read(score)}. The evidence combines {int(total):,} customer surveys with sentiment, driver and people-performance signals.")
+    card_width = (content_width - 8 * mm) / 3
+    card_y = top - 39 * mm
+    kpi_card(margin, card_y, card_width, metric, fmt(score), f"Overall score across the selected reporting period.", teal)
+    kpi_card(margin + card_width + 4 * mm, card_y, card_width, "Survey volume", fmt(total, 0), "Customer responses supporting this leadership read.", cyan)
+    kpi_card(margin + 2 * (card_width + 4 * mm), card_y, card_width, "Latest movement", f"{movement:+.1f} pts", "Latest reporting period compared with the prior period.", green if movement >= 0 else red)
+    callout(margin, card_y - 55 * mm, content_width, 43 * mm, "The leadership read",
+            f"Overall performance is <b>{score_read(score)}</b> at <b>{score:.1f}</b>. The latest period moved <b>{movement:+.1f} points</b>. "
+            f"<b>{segment_names[-1]}</b> represent <b>{segment_shares[-1]:.1f}%</b> of classified responses, while negative sentiment is <b>{negative:.1f}%</b>. "
+            f"The leading classified experience driver is <b>{safe(top_driver)}</b>.")
+    canvas.setFillColor(navy)
+    canvas.setFont("Helvetica-Bold", 12)
+    canvas.drawString(margin, card_y - 68 * mm, "What leadership should discuss")
+    priorities = overall_highlights[:3] or [
+        f"Whether the {movement:+.1f}-point latest movement represents a sustained change or short-term variation.",
+        f"Why {top_driver} is the leading classified experience driver and which part is operationally controllable.",
+        f"Which teams or agents need coaching, monitoring or recognition based on sufficient survey evidence.",
+    ]
+    for index, item in enumerate(priorities, start=1):
+        y = card_y - (75 + (index - 1) * 17) * mm
+        canvas.setFillColor(teal)
+        canvas.circle(margin + 3 * mm, y + 2 * mm, 3 * mm, fill=1, stroke=0)
+        canvas.setFillColor(white)
+        canvas.setFont("Helvetica-Bold", 7)
+        canvas.drawCentredString(margin + 3 * mm, y + 0.5 * mm, str(index))
+        paragraph(safe(item, 180), margin + 10 * mm, y + 5 * mm, content_width - 10 * mm, body_small, 15 * mm)
+    draw_section_signature(0, "Leadership overview")
+    end_page()
+
+    # Performance trajectory
+    page_header(4)
+    top = heading("Performance trajectory", f"Performance averaged {average:.1f} across the available periods. The latest result is {latest:.1f}, compared with {previous:.1f} previously.")
+    chart_y = top - 92 * mm
+    line_chart(margin, chart_y, content_width, 83 * mm, trend_points)
+    insight_y = chart_y - 52 * mm
+    box_width = (content_width - 8 * mm) / 3
+    insights = [
+        ("Momentum", f"{movement:+.1f} pts", "Improvement in the latest period." if movement >= 0 else "A decline requiring recovery attention.", green if movement >= 0 else red),
+        ("Range", f"{best_period[1] - worst_period[1]:.1f} pts", f"Best: {best_period[0]}; lowest: {worst_period[0]}.", cyan),
+        ("Volatility", f"{volatility:.1f}", "Lower values indicate more consistent customer outcomes.", amber),
+    ]
+    for index, (label, value, note, accent) in enumerate(insights):
+        kpi_card(margin + index * (box_width + 4 * mm), insight_y, box_width, label, value, note, accent)
+    draw_section_signature(1, "Performance movement")
+    end_page()
+
+    # Composition and sentiment
+    page_header(5)
+    top = heading("Customer composition and sentiment", "Score categories show what customers selected; sentiment shows how customers expressed the experience in their own words.")
+    column_width = (content_width - 12 * mm) / 2
+    rounded_card(margin, top - 100 * mm, column_width, 90 * mm, white)
+    rounded_card(margin + column_width + 12 * mm, top - 100 * mm, column_width, 90 * mm, white)
+    canvas.setFillColor(navy)
+    canvas.setFont("Helvetica-Bold", 12)
+    canvas.drawString(margin + 7 * mm, top - 20 * mm, "Score composition")
+    canvas.drawString(margin + column_width + 19 * mm, top - 20 * mm, "Verbatim sentiment")
+    horizontal_bars(margin + 7 * mm, top - 33 * mm, column_width - 14 * mm, list(zip(segment_names, segment_shares)), [green, amber, red], True)
+    horizontal_bars(margin + column_width + 19 * mm, top - 33 * mm, column_width - 14 * mm, [("Positive", positive), ("Neutral", neutral_sentiment), ("Negative", negative)], [green, amber, red], True)
+    callout(margin, top - 150 * mm, content_width, 38 * mm, "Interpretation",
+            f"The score mix contains <b>{segment_shares[-1]:.1f}% {safe(segment_names[-1].lower())}</b>, while negative sentiment is <b>{negative:.1f}%</b>. "
+            f"The difference between score and sentiment is useful: score identifies the outcome; language helps explain the cause and whether it is agent, process, policy, product or technology related.", navy)
+    draw_section_signature(2, "Customer voice")
+    end_page()
+
+    # Drivers
+    page_header(6)
+    top = heading("Drivers of experience", "The most frequent classified topics indicate where customer experience pressure is concentrated.")
+    left_width = 92 * mm
+    if driver_data:
+        horizontal_bars(margin, top - 15 * mm, left_width, [(label, value) for label, value, _issue in driver_data], [teal, cyan, green, amber, red], False)
+    else:
+        paragraph("No classified theme or reason rows were returned in this run.", margin, top - 15 * mm, left_width, body_style)
+    narrative_x = margin + left_width + 14 * mm
+    rounded_card(narrative_x, top - 105 * mm, content_width - left_width - 14 * mm, 94 * mm, pale_teal)
+    canvas.setFillColor(deep_teal)
+    canvas.setFont("Helvetica-Bold", 12)
+    canvas.drawString(narrative_x + 7 * mm, top - 22 * mm, "What the data says")
+    if driver_data:
+        driver_sentence = ", ".join(item[0] for item in driver_data[:3])
+        driver_body = f"The leading themes are <b>{safe(driver_sentence)}</b>. <b>{safe(top_driver)}</b> has the largest available evidence base in this run. "
+        if driver_data[0][2]:
+            driver_body += f"Its most common associated issue is <b>{safe(driver_data[0][2])}</b>. "
+        driver_body += "Leadership should separate structural causes from agent-controllable causes before assigning individual coaching actions."
+    else:
+        driver_body = "Theme evidence is not available. Use the Interactive HTML to confirm mapping and theme classification coverage before drawing driver conclusions."
+    paragraph(driver_body, narrative_x + 7 * mm, top - 30 * mm, content_width - left_width - 28 * mm, card_body_style, 70 * mm)
+    callout(margin, top - 153 * mm, content_width, 36 * mm, "Decision lens",
+            f"Prioritise <b>{safe(top_driver)}</b> when it combines high response volume, negative sentiment and a controllable root cause. Validate representative interactions before changing policy, process or coaching plans.")
+    draw_section_signature(3, "Experience drivers")
+    end_page()
+
+    # People performance
+    page_header(7)
+    top = heading("People performance and coaching", f"Rankings include only entities with at least {minimum_sample} responses, reducing the risk of conclusions based on very small samples.")
+    panel_width = (content_width - 10 * mm) / 2
+    panel_y = top - 103 * mm
+    for panel_index, (panel_title, records, fill_color) in enumerate([("Practices to investigate", top_agents, pale_teal), ("Coaching priority", bottom_agents, pale_red)]):
+        x = margin + panel_index * (panel_width + 10 * mm)
+        rounded_card(x, panel_y, panel_width, 92 * mm, fill_color)
+        canvas.setFillColor(deep_teal if panel_index == 0 else red)
+        canvas.setFont("Helvetica-Bold", 12)
+        canvas.drawString(x + 7 * mm, top - 23 * mm, panel_title)
+        if not records:
+            paragraph("No eligible agent ranking is available.", x + 7 * mm, top - 34 * mm, panel_width - 14 * mm, card_body_style)
+        for index, (name, entity_score, responses) in enumerate(records, start=1):
+            y = top - (37 + (index - 1) * 19) * mm
+            canvas.setFillColor(teal if panel_index == 0 else red)
+            canvas.circle(x + 8 * mm, y + 2 * mm, 3.2 * mm, fill=1, stroke=0)
+            canvas.setFillColor(white)
+            canvas.setFont("Helvetica-Bold", 7)
+            canvas.drawCentredString(x + 8 * mm, y + 0.5 * mm, str(index))
+            canvas.setFillColor(ink)
+            canvas.setFont("Helvetica-Bold", 10)
+            canvas.drawString(x + 15 * mm, y + 3 * mm, name[:28])
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColor(muted)
+            canvas.drawString(x + 15 * mm, y - 2 * mm, f"{metric} {entity_score:.1f}  |  {responses:,.0f} responses")
+    manager_note = f"{len(ranked_managers)} managers/team leaders and {len(ranked_agents)} agents meet the minimum sample requirement. "
+    manager_note += "Use high performers as investigation candidates, not automatic best-practice examples; interaction-level validation is still required."
+    callout(margin, panel_y - 48 * mm, content_width, 36 * mm, "How to use this page", manager_note, navy)
+    draw_section_signature(4, "People and coaching")
+    end_page()
+
+    # Risk and alignment
+    page_header(8)
+    top = heading("Risk and score-sentiment alignment", "Misaligned score and verbatim signals identify interactions that deserve review before coaching or process action.")
+    box_width = (content_width - 8 * mm) / 2
+    kpi_card(margin, top - 42 * mm, box_width, "Low score / non-negative text", fmt(low_positive_mismatch, 0), "Review for policy, product, process or technology causes.", amber)
+    kpi_card(margin + box_width + 8 * mm, top - 42 * mm, box_width, "Negative text / acceptable score", fmt(negative_high_mismatch, 0), "Hidden dissatisfaction may not be visible in the score alone.", red)
+    rounded_card(margin, top - 135 * mm, content_width, 78 * mm, white)
+    canvas.setFillColor(navy)
+    canvas.setFont("Helvetica-Bold", 12)
+    canvas.drawString(margin + 7 * mm, top - 69 * mm, "Risk signals to review")
+    risk_items = []
+    for alert in alerts[:4]:
+        if isinstance(alert, dict):
+            risk_items.append(str(row_value(alert, ["detail", "title", "message", "Alert"], "")))
+    if not risk_items:
+        risk_items = [
+            f"Review {low_positive_mismatch:,} low-score interactions whose language is neutral or positive.",
+            f"Review {negative_high_mismatch:,} acceptable-score interactions containing negative sentiment.",
+            f"Validate whether {top_driver} is structurally driven or individually controllable.",
+        ]
+    for index, item in enumerate(risk_items[:4], start=1):
+        y = top - (82 + (index - 1) * 14) * mm
+        canvas.setFillColor(red if index == 1 else amber)
+        canvas.rect(margin + 8 * mm, y - 1 * mm, 3 * mm, 3 * mm, fill=1, stroke=0)
+        paragraph(safe(item), margin + 15 * mm, y + 4 * mm, content_width - 24 * mm, body_small, 12 * mm)
+    callout(margin, top - 182 * mm, content_width, 34 * mm, "Control principle",
+            "Do not convert every detractor or dissatisfied response into an agent coaching action. First determine whether the evidence points to people, process, policy, product or technology.")
+    end_page()
+
+    # Signal Horizon - variance, voice, outlook and sentiment
+    page_header(signal_horizon_page)
+    top = heading("Signal Horizon", "Variance, voice and forward view: five decision signals retrieved or derived from the completed analysis.")
+    upper_width = (content_width - 8 * mm) / 2
+    upper_y = top - 68 * mm
+    if variance_dimension:
+        variance_headline = f"{variance_dimension['name']}: {variance_dimension['iqr']:.1f} pts IQR"
+        variance_body = (
+            f"The widest interquartile variance is across <b>{safe(variance_dimension['name'])}</b>. The middle 50% of group scores spans "
+            f"<b>{variance_dimension['q1']:.1f} to {variance_dimension['q3']:.1f}</b>. Highest: <b>{safe(variance_dimension['high'][0])} {variance_dimension['high'][1]:.1f}</b>; "
+            f"lowest: <b>{safe(variance_dimension['low'][0])} {variance_dimension['low'][1]:.1f}</b>."
+        )
+    else:
+        variance_headline = "Dimension IQR not available"
+        variance_body = "At least three scored groups are required within a dimension before an interquartile variance is reported."
+    intelligence_card(margin, upper_y, upper_width, 56 * mm, "Variance Radar", variance_headline, variance_body, cyan, pale_blue)
+
+    if best_quartile and weakest_quartile:
+        quartile_headline = f"{best_quartile[0]} leads; {weakest_quartile[0]} is the recovery quartile"
+        quartile_body = (
+            f"Best score: <b>{best_quartile[1]:.1f}</b>. Weakest score: <b>{weakest_quartile[1]:.1f}</b>. "
+            f"The quartile gap is <b>{quartile_gap:.1f} points</b>. Use the top quartile as an investigation pool and the weakest quartile as a validation-led coaching focus."
+        )
+    else:
+        quartile_headline = "Quartile evidence not available"
+        quartile_body = "Quartile callouts require populated Quartile Intelligence rows from the completed analysis."
+    intelligence_card(margin + upper_width + 8 * mm, upper_y, upper_width, 56 * mm, "Quartile Pulse", quartile_headline, quartile_body, green, pale_teal)
+
+    lower_gap = 5 * mm
+    lower_width = (content_width - 2 * lower_gap) / 3
+    lower_y = upper_y - 79 * mm
+    if top_meaningful_word:
+        word_headline = f'"{top_meaningful_word[0]}"'
+        word_body = f"Leading meaningful word after stop-word removal, appearing in <b>{top_meaningful_word[1]:,}</b> feedback records (<b>{top_word_share:.1f}%</b> of records with usable words)."
+    else:
+        word_headline = "No meaningful word available"
+        word_body = "No usable verbatim tokens remained after blank text, short tokens, numbers and stop words were excluded."
+    intelligence_card(margin, lower_y, lower_width, 68 * mm, "Voiceprint", word_headline, word_body, amber, white)
+
+    if projected_4_weeks is not None and projected_3_months is not None:
+        forecast_headline = f"4 weeks: {projected_4_weeks:.1f} | 3 months: {projected_3_months:.1f}"
+        forecast_body = f"A straight-line continuation of the available weekly trend ({projection_slope:+.2f} points per week). This is a directional scenario, not a causal or model-based forecast."
+    else:
+        forecast_headline = "Trend projection unavailable"
+        forecast_body = "At least three valid weekly score points are required to extend the same observed trend into future weeks and months."
+    intelligence_card(margin + lower_width + lower_gap, lower_y, lower_width, 68 * mm, "Forward Curve", forecast_headline, forecast_body, teal, white)
+
+    if sentiment_points:
+        latest_positive, _latest_neutral, latest_negative = sentiment_points[-1]
+        sentiment_headline = sentiment_trend_label
+        if sentiment_positive_change is not None and sentiment_negative_change is not None:
+            sentiment_body = f"Latest mix: <b>{latest_positive:.1f}% positive</b> and <b>{latest_negative:.1f}% negative</b>. Across the available trend, positive moved <b>{sentiment_positive_change:+.1f} pts</b> and negative moved <b>{sentiment_negative_change:+.1f} pts</b>."
+        else:
+            sentiment_body = f"Latest available sentiment is <b>{latest_positive:.1f}% positive</b> and <b>{latest_negative:.1f}% negative</b>; a trend comparison needs at least two periods."
+    else:
+        sentiment_headline = "Sentiment trend unavailable"
+        sentiment_body = "Weekly or period-level positive, neutral and negative sentiment values were not returned in this analysis."
+    intelligence_card(margin + 2 * (lower_width + lower_gap), lower_y, lower_width, 68 * mm, "Sentiment Current", sentiment_headline, sentiment_body, red if sentiment_trend_label == "Deteriorating" else green, white)
+
+    callout(margin, 31 * mm, content_width, 30 * mm, "Interpretation guardrail",
+            "IQR compares scored groups within each available dimension. Word intelligence excludes configured stop words. Forward values extend the same linear trend and should be used for scenario discussion, not as guaranteed outcomes.", navy)
+    end_page()
+
+    # Evidence & Relationship Intelligence
+    page_header(evidence_relationship_page)
+    evidence_dimensions = evidence_relationship.get("dimensions") if isinstance(evidence_relationship.get("dimensions"), list) else []
+    evidence_dimensions = [item for item in evidence_dimensions if isinstance(item, dict)]
+    evidence_dimensions.sort(key=lambda item: numeric(item.get("Effect Size"), -1), reverse=True)
+    evidence_strongest = evidence_relationship.get("strongestDimension") if isinstance(evidence_relationship.get("strongestDimension"), dict) else (evidence_dimensions[0] if evidence_dimensions else {})
+    evidence_usable = int(numeric(evidence_relationship.get("usableResponses"), total))
+    evidence_score = numeric(evidence_relationship.get("score"), score)
+    evidence_low = evidence_relationship.get("confidenceLow")
+    evidence_high = evidence_relationship.get("confidenceHigh")
+    evidence_margin = evidence_relationship.get("marginOfError")
+    evidence_rating = str(evidence_relationship.get("evidenceRating") or "Insufficient")
+    top = heading("Evidence & Relationship Intelligence", "Statistical confidence and relationship strength across the dimensions selected during Setup. Associations support investigation; they do not establish causation.")
+    evidence_card_width = (content_width - 8 * mm) / 3
+    evidence_card_y = top - 39 * mm
+    kpi_card(margin, evidence_card_y, evidence_card_width, f"{metric} with 95% CI", fmt(evidence_score), f"{fmt(evidence_low)} to {fmt(evidence_high)}; margin +/- {fmt(evidence_margin)} pts.", teal)
+    kpi_card(margin + evidence_card_width + 4 * mm, evidence_card_y, evidence_card_width, "Usable evidence", fmt(evidence_usable, 0), f"Evidence rating: {evidence_rating}.", cyan)
+    kpi_card(margin + 2 * (evidence_card_width + 4 * mm), evidence_card_y, evidence_card_width, "Strongest dimension", str(evidence_strongest.get("Dimension") or "Not available")[:22], f"{evidence_strongest.get('Relationship') or 'Unavailable'} relationship; effect {fmt(evidence_strongest.get('Effect Size'), 4)}.", green)
+
+    ranking_y = evidence_card_y - 95 * mm
+    ranking_width = 92 * mm
+    rounded_card(margin, ranking_y, ranking_width, 82 * mm, white)
+    canvas.setFillColor(navy)
+    canvas.setFont("Helvetica-Bold", 11.5)
+    canvas.drawString(margin + 7 * mm, ranking_y + 70 * mm, "Selected-dimension relationship ranking")
+    ranking_rows = [(str(item.get("Dimension") or "Unknown"), max(0.0, numeric(item.get("Effect Size")) * 100)) for item in evidence_dimensions[:6] if item.get("Effect Size") is not None]
+    if ranking_rows:
+        horizontal_bars(margin + 7 * mm, ranking_y + 59 * mm, ranking_width - 14 * mm, ranking_rows, [teal, cyan, green, amber, red, navy], False)
+    else:
+        paragraph("No selected dimension currently has enough eligible groups for an effect-size ranking.", margin + 7 * mm, ranking_y + 56 * mm, ranking_width - 14 * mm, body_small, 38 * mm)
+
+    relationship_x = margin + ranking_width + 10 * mm
+    relationship_width = content_width - ranking_width - 10 * mm
+    rounded_card(relationship_x, ranking_y, relationship_width, 82 * mm, pale_teal)
+    canvas.setFillColor(deep_teal)
+    canvas.setFont("Helvetica-Bold", 11.5)
+    canvas.drawString(relationship_x + 7 * mm, ranking_y + 70 * mm, "What leadership should take from this")
+    if evidence_strongest:
+        relationship_body = (
+            f"<b>{safe(evidence_strongest.get('Dimension'))}</b> has the strongest measurable association with {metric}. "
+            f"Its relationship is <b>{safe(evidence_strongest.get('Relationship') or 'unavailable')}</b> with effect size <b>{fmt(evidence_strongest.get('Effect Size'), 4)}</b>. "
+            f"The eligible group score spread is <b>{fmt(evidence_strongest.get('Score Spread'))} points</b>, from <b>{safe(evidence_strongest.get('Lowest Value'))}</b> to <b>{safe(evidence_strongest.get('Highest Value'))}</b>. "
+            "Use this as a prioritisation signal, then validate volume, operational context and representative interactions before assigning action."
+        )
+    else:
+        relationship_body = "Selected dimensions were retained, but the current run does not provide enough eligible group variation for a reliable statistical relationship ranking."
+    paragraph(relationship_body, relationship_x + 7 * mm, ranking_y + 61 * mm, relationship_width - 14 * mm, card_body_style, 51 * mm)
+
+    detail_y = ranking_y - 58 * mm
+    rounded_card(margin, detail_y, content_width, 47 * mm, white)
+    canvas.setFillColor(navy)
+    canvas.setFont("Helvetica-Bold", 10.5)
+    canvas.drawString(margin + 7 * mm, detail_y + 36 * mm, "Evidence safeguards")
+    safeguards = [
+        f"All {len(evidence_relationship.get('selectedDimensions') or [])} Setup-selected dimensions remain visible, including fields with insufficient or missing evidence.",
+        f"Group comparisons require at least {int(numeric(evidence_relationship.get('minimumSample'), 5))} responses per value.",
+        "Pearson correlation and simple regression are reported only for genuinely numeric dimensions; categorical dimensions use effect size.",
+        "Statistical significance and association do not prove causation.",
+    ]
+    for index, item in enumerate(safeguards):
+        y = detail_y + (27 - index * 7.5) * mm
+        canvas.setFillColor(teal)
+        canvas.circle(margin + 8 * mm, y + 1 * mm, 1.5 * mm, fill=1, stroke=0)
+        paragraph(item, margin + 12 * mm, y + 3 * mm, content_width - 19 * mm, body_small, 7 * mm)
+    end_page()
+
+    # Existing 100-question leadership results
+    if leadership_questions:
+        page_header(question_summary_page)
+        top = heading("100-question leadership results", "A decision-oriented summary of the existing score and sentiment question framework. No questions are recalculated for this PDF.")
+        result_card_width = (content_width - 8 * mm) / 3
+        result_card_y = top - 39 * mm
+        usable_count = len(leadership_questions) - question_counts["unavailable"]
+        kpi_card(margin, result_card_y, result_card_width, "Questions returned", fmt(len(leadership_questions), 0), f"{usable_count} contain usable answer text.", teal)
+        kpi_card(margin + result_card_width + 4 * mm, result_card_y, result_card_width, "Action / review", fmt(question_counts["attention"], 0), "Questions whose existing status calls for investigation or review.", red)
+        kpi_card(margin + 2 * (result_card_width + 4 * mm), result_card_y, result_card_width, "Unavailable", fmt(question_counts["unavailable"], 0), "Questions without sufficient returned evidence.", amber)
+
+        category_panel_y = result_card_y - 82 * mm
+        category_panel_width = 96 * mm
+        rounded_card(margin, category_panel_y, category_panel_width, 70 * mm, white)
+        canvas.setFillColor(navy)
+        canvas.setFont("Helvetica-Bold", 11.5)
+        canvas.drawString(margin + 7 * mm, category_panel_y + 59 * mm, "Coverage by question area")
+        if question_category_rows:
+            horizontal_bars(margin + 7 * mm, category_panel_y + 49 * mm, category_panel_width - 14 * mm, [(label, float(value)) for label, value in question_category_rows], [teal, cyan, green, amber, red, navy], False)
+
+        narrative_x = margin + category_panel_width + 10 * mm
+        narrative_width = content_width - category_panel_width - 10 * mm
+        rounded_card(narrative_x, category_panel_y, narrative_width, 70 * mm, pale_teal)
+        canvas.setFillColor(deep_teal)
+        canvas.setFont("Helvetica-Bold", 11.5)
+        canvas.drawString(narrative_x + 7 * mm, category_panel_y + 59 * mm, "How leadership should read it")
+        result_read = (
+            f"The framework returned <b>{len(leadership_questions)}</b> answers: <b>{question_counts['attention']}</b> require action or review, "
+            f"<b>{question_counts['monitor']}</b> should be monitored, <b>{question_counts['strength']}</b> indicate positive or no-action evidence, and "
+            f"<b>{question_counts['unavailable']}</b> lack sufficient evidence. The appendix preserves the question-level answer and status."
+        )
+        paragraph(result_read, narrative_x + 7 * mm, category_panel_y + 50 * mm, narrative_width - 14 * mm, card_body_style, 46 * mm)
+
+        focus_y = category_panel_y - 68 * mm
+        focus_width = (content_width - 10 * mm) / 2
+        for panel_index, (panel_title, items, panel_fill, accent) in enumerate([
+            ("Evidence to sustain", question_strengths or [item for item in leadership_questions if question_tone(item) == "monitor"][:4], pale_teal, green),
+            ("Questions needing attention", question_attention, pale_red, red),
+        ]):
+            x = margin + panel_index * (focus_width + 10 * mm)
+            rounded_card(x, focus_y, focus_width, 56 * mm, panel_fill)
+            canvas.setFillColor(accent)
+            canvas.setFont("Helvetica-Bold", 10.5)
+            canvas.drawString(x + 6 * mm, focus_y + 45 * mm, panel_title)
+            if not items:
+                paragraph("No questions carry this status in the current results.", x + 6 * mm, focus_y + 37 * mm, focus_width - 12 * mm, body_small, 25 * mm)
+            for item_index, item in enumerate(items[:4]):
+                y = focus_y + (34 - item_index * 9.5) * mm
+                canvas.setFillColor(accent)
+                canvas.circle(x + 7 * mm, y + 1 * mm, 1.5 * mm, fill=1, stroke=0)
+                paragraph(safe(item.get("question"), 90), x + 11 * mm, y + 3 * mm, focus_width - 17 * mm, body_small, 8 * mm)
+        end_page()
+
+    # Custom dashboard narrative pages
+    for custom_index, dashboard in enumerate(custom_dashboards[:3], start=1):
+        page_number = custom_start_page + custom_index - 1
+        page_header(page_number)
+        dashboard_title = str(dashboard.get("title") or f"Custom dashboard {custom_index}")
+        creator = str(dashboard.get("creator") or "Dashboard Maker")
+        top = heading(dashboard_title, f"A user-configured view from {creator}, interpreted as part of the leadership story.")
+        rows = dashboard.get("rows") if isinstance(dashboard.get("rows"), list) else []
+        label_column = next(iter(rows[0].keys()), "Period") if rows else "Period"
+        numeric_column = None
+        if rows:
+            for key in rows[0].keys():
+                if key == label_column:
+                    continue
+                if any(re.search(r"-?\d", str(row.get(key) or "")) for row in rows):
+                    numeric_column = key
+                    break
+        custom_points = []
+        if numeric_column:
+            for row in rows[:12]:
+                custom_points.append((str(row.get(label_column) or "")[:12], numeric(row.get(numeric_column)), 0))
+        line_chart(margin, top - 98 * mm, content_width, 88 * mm, custom_points)
+        if custom_points:
+            values = [point[1] for point in custom_points]
+            custom_movement = values[-1] - values[-2] if len(values) > 1 else 0
+            custom_read = f"The latest <b>{safe(numeric_column)}</b> value is <b>{values[-1]:.1f}</b>. It moved <b>{custom_movement:+.1f}</b> from the previous point. The displayed range is <b>{min(values):.1f} to {max(values):.1f}</b>."
+        else:
+            custom_read = safe(dashboard.get("text") or "No numeric series was available for charting in this custom dashboard.", 900)
+        callout(margin, top - 145 * mm, content_width, 34 * mm, "Leadership interpretation", custom_read, navy)
+        end_page()
+
+    # Recommended actions
+    page_header(action_page)
+    top = heading("Recommended leadership actions", "Actions are derived from the available score, sentiment, driver, people and alignment evidence. Validate owners and targets during the review.")
+    actions = [
+        ("1", "Stabilise the latest movement", f"Investigate the {movement:+.1f}-point latest change and confirm whether the same direction appears across teams and dimensions.", "Next 1-2 weeks", teal),
+        ("2", f"Address {top_driver}", "Review representative interactions, separate structural and controllable causes, and assign the correct operational owner.", "Next 2-4 weeks", cyan),
+        ("3", "Target coaching with evidence", f"Prioritise eligible lower performers while validating the interaction evidence and preserving recognition for repeatable practices.", "Next 4 weeks", amber),
+        ("4", "Close alignment blind spots", f"Review {low_positive_mismatch + negative_high_mismatch:,} score-sentiment mismatch cases and feed confirmed learning into QA and process governance.", "Monthly governance", red),
+    ]
+    action_height = 43 * mm
+    for index, (number_text, action_title, action_body, timing, accent) in enumerate(actions):
+        y = top - (index + 1) * action_height + 2 * mm
+        rounded_card(margin, y, content_width, action_height - 7 * mm, white)
+        canvas.setFillColor(accent)
+        canvas.circle(margin + 10 * mm, y + 18 * mm, 6 * mm, fill=1, stroke=0)
+        canvas.setFillColor(white)
+        canvas.setFont("Helvetica-Bold", 10)
+        canvas.drawCentredString(margin + 10 * mm, y + 15.5 * mm, number_text)
+        canvas.setFillColor(navy)
+        canvas.setFont("Helvetica-Bold", 11)
+        canvas.drawString(margin + 21 * mm, y + 24 * mm, action_title[:72])
+        paragraph(safe(action_body), margin + 21 * mm, y + 19 * mm, content_width - 58 * mm, card_body_style, 19 * mm)
+        canvas.setFillColor(accent)
+        canvas.setFont("Helvetica-Bold", 7.5)
+        canvas.drawRightString(page_width - margin - 7 * mm, y + 18 * mm, timing.upper())
+    draw_section_signature(0, "Leadership action")
+    end_page()
+
+    # Methodology
+    page_header(methodology_page)
+    top = heading("Methodology and evidence", "This report retrieves and interprets existing analysis outputs. It does not rerun or alter the underlying NPS or CSAT analysis.")
+    evidence_items = [
+        ("Evidence base", f"{int(total):,} analyzed customer surveys; {len(trend_points)} period-level trend points; {len(ranked_agents)} eligible agents; {len(ranked_managers)} eligible managers/team leaders."),
+        ("Minimum sample", f"People rankings use a minimum sample of {minimum_sample} responses. Entities below this threshold are excluded from ranking."),
+        ("Interpretation", "Score indicates the recorded customer outcome. Sentiment and classified drivers provide context but should be validated against representative interactions."),
+        ("Detail retained", "The Interactive HTML remains the detailed evidence environment. This PDF summarises decision-relevant signals and retains the existing 100-question answers in its appendix."),
+    ]
+    for index, (label, description) in enumerate(evidence_items):
+        y = top - (index + 1) * 39 * mm + 8 * mm
+        rounded_card(margin, y, content_width, 31 * mm, white)
+        canvas.setFillColor(teal)
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.drawString(margin + 7 * mm, y + 20 * mm, label.upper())
+        paragraph(safe(description), margin + 7 * mm, y + 15 * mm, content_width - 14 * mm, card_body_style, 12 * mm)
+    selected_names = [REPORT_TAB_TITLES.get(tab, tab) for tab in selected if tab != "customdashboards"]
+    callout(margin, 30 * mm, content_width, 34 * mm, "Included report scope",
+            safe(", ".join(selected_names[:16]) or "Executive narrative based on the completed analysis.", 850), navy)
+
+    if leadership_questions:
+        end_page()
+        for appendix_index in range(question_appendix_page_count):
+            start_index = appendix_index * 8
+            page_questions = leadership_questions[start_index:start_index + 8]
+            end_index = start_index + len(page_questions)
+            appendix_page_number = appendix_start_page + appendix_index
+            page_header(appendix_page_number)
+            top = heading("Detailed question appendix", f"Questions {start_index + 1}-{end_index} of {len(leadership_questions)}. Answers and evidence statuses are retrieved directly from the existing Results output.")
+            row_height = 24 * mm
+            row_step = 26 * mm
+            for row_index, item in enumerate(page_questions):
+                y = top - (row_index + 1) * row_step + 2 * mm
+                tone = question_tone(item)
+                accent = red if tone == "attention" else green if tone == "strength" else amber if tone == "unavailable" else teal
+                rounded_card(margin, y, content_width, row_height, white)
+                canvas.setFillColor(accent)
+                canvas.rect(margin, y, 2.2 * mm, row_height, fill=1, stroke=0)
+                canvas.setFillColor(accent)
+                canvas.setFont("Helvetica-Bold", 7)
+                number_text = str(item.get("number") or start_index + row_index + 1)
+                category_text = str(item.get("category") or "Leadership result")
+                canvas.drawString(margin + 6 * mm, y + 18.5 * mm, f"Q{number_text}  |  {category_text[:34].upper()}")
+                canvas.drawRightString(page_width - margin - 6 * mm, y + 18.5 * mm, str(item.get("status") or "Monitor")[:30].upper())
+                paragraph(safe(item.get("question"), 110), margin + 6 * mm, y + 16 * mm, content_width - 12 * mm, appendix_question_style, 7 * mm)
+                paragraph(safe(item.get("answer"), 190), margin + 6 * mm, y + 8.5 * mm, content_width - 12 * mm, appendix_answer_style, 7 * mm)
+            if appendix_index < question_appendix_page_count - 1:
+                end_page()
+
+    # Conclusion is intentionally rendered last, after methodology and appendices.
+    end_page()
+    page_header(conclusion_page)
+    top = heading("Conclusion and next steps", "A concise close for the leadership discussion, with the detailed evidence retained in the application.")
+    conclusion_panel_width = 105 * mm
+    conclusion_panel_y = top - 91 * mm
+    rounded_card(margin, conclusion_panel_y, conclusion_panel_width, 78 * mm, pale_teal)
+    canvas.setFillColor(deep_teal)
+    canvas.setFont("Helvetica-Bold", 13)
+    canvas.drawString(margin + 8 * mm, conclusion_panel_y + 64 * mm, "Overall conclusion")
+    conclusion_text = (
+        f"The completed analysis places {metric} at <b>{score:.1f}</b>, a position that is <b>{score_read(score)}</b>. "
+        f"The latest period moved <b>{movement:+.1f} points</b>, while <b>{top_driver}</b> is the leading classified experience driver. "
+        f"Negative sentiment is <b>{negative:.1f}%</b> and the {segment_names[-1].lower()} population represents <b>{segment_shares[-1]:.1f}%</b> of responses. "
+        "Leadership should confirm the movement across teams, validate representative interactions, and assign structural and coaching actions to the correct owners."
+    )
+    paragraph(conclusion_text, margin + 8 * mm, conclusion_panel_y + 56 * mm, conclusion_panel_width - 16 * mm, card_body_style, 48 * mm)
+    conclusion_image = chapter_image(2)
+    if conclusion_image is None:
+        conclusion_image = home_image
+    if conclusion_image is not None:
+        draw_editorial_image(conclusion_image, margin + conclusion_panel_width + 10 * mm, conclusion_panel_y, content_width - conclusion_panel_width - 10 * mm, 78 * mm, "Leadership close")
+
+    conclusion_card_width = (content_width - 8 * mm) / 3
+    conclusion_card_y = conclusion_panel_y - 42 * mm
+    kpi_card(margin, conclusion_card_y, conclusion_card_width, "Evidence base", fmt(total, 0), "Analyzed customer responses supporting the report.", teal)
+    kpi_card(margin + conclusion_card_width + 4 * mm, conclusion_card_y, conclusion_card_width, "Priority driver", str(top_driver)[:18], "Validate controllability before assigning action.", amber)
+    kpi_card(margin + 2 * (conclusion_card_width + 4 * mm), conclusion_card_y, conclusion_card_width, "Questions retained", fmt(len(leadership_questions), 0), "Detailed Results evidence included in the appendix.", cyan)
+
+    app_reference = "Krestrel Analysis Suite - Interactive Board Room HTML"
+    if re.match(r"^https?://", app_url, flags=re.IGNORECASE):
+        app_reference += f"<br/><font size='8'>{safe(app_url, 130)}</font>"
+    callout(margin, 35 * mm, content_width, 47 * mm, "Continue the investigation in the app",
+            f"Use <b>{app_reference}</b> for interactive filters, detailed tables, record-level evidence, role-based reads, custom dashboards, and the complete 100-question Results trail. This PDF is the leadership narrative; the application remains the source for drill-down analysis.", navy)
+    canvas.save()
+    return output.getvalue()
+
+
 def _quartile_rollup(agent_df: pd.DataFrame) -> list[dict[str, Any]]:
     frame = _quartile_summary(agent_df)
     if frame.empty:
@@ -3938,6 +5743,192 @@ def _dynamic_dimension_payload(df: pd.DataFrame, selected_columns: list[str]) ->
     return payload
 
 
+def _selected_dimension_columns(df: pd.DataFrame, dynamic_dimensions: list[str], mapping: dict[str, Any]) -> list[str]:
+    candidates = list(dynamic_dimensions or [])
+    for mapping_key, canonical in (("agent", "Agent Name"), ("manager", "Manager/TL"), ("wave", "Wave"), ("tenure", "Tenure")):
+        if str(mapping.get(mapping_key) or "").strip():
+            candidates.append(canonical)
+    selected: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        label = str(candidate or "").strip()
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        selected.append(label)
+    return selected
+
+
+def _evidence_relationship_payload(
+    df: pd.DataFrame,
+    selected_dimensions: list[str],
+    is_csat: bool,
+    minimum_sample: int = 5,
+) -> dict[str, Any]:
+    metric = "CSAT" if is_csat else "NPS"
+    empty = {
+        "metric": metric,
+        "minimumSample": minimum_sample,
+        "selectedDimensions": list(selected_dimensions or []),
+        "usableResponses": 0,
+        "score": None,
+        "confidenceLow": None,
+        "confidenceHigh": None,
+        "marginOfError": None,
+        "evidenceRating": "Insufficient",
+        "dimensions": [],
+        "strongestDimension": None,
+    }
+    if df.empty:
+        return empty
+
+    type_column = "CSAT Type" if is_csat and "CSAT Type" in df.columns else "NPS Type"
+    if type_column not in df.columns:
+        return empty
+    labels = df[type_column].fillna("").astype(str).str.strip().str.lower()
+    if is_csat:
+        outcome = labels.map({"satisfied": 100.0, "neutral": 0.0, "dissatisfied": 0.0, "promoter": 100.0, "passive": 0.0, "detractor": 0.0})
+    else:
+        outcome = labels.map({"promoter": 100.0, "passive": 0.0, "detractor": -100.0})
+    usable = outcome.dropna()
+    if usable.empty:
+        return empty
+    score = float(usable.mean())
+    standard_error = float(usable.std(ddof=1) / math.sqrt(len(usable))) if len(usable) > 1 else 0.0
+    margin = 1.96 * standard_error
+    lower_bound = 0.0 if is_csat else -100.0
+    confidence_low = max(lower_bound, score - margin)
+    confidence_high = min(100.0, score + margin)
+    evidence_rating = "Strong" if len(usable) >= 1000 else "Moderate" if len(usable) >= 300 else "Directional" if len(usable) >= 50 else "Insufficient"
+
+    rows: list[dict[str, Any]] = []
+    total_variation = float(((usable - score) ** 2).sum())
+    for dimension in selected_dimensions:
+        if dimension not in df.columns:
+            rows.append({
+                "Dimension": dimension,
+                "Status": "Not returned in analysis output",
+                "Populated": 0,
+                "Missing %": 100.0,
+                "Values": 0,
+                "Eligible Values": 0,
+                "Effect Size": None,
+                "Relationship": "Unavailable",
+                "Score Spread": None,
+                "Highest Value": "Not available",
+                "Highest Score": None,
+                "Lowest Value": "Not available",
+                "Lowest Score": None,
+                "Pearson r": None,
+                "Regression Slope": None,
+                "R Squared": None,
+                "Numeric": False,
+            })
+            continue
+
+        raw_dimension = df.loc[usable.index, dimension]
+        text_dimension = raw_dimension.fillna("").astype(str).str.strip()
+        populated_mask = text_dimension.ne("") & text_dimension.str.lower().ne("unknown")
+        populated_count = int(populated_mask.sum())
+        missing_pct = round((1 - populated_count / max(len(usable), 1)) * 100, 2)
+        value_count = int(text_dimension[populated_mask].nunique())
+        grouped_scores: list[dict[str, Any]] = []
+        if populated_count:
+            grouped_frame = pd.DataFrame({"Dimension": text_dimension[populated_mask], "Outcome": usable.loc[text_dimension[populated_mask].index]})
+            for value, group in grouped_frame.groupby("Dimension", dropna=False):
+                volume = int(len(group))
+                if volume < minimum_sample:
+                    continue
+                grouped_scores.append({"value": str(value), "score": float(group["Outcome"].mean()), "volume": volume})
+        grouped_scores.sort(key=lambda item: (item["score"], item["volume"]), reverse=True)
+        eligible_count = len(grouped_scores)
+        highest = grouped_scores[0] if grouped_scores else None
+        lowest = grouped_scores[-1] if grouped_scores else None
+        spread = float(highest["score"] - lowest["score"]) if highest and lowest and eligible_count > 1 else None
+
+        eligible_values = {item["value"] for item in grouped_scores}
+        eligible_mask = populated_mask & text_dimension.isin(eligible_values)
+        between_variation = 0.0
+        if eligible_mask.any() and total_variation > 0:
+            eligible_frame = pd.DataFrame({"Dimension": text_dimension[eligible_mask], "Outcome": usable.loc[text_dimension[eligible_mask].index]})
+            eligible_mean = float(eligible_frame["Outcome"].mean())
+            eligible_total_variation = float(((eligible_frame["Outcome"] - eligible_mean) ** 2).sum())
+            if eligible_total_variation > 0:
+                for _value, group in eligible_frame.groupby("Dimension"):
+                    between_variation += len(group) * (float(group["Outcome"].mean()) - eligible_mean) ** 2
+                effect_size = max(0.0, min(1.0, between_variation / eligible_total_variation))
+            else:
+                effect_size = 0.0
+        else:
+            effect_size = None
+        relationship = "Unavailable" if effect_size is None else "Strong" if effect_size >= 0.14 else "Moderate" if effect_size >= 0.06 else "Weak" if effect_size >= 0.01 else "Minimal"
+
+        numeric_values = pd.to_numeric(raw_dimension, errors="coerce")
+        numeric_quality = float(numeric_values.notna().sum() / max(populated_count, 1)) if populated_count else 0.0
+        numeric_mask = numeric_values.notna() & outcome.loc[numeric_values.index].notna()
+        is_numeric = numeric_quality >= 0.8 and int(numeric_values[numeric_mask].nunique()) >= 3
+        pearson = slope = r_squared = None
+        if is_numeric and int(numeric_mask.sum()) >= max(minimum_sample * 2, 10):
+            x = numeric_values[numeric_mask].astype(float)
+            y = outcome.loc[x.index].astype(float)
+            x_variance = float(((x - x.mean()) ** 2).sum())
+            if x_variance > 0:
+                pearson_value = x.corr(y)
+                covariance = float(((x - x.mean()) * (y - y.mean())).sum())
+                slope_value = covariance / x_variance
+                if pd.notna(pearson_value):
+                    pearson = float(pearson_value)
+                    slope = float(slope_value)
+                    r_squared = float(pearson_value ** 2)
+
+        status = "Ready"
+        if populated_count == 0:
+            status = "No populated values"
+        elif value_count < 2:
+            status = "No measurable variation"
+        elif is_numeric and pearson is not None:
+            status = "Ready - numeric relationship"
+        elif eligible_count < 2:
+            status = "Insufficient sample across values"
+        elif value_count > 250:
+            status = "High-cardinality; summarized with safeguards"
+        rows.append({
+            "Dimension": dimension,
+            "Status": status,
+            "Populated": populated_count,
+            "Missing %": missing_pct,
+            "Values": value_count,
+            "Eligible Values": eligible_count,
+            "Effect Size": round(effect_size, 4) if effect_size is not None else None,
+            "Relationship": relationship,
+            "Score Spread": round(spread, 2) if spread is not None else None,
+            "Highest Value": highest["value"] if highest else "Not available",
+            "Highest Score": round(highest["score"], 2) if highest else None,
+            "Lowest Value": lowest["value"] if lowest else "Not available",
+            "Lowest Score": round(lowest["score"], 2) if lowest else None,
+            "Pearson r": round(pearson, 4) if pearson is not None else None,
+            "Regression Slope": round(slope, 4) if slope is not None else None,
+            "R Squared": round(r_squared, 4) if r_squared is not None else None,
+            "Numeric": is_numeric,
+        })
+
+    rows.sort(key=lambda item: (item.get("Effect Size") is not None, item.get("Effect Size") or -1, item.get("Populated") or 0), reverse=True)
+    strongest = next((row for row in rows if row.get("Effect Size") is not None), None)
+    return {
+        "metric": metric,
+        "minimumSample": minimum_sample,
+        "selectedDimensions": list(selected_dimensions or []),
+        "usableResponses": int(len(usable)),
+        "score": round(score, 2),
+        "confidenceLow": round(confidence_low, 2),
+        "confidenceHigh": round(confidence_high, 2),
+        "marginOfError": round(margin, 2),
+        "evidenceRating": evidence_rating,
+        "dimensions": rows,
+        "strongestDimension": strongest,
+    }
+
+
 def _numeric_quality(series: pd.Series) -> tuple[pd.Series, float]:
     populated = series[(series.notna()) & (series.astype(str).str.strip() != "")]
     numeric = pd.to_numeric(populated, errors="coerce")
@@ -4033,6 +6024,7 @@ def _analysis_payload() -> dict[str, Any]:
         analysis_engines = dict(STATE.analysis_engines)
         model_paths = dict(STATE.model_paths)
         calendar_settings = dict(STATE.calendar_settings)
+        mapping_config = dict(STATE.last_run_config.get("mapping", {}))
     analyzed_df = _apply_date_filter(raw_analyzed_df)
     analyzed_df = _apply_reporting_calendar(analyzed_df, calendar_settings)
     if analyzed_df.empty:
@@ -4059,6 +6051,8 @@ def _analysis_payload() -> dict[str, Any]:
     is_csat = "CSAT Type" in analyzed_df.columns
     if is_csat:
         summary, counts = _csat_summary_aliases(summary, counts)
+    selected_dimension_columns = _selected_dimension_columns(analyzed_df, dynamic_dimensions, mapping_config)
+    evidence_relationship = _evidence_relationship_payload(analyzed_df, selected_dimension_columns, is_csat)
     sentiment = sentiment_summary(analyzed_df) if not analyzed_df.empty else {}
     try:
         insights = executive_snapshot_insights(analyzed_df, reason_df) if not analyzed_df.empty else ""
@@ -4181,12 +6175,20 @@ def _analysis_payload() -> dict[str, Any]:
             satisfied = int(period_counts.get("Satisfied", period_counts.get("Promoter", 0)) or 0)
             neutral = int(period_counts.get("Neutral", period_counts.get("Passive", 0)) or 0)
             dissatisfied = int(period_counts.get("Dissatisfied", period_counts.get("Detractor", 0)) or 0)
+            promoter = int(period_counts.get("Promoter", period_counts.get("Satisfied", 0)) or 0)
+            passive = int(period_counts.get("Passive", period_counts.get("Neutral", 0)) or 0)
+            detractor = int(period_counts.get("Detractor", period_counts.get("Dissatisfied", 0)) or 0)
+            period_score = float(period_summary.get("CSAT", period_summary.get("nps", period_summary.get("NPS", 0))) or 0)
             population_daily.append(
                 {
                     "Period": pd.Timestamp(period).strftime("%Y-%m-%d"),
                     "Key": pd.Timestamp(period).strftime("%Y-%m-%d"),
-                    "CSAT": float(period_summary.get("CSAT", period_summary.get("nps", 0)) or 0),
+                    "NPS": period_score,
+                    "CSAT": period_score,
                     "Responses": satisfied + neutral + dissatisfied,
+                    "Promoter": promoter,
+                    "Passive": passive,
+                    "Detractor": detractor,
                     "Satisfied": satisfied,
                     "Neutral": neutral,
                     "Dissatisfied": dissatisfied,
@@ -4208,7 +6210,8 @@ def _analysis_payload() -> dict[str, Any]:
         "analysisEngines": analysis_engines,
         "modelPaths": model_paths,
         "calendar": calendar_settings,
-        "mapping": dict(STATE.last_run_config.get("mapping", {})),
+        "mapping": mapping_config,
+        "selectedDimensionColumns": selected_dimension_columns,
         "businessRules": dict(STATE.last_run_config.get("businessRules", {})),
         "timings": {
             "totalSeconds": round(max(0.0, STATE.analysis_completed_at - STATE.analysis_started_at), 2)
@@ -4242,6 +6245,7 @@ def _analysis_payload() -> dict[str, Any]:
         "tenure": _safe_records(tenure_df, 100),
         "tenureCards": _dimension_cards(analyzed_df, tenure_df, "Tenure"),
         "dynamicDimensions": _dynamic_dimension_payload(analyzed_df, dynamic_dimensions),
+        "evidenceRelationship": evidence_relationship,
         "themes": _safe_records(_theme_summary(analyzed_df), 100),
         "themeRows": _records_for_columns(feedback_df, theme_detail_columns, 5000),
         "operations": _operations_summary(analyzed_df),
@@ -5878,6 +7882,7 @@ class NPSHandler(BaseHTTPRequestHandler):
                     "lookup_columns": list(STATE.lookup_df.columns),
                     "base_column_stats": STATE.base_column_profile or _column_profile(STATE.base_df),
                     "lookup_column_stats": STATE.lookup_column_profile or _column_profile(STATE.lookup_df),
+                    "dynamic_dimensions": list(STATE.dynamic_dimensions),
                     "guesses": _guess_columns(list(STATE.base_df.columns)),
                     "analysis": _analysis_payload(),
                     "sparrow_training": _training_snapshot(),
@@ -6175,6 +8180,10 @@ class NPSHandler(BaseHTTPRequestHandler):
                     STATE.files = project.get("files") if isinstance(project.get("files"), dict) else {"analysis": project.get("preferredName") or "Imported analysis"}
                     STATE.file_sizes = project.get("fileSizes") if isinstance(project.get("fileSizes"), dict) else {}
                     STATE.dynamic_dimensions = project.get("dynamicDimensions") if isinstance(project.get("dynamicDimensions"), list) else []
+                    STATE.last_run_config = {
+                        "mapping": dict(analysis.get("mapping", {})) if isinstance(analysis.get("mapping"), dict) else {},
+                        "businessRules": dict(analysis.get("businessRules", {})) if isinstance(analysis.get("businessRules"), dict) else {},
+                    }
                     STATE.date_filter = project.get("dateFilter") if isinstance(project.get("dateFilter"), dict) else analysis.get("dateFilter") if isinstance(analysis.get("dateFilter"), dict) else {"mode": "All Time", "start": "", "end": ""}
                     STATE.calendar_settings = calendar_settings
                     STATE.status = "Imported analysis ready"
@@ -6288,6 +8297,14 @@ class NPSHandler(BaseHTTPRequestHandler):
             if self.path == "/api/custom-statistics":
                 _json_response(self, _custom_statistics(_read_json(self)))
                 return
+            if self.path == "/api/weekly-trend-dashboard":
+                result = _weekly_trend_dashboard(_read_json(self))
+                _json_response(self, result, 200 if result.get("ok") else 400)
+                return
+            if self.path == "/api/weekly-trend-matrix":
+                result = _weekly_trend_matrix(_read_json(self))
+                _json_response(self, result, 200 if result.get("ok") else 400)
+                return
             if self.path == "/api/module/inspect":
                 payload = _read_json(self)
                 df = _decode_tabular(payload)
@@ -6395,6 +8412,12 @@ class NPSHandler(BaseHTTPRequestHandler):
                 session = _session_from_handler(self)
                 _audit_from_handler(self, session.get("username", "unknown") if session else "unknown", "EXPORT_REPORT_PPTX", "User exported board-room PPT/PDF pack.")
                 self._export_report_pptx(ppt_payload)
+                return
+            if self.path == "/api/export/boardroom-pdf":
+                pdf_payload = _read_json(self)
+                session = _session_from_handler(self)
+                _audit_from_handler(self, session.get("username", "unknown") if session else "unknown", "EXPORT_BOARDROOM_PDF", "User exported a native board-room PDF pack.")
+                self._export_boardroom_pdf(pdf_payload)
                 return
             _json_response(self, {"ok": False, "error": "Unknown endpoint."}, 404)
         except Exception as exc:
@@ -6628,6 +8651,31 @@ class NPSHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation")
         self.send_header("Content-Disposition", "attachment; filename=NPS_Analyzer_Selected_Report.pptx")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _export_boardroom_pdf(self, payload: dict[str, Any]) -> None:
+        try:
+            analysis_payload = payload.get("analysis") if isinstance(payload.get("analysis"), dict) else {}
+            if STATE.analyzed_df.empty and not analysis_payload:
+                _json_response(self, {"ok": False, "error": "Run analysis first."}, 400)
+                return
+            selected = [str(item) for item in payload.get("tabs", []) if str(item).strip()]
+            custom_dashboards = payload.get("customDashboards") if isinstance(payload.get("customDashboards"), list) else []
+            if not selected and not custom_dashboards:
+                _json_response(self, {"ok": False, "error": "Select at least one report section or add a custom dashboard."}, 400)
+                return
+            content = _build_boardroom_pdf(payload)
+            metric = re.sub(r"[^A-Za-z0-9_-]+", "_", str(payload.get("metric") or "NPS").upper()).strip("_") or "NPS"
+            filename = f"{metric}_Board_Room_Leadership_Report.pdf"
+        except Exception as exc:
+            traceback.print_exc()
+            _json_response(self, {"ok": False, "error": f"Board-room PDF export failed: {exc}"}, 500)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/pdf")
+        self.send_header("Content-Disposition", f"attachment; filename={filename}")
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self.wfile.write(content)

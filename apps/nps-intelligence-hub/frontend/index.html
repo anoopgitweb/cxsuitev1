@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>NPS Dashboard</title>
-    <link rel="stylesheet" href="styles.css?v=20260710-owl-theme-results-v81" />
+    <link rel="stylesheet" href="styles.css?v=20260713-preflight-dialog-v102" />
   </head>
   <body>
     <header class="topbar">
@@ -87,6 +87,7 @@
             <button class="nav-item" data-view="performancequestions" data-icon="performance">Master Lens</button>
             <button class="nav-item" data-view="movingaverageslaunch" data-icon="performance">Moving Averages</button>
             <button class="nav-item" data-view="quartilelaunch" data-icon="quartile">Quartile Intelligence</button>
+            <button class="nav-item" data-view="evidencerelationship" data-icon="analysis">Evidence &amp; Relationship Intelligence</button>
             <button class="nav-item" data-view="statistics" data-icon="stats">Statistics</button>
             <button class="nav-item" data-view="customstatslaunch" data-icon="stats">Custom Statistics</button>
           </div>
@@ -149,9 +150,25 @@
             <span><strong>Downloads and Outputs</strong><small>Board pack and GenAI files</small></span>
           </button>
           <div class="nav-section-body">
-            <button class="nav-item" data-view="boardpdf" data-icon="document">Board Room PDF</button>
+            <button class="nav-item" data-view="boardpdf" data-icon="document">Board Room HTML</button>
             <button class="nav-item" data-view="rawdata" data-icon="downloads">Analysis Raw Data</button>
             <button id="genAiJsonOutput" class="nav-item" data-icon="document" type="button">Create Gen AI JSON</button>
+          </div>
+        </div>
+
+        <div class="nav-section">
+          <button class="nav-section-toggle" type="button" aria-expanded="false">
+            <span class="nav-section-icon" data-section-icon="command"></span>
+            <span><strong>Dashboard Maker</strong><small>Create configurable dashboard views</small></span>
+          </button>
+          <div class="nav-section-body">
+            <button class="nav-item" data-view="weeklytrenddashboards" data-icon="stats">Weekly Trend Creator</button>
+            <button class="nav-item" data-view="weeklytrenddashboard2" data-icon="dashboard">Dimension Matrix Creator (Weeks)</button>
+            <button class="nav-item" data-view="monthlytrendcreator" data-icon="stats">Monthly Trend Creator</button>
+            <button class="nav-item" data-view="monthlymatrixcreator" data-icon="dashboard">Dimension Matrix Creator (Months)</button>
+            <button class="nav-item" data-view="performancecoachingcreator" data-icon="performance">Performance &amp; Coaching Creator</button>
+            <button class="nav-item" data-view="driverssentimentcreator" data-icon="feedback">Drivers &amp; Sentiment Creator</button>
+            <button class="nav-item" data-view="customkpicreator" data-icon="command">Custom KPI Canvas</button>
           </div>
         </div>
 
@@ -997,6 +1014,82 @@
           </div>
         </section>
 
+        <section id="weeklytrenddashboard2" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">Dashboard Maker</p><h1>Dimension Matrix Creator (Weeks)</h1></div>
+            <span id="weeklyTrend2Status">Run analysis to build a weekly dimension matrix.</span>
+          </div>
+          <div class="weekly-trend-builder weekly-trend-matrix-builder">
+            <div class="weekly-trend-builder-head"><h3>Weekly Dimension Matrix Builder</h3><p>Choose one reporting week, place a business dimension across the columns, and select the metric rows relevant to your audience.</p></div>
+            <div class="weekly-trend-builder-grid weekly-trend-matrix-grid">
+              <label>Dashboard Title<input id="weeklyTrend2Title" value="Weekly NPS Dimension Matrix" /></label>
+              <label>Reporting Week<select id="weeklyTrend2Week"></select></label>
+              <label>Column Dimension<select id="weeklyTrend2Dimension"></select></label>
+              <label>Maximum Columns<select id="weeklyTrend2MaxColumns"><option value="10">Top 10</option><option value="15" selected>Top 15</option><option value="20">Top 20</option><option value="30">Top 30</option><option value="0">All values</option></select></label>
+              <label>Column Order<select id="weeklyTrend2Sort"><option value="volume">Survey volume: high to low</option><option value="name">Dimension name: A to Z</option></select></label>
+              <label>Optional Numeric Field<select id="weeklyTrend2ValueField"></select></label>
+              <label>Numeric Calculation<select id="weeklyTrend2Aggregation"><option value="average">Average</option><option value="sum">Sum</option></select></label>
+            </div>
+            <div class="weekly-trend-metric-picker"><div><strong>Metric Rows</strong><span>Pick the rows to include in the matrix.</span></div><div id="weeklyTrend2MetricOptions" class="weekly-trend-metric-options"></div></div>
+            <div class="weekly-trend-actions"><button id="weeklyTrend2PreviewButton" class="button button-secondary" type="button">Preview</button><button id="weeklyTrend2AddButton" class="button button-primary" type="button">Add Dashboard</button></div>
+            <div id="weeklyTrend2Message" class="summary-builder-message">Select a week, dimension, and metric rows.</div>
+            <div id="weeklyTrend2Preview" class="weekly-trend-preview"></div>
+          </div>
+          <div class="panel weekly-trend-dashboard-panel"><div class="panel-title-row"><div><h2>Added Matrix Dashboards</h2><p id="weeklyTrend2DashboardMeta" class="panel-meta">Add one or more weekly dimension matrices.</p></div><button id="weeklyTrend2Clear" class="button button-secondary" type="button">Clear</button></div><div id="weeklyTrend2Dashboard" class="weekly-trend-dashboard-output"></div></div>
+        </section>
+
+        <section id="weeklytrenddashboards" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">Dashboard Maker</p><h1>Weekly Trend Creator</h1></div>
+            <span id="weeklyTrendStatus">Run analysis to build weekly scorecards.</span>
+          </div>
+          <div class="weekly-trend-builder">
+            <div class="weekly-trend-builder-head">
+              <div><h3>Dashboard Builder</h3><p>Turn the completed analysis into a week-ending scorecard. Filter by any available business dimension without rerunning analysis.</p></div>
+            </div>
+            <div class="weekly-trend-builder-grid">
+              <label>Dashboard Title<input id="weeklyTrendTitle" value="Weekly NPS Performance" /></label>
+              <label>Weeks<select id="weeklyTrendWeeks"><option value="4">Last 4 weeks</option><option value="8">Last 8 weeks</option><option value="12" selected>Last 12 weeks</option><option value="26">Last 26 weeks</option><option value="52">Last 52 weeks</option><option value="0">All available weeks</option></select></label>
+              <label>Metric View<select id="weeklyTrendMetricSet"><option value="full">Full weekly scorecard</option><option value="score">Score &amp; survey volume</option><option value="segments">Segment mix</option><option value="sentiment">Sentiment mix</option></select></label>
+              <label>Dimension<select id="weeklyTrendDimension"></select></label>
+              <label>Dimension Value<select id="weeklyTrendDimensionValue"></select></label>
+              <label>Week Order<select id="weeklyTrendOrder"><option value="newest">Newest week first</option><option value="oldest">Oldest week first</option></select></label>
+            </div>
+            <div class="weekly-trend-actions"><button id="weeklyTrendPreviewButton" class="button button-secondary" type="button">Preview</button><button id="weeklyTrendAddButton" class="button button-primary" type="button">Add Dashboard</button></div>
+            <div id="weeklyTrendMessage" class="summary-builder-message">Select options, then preview the weekly trend.</div>
+            <div id="weeklyTrendPreview" class="weekly-trend-preview"></div>
+          </div>
+          <div class="panel weekly-trend-dashboard-panel">
+            <div class="panel-title-row"><div><h2>Added Weekly Dashboards</h2><p id="weeklyTrendDashboardMeta" class="panel-meta">Add one or more views to compare business dimensions.</p></div><button id="weeklyTrendClear" class="button button-secondary" type="button">Clear</button></div>
+            <div id="weeklyTrendDashboard" class="weekly-trend-dashboard-output"></div>
+          </div>
+        </section>
+
+        <section id="monthlytrendcreator" class="view dashboard-maker-studio-view">
+          <div class="section-title"><div><p class="eyebrow">Dashboard Maker</p><h1>Monthly Trend Creator</h1></div><span>Build configurable month-by-month score, volume, segment, and sentiment graphs.</span></div>
+          <div class="dashboard-maker-studio" data-dashboard-studio="monthlyTrend"></div>
+        </section>
+
+        <section id="monthlymatrixcreator" class="view dashboard-maker-studio-view">
+          <div class="section-title"><div><p class="eyebrow">Dashboard Maker</p><h1>Dimension Matrix Creator (Months)</h1></div><span>Compare dimension values within a selected reporting month.</span></div>
+          <div class="dashboard-maker-studio" data-dashboard-studio="monthlyMatrix"></div>
+        </section>
+
+        <section id="performancecoachingcreator" class="view dashboard-maker-studio-view">
+          <div class="section-title"><div><p class="eyebrow">Dashboard Maker</p><h1>Performance &amp; Coaching Creator</h1></div><span>Build reliable performance rankings and coaching populations from existing analysis evidence.</span></div>
+          <div class="dashboard-maker-studio" data-dashboard-studio="performanceCoaching"></div>
+        </section>
+
+        <section id="driverssentimentcreator" class="view dashboard-maker-studio-view">
+          <div class="section-title"><div><p class="eyebrow">Dashboard Maker</p><h1>Drivers &amp; Sentiment Creator</h1></div><span>Explore ACPT ownership, themes, reasons, and sentiment using configurable graphs.</span></div>
+          <div class="dashboard-maker-studio" data-dashboard-studio="driversSentiment"></div>
+        </section>
+
+        <section id="customkpicreator" class="view dashboard-maker-studio-view">
+          <div class="section-title"><div><p class="eyebrow">Dashboard Maker</p><h1>Custom KPI Canvas</h1></div><span>Advanced flexible canvas for assembling reusable KPI and graph tiles.</span></div>
+          <div class="dashboard-maker-studio" data-dashboard-studio="kpiCanvas"></div>
+        </section>
+
         <section id="customdashboards" class="view">
           <div class="section-title">
             <div>
@@ -1417,13 +1510,13 @@
                 </label>
                 <label>Week Ends
                   <select id="movingWeekEndDay">
-                    <option value="0">Sunday</option>
+                    <option value="0" selected>Sunday</option>
                     <option value="1">Monday</option>
                     <option value="2">Tuesday</option>
                     <option value="3">Wednesday</option>
                     <option value="4">Thursday</option>
                     <option value="5">Friday</option>
-                    <option value="6" selected>Saturday</option>
+                    <option value="6">Saturday</option>
                   </select>
                 </label>
               </div>
@@ -1531,6 +1624,33 @@
             <div class="chart-card full"><h3>4-Week Quartile Movement</h3><p class="chart-subtitle">Latest four weeks x Quartile Average NPS</p><svg id="quartileWeeklyChart" viewBox="0 0 760 260"></svg><div id="quartileWeeklyInsight" class="chart-insight"></div></div>
           </div>
           <div class="table-wrap fit-table"><table id="quartileTable"></table></div>
+          </div>
+        </section>
+
+        <section id="evidencerelationship" class="view data-view evidence-relationship-view">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Performance Lens</p>
+              <h1>Evidence &amp; Relationship Intelligence</h1>
+            </div>
+          </div>
+          <div class="evidence-relationship-toolbar">
+            <label>Dimension<select id="evidenceRelationshipDimension"></select></label>
+            <div id="evidenceRelationshipStatus" class="evidence-relationship-status">Run analysis to build the statistical relationship read.</div>
+          </div>
+          <div id="evidenceRelationshipCards" class="metric-grid evidence-relationship-cards"></div>
+          <div class="dashboard-grid evidence-relationship-grid">
+            <div class="panel evidence-relationship-lead"><h2>Leadership interpretation</h2><div id="evidenceRelationshipNarrative" class="insight-text"></div></div>
+            <div class="panel"><h2>Selected dimension evidence</h2><div id="evidenceRelationshipDetail"></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title-row"><div><h2>Dimension relationship ranking</h2><p class="panel-meta">Effect size compares between-group outcome variation. It is an association measure, not proof of causation.</p></div><button class="button button-secondary" data-export-table="evidenceRelationshipTable" type="button">Export CSV</button></div>
+            <div class="table-wrap fit-table compact-report-table"><table id="evidenceRelationshipTable"></table></div>
+          </div>
+          <div class="panel evidence-regression-panel">
+            <h2>Correlation &amp; regression evidence</h2>
+            <p class="panel-meta">Pearson correlation and simple regression are shown only when the selected dimension is genuinely numeric. Categorical dimensions use effect-size analysis.</p>
+            <div id="evidenceRelationshipRegression"></div>
           </div>
         </section>
 
@@ -2181,16 +2301,16 @@
         <section id="boardpdf" class="view data-view pdf-builder-view">
           <div class="section-title">
             <div>
-              <p class="eyebrow">Board Room PDF</p>
-              <h1>Executive Board Room Ready PDF</h1>
+              <p class="eyebrow">Board Room HTML</p>
+              <h1>Interactive Board Room HTML</h1>
             </div>
             <span>Choose exactly what leadership should see.</span>
           </div>
           <div class="pdf-builder-shell">
             <div class="panel pdf-builder-control">
-              <p class="eyebrow">PDF Builder</p>
+              <p class="eyebrow">HTML Builder</p>
               <h2>Report content</h2>
-              <p class="insight-text">Select the sections to include. The output opens in a print-ready window where the user can save as PDF.</p>
+              <p class="insight-text">Select the report sections to include. Added Dashboard Maker views are included automatically under Custom Dashboards.</p>
               <div class="pdf-builder-presets">
                 <button id="boardPdfRecommended" class="button button-secondary" type="button">Recommended</button>
                 <button id="boardPdfSelectAll" class="button button-secondary" type="button">Select All</button>
@@ -2203,13 +2323,11 @@
                 <label>Footer Note<input id="boardPdfFooterNote" value="Confidential - Krestrel Analysis Suite Review" /></label>
                 <label>Home Page Image<input id="boardPdfHomeImage" type="file" accept="image/*" /></label>
                 <label>Separator Images<input id="boardPdfSeparatorImage" type="file" accept="image/*" multiple /></label>
-                <label class="pdf-builder-check"><input id="boardPdfIncludeHeaderFooter" type="checkbox" /> Show header and footer in PDF</label>
               </div>
               <div class="pdf-builder-actions">
-                <button id="createBoardRoomPdf" class="button button-primary pdf-builder-main-action" type="button">Create Board Room PDF</button>
-                <button id="createInteractiveHtml" class="button button-secondary pdf-builder-main-action interactive-html-action" type="button">Create Interactive HTML</button>
+                <button id="createInteractiveHtml" class="button button-primary pdf-builder-main-action interactive-html-action" type="button">Create Interactive HTML</button>
               </div>
-              <div class="pdf-builder-note">For the cleanest PDF, turn off browser print Headers and footers in the print dialog. The app can add its own header/footer if selected above.</div>
+              <div class="pdf-builder-note">Before creation, the report checks selected sections and custom dashboards for empty cards, tables, and charts. Download PDF creates a separate, concise board-room document; Download HTML retains the detailed interactive views.</div>
             </div>
             <div class="panel pdf-builder-options">
               <div class="pdf-builder-option-grid">
@@ -2425,7 +2543,7 @@
     <script>
       (function () {
         const resultAliases = {};
-        const allowed = new Set(["setuphome", "setup", "analysissummary", "datasetsummary", "performanceoverview", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout", "columnexplorer", "executive", "executivelens", "dimensionlens", "customdims", "analysis", "feedback", "performancequestions", "agent", "manager", "customdashboards"]);
+        const allowed = new Set(["setuphome", "setup", "analysissummary", "datasetsummary", "performanceoverview", "weeklytrenddashboards", "weeklytrenddashboard2", "monthlytrendcreator", "monthlymatrixcreator", "performancecoachingcreator", "driverssentimentcreator", "customkpicreator", "executivesummary", "decisionguide", "dimensions", "results", "sentimentbriefing", "insightsreadout", "columnexplorer", "executive", "executivelens", "dimensionlens", "customdims", "analysis", "feedback", "performancequestions", "agent", "manager", "customdashboards"]);
         const aliases = { movingaverages: "movingaverageslaunch", quartile: "quartilelaunch", customstats: "customstatslaunch" };
         const view = new URLSearchParams(window.location.search).get("view") || "";
         if (!allowed.has(view)) return;
@@ -2451,7 +2569,9 @@
         }
       }());
     </script>
-  <script src="app.js?v=20260710-owl-theme-results-v81"></script>
+  <script src="app.js?v=20260714-evidence-relationship-v113"></script>
+  <script src="dashboard-maker.js?v=20260713-row-graphs-v98"></script>
+  <script src="evidence-relationship.js?v=20260714-v2"></script>
       <script src="/auth.js?v=20260621-auth-handoff-v1"></script>
   </body>
 </html>
