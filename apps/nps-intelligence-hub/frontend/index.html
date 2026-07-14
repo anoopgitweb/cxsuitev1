@@ -492,10 +492,13 @@
                 <div class="guided-analysis-options guided-dimension-options">
                   <div>
                     <strong><span class="setup-step-number inline-step-number">7</span>Dimensions</strong>
-                    <p>Add optional report cuts for dashboard filters, summaries, and custom views.</p>
+                    <p>Add optional report cuts with up to 20 unique values for dashboard filters, summaries, and custom views.</p>
                   </div>
                   <label>Additional Report Dimensions<select id="dynamicDimensionSelect"></select></label>
-                  <button id="addDynamicDimension" class="button button-secondary" type="button">Add Dimension</button>
+                  <div class="dimension-action-buttons">
+                    <button id="addDynamicDimension" class="button button-secondary" type="button">Add Dimension</button>
+                    <button id="addAllDynamicDimensions" class="button button-secondary" type="button">Add All Dimensions</button>
+                  </div>
                   <div id="dynamicDimensionChips" class="dimension-chips"></div>
                   <button id="confirmDimensionsBtn" class="button button-secondary setup-confirm-button" type="button">Confirm Dimensions</button>
                 </div>
@@ -828,6 +831,25 @@
             <div><p class="eyebrow">Analysis Results</p><h1>Dimensions</h1></div>
             <span id="resultDimensionsStatus">Run analysis to populate this result.</span>
           </div>
+          <section id="resultDimensionCalloutPanel" class="panel dimension-callout-panel">
+            <div class="panel-title-row dimension-callout-heading">
+              <div>
+                <p class="eyebrow">Dimension Intelligence</p>
+                <h2>Key Callouts</h2>
+                <p id="resultDimensionCalloutMeta" class="insight-text">Reliable findings will appear after analysis.</p>
+              </div>
+              <div class="dimension-question-explorer">
+                <label>View
+                  <select id="resultDimensionQuestionSelect"><option value="__summary__">High-Level Summary</option></select>
+                </label>
+                <button id="resultDimensionCalloutGraphButton" class="dimension-question-graph-button" type="button" title="Create a custom dimension graph" aria-label="Create a custom dimension graph">
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16h14M5 13l3-4 3 2 4-6"></path></svg><span>Graph</span>
+                </button>
+              </div>
+            </div>
+            <div id="resultDimensionCallouts" class="dimension-callout-grid"></div>
+            <p class="dimension-callout-guardrail">Only Setup-selected dimensions and values meeting the minimum sample requirement are considered. Double-click any question to inspect its calculation and supporting artifact.</p>
+          </section>
           <div class="dimension-control-bar">
             <div>
               <span>Dimension workspace</span>
@@ -2569,7 +2591,8 @@
         }
       }());
     </script>
-  <script src="app.js?v=20260714-evidence-relationship-v113"></script>
+    <script src="dimension-callouts.js?v=20260714-boardroom-evidence-v131"></script>
+    <script src="app.js?v=20260714-pdf-people-rankings-v134"></script>
   <script src="dashboard-maker.js?v=20260713-row-graphs-v98"></script>
   <script src="evidence-relationship.js?v=20260714-v2"></script>
       <script src="/auth.js?v=20260621-auth-handoff-v1"></script>

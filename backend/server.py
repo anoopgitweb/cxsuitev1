@@ -4352,6 +4352,12 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
     app_url = str(options.get("appUrl") or "").strip()
     selected = [str(item) for item in payload.get("tabs", []) if str(item).strip()]
     custom_dashboards = payload.get("customDashboards") if isinstance(payload.get("customDashboards"), list) else []
+    dimension_evidence = payload.get("dimensionEvidence") if isinstance(payload.get("dimensionEvidence"), list) else []
+    dimension_evidence = [item for item in dimension_evidence if isinstance(item, dict)]
+    performance_trends = payload.get("performanceTrends") if isinstance(payload.get("performanceTrends"), dict) else {}
+    people_rankings = payload.get("peopleRankings") if isinstance(payload.get("peopleRankings"), dict) else {}
+    report_agent_rankings = people_rankings.get("agents") if isinstance(people_rankings.get("agents"), list) else []
+    report_manager_rankings = people_rankings.get("managers") if isinstance(people_rankings.get("managers"), list) else []
     summary = analysis.get("summary") if isinstance(analysis.get("summary"), dict) else {}
     counts = analysis.get("counts") if isinstance(analysis.get("counts"), dict) else {}
     sentiment = analysis.get("sentiment") if isinstance(analysis.get("sentiment"), dict) else {}
@@ -4464,6 +4470,8 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
     body_small = ParagraphStyle("StorySmall", fontName="Helvetica", fontSize=8.3, leading=12.2, textColor=muted, alignment=TA_LEFT)
     card_title_style = ParagraphStyle("CardTitle", fontName="Helvetica-Bold", fontSize=11.2, leading=14, textColor=navy)
     card_body_style = ParagraphStyle("CardBody", fontName="Helvetica", fontSize=8.8, leading=12.8, textColor=ink)
+    compact_note_style = ParagraphStyle("CompactNote", fontName="Helvetica", fontSize=7.2, leading=9.2, textColor=muted)
+    relationship_heading_style = ParagraphStyle("RelationshipHeading", fontName="Helvetica-Bold", fontSize=9.6, leading=11.4, textColor=deep_teal)
     callout_style = ParagraphStyle("Callout", fontName="Helvetica", fontSize=10.2, leading=15, textColor=white)
     appendix_question_style = ParagraphStyle("AppendixQuestion", fontName="Helvetica-Bold", fontSize=7.6, leading=9.2, textColor=navy)
     appendix_answer_style = ParagraphStyle("AppendixAnswer", fontName="Helvetica", fontSize=6.8, leading=8.2, textColor=muted)
@@ -4773,6 +4781,15 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
 
     def page_header(page_number: int) -> None:
         page_background()
+        canvas.bookmarkPage(f"page-{page_number}")
+        if page_number == 2:
+            canvas.bookmarkPage("contents")
+        else:
+            back_text = "Back to Contents"
+            canvas.setFillColor(teal)
+            canvas.setFont("Helvetica-Bold", 6.8)
+            canvas.drawString(margin, page_height - 12 * mm, back_text)
+            canvas.linkAbsolute(back_text, "contents", Rect=(margin, page_height - 15 * mm, margin + 29 * mm, page_height - 8 * mm), thickness=0)
         canvas.setFont("Helvetica", 7.2)
         canvas.setFillColor(navy)
         canvas.drawRightString(page_width - margin, page_height - 12 * mm, f"{title}   |   {page_number}")
@@ -4801,20 +4818,20 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
         canvas.setLineWidth(0.6)
         canvas.roundRect(x, y, width, height, 4 * mm, fill=1, stroke=1)
 
-    def kpi_card(x: float, y: float, width: float, label: str, value: str, note: str, accent=teal) -> None:
+    def kpi_card(x: float, y: float, width: float, label: str, value: str, note: str, accent=teal, compact: bool = False) -> None:
         height = 30 * mm
         rounded_card(x, y, width, height, white)
         canvas.setFillColor(accent)
         canvas.rect(x, y + height - 2 * mm, width, 2 * mm, fill=1, stroke=0)
         canvas.setFillColor(accent)
-        canvas.setFont("Helvetica-Bold", 7.3)
+        canvas.setFont("Helvetica-Bold", 6.5 if compact else 7.3)
         canvas.drawString(x + 5 * mm, y + height - 8 * mm, label[:30].upper())
         canvas.setFillColor(navy)
         value_text = str(value)
-        value_font_size = 18 if len(value_text) <= 12 else 14 if len(value_text) <= 20 else 11
+        value_font_size = (14 if len(value_text) <= 12 else 11 if len(value_text) <= 20 else 9) if compact else (18 if len(value_text) <= 12 else 14 if len(value_text) <= 20 else 11)
         canvas.setFont("Helvetica-Bold", value_font_size)
         canvas.drawString(x + 5 * mm, y + 10.5 * mm, value_text)
-        paragraph(safe(note), x + 5 * mm, y + 8.5 * mm, width - 10 * mm, body_small, 8 * mm)
+        paragraph(safe(note), x + 5 * mm, y + 8.5 * mm, width - 10 * mm, compact_note_style if compact else body_small, 8 * mm)
 
     def callout(x: float, y: float, width: float, height: float, title_text: str, body_html: str, fill=deep_teal) -> None:
         rounded_card(x, y, width, height, fill, fill)
@@ -4834,10 +4851,10 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
         paragraph(safe(headline, 80), x + 6 * mm, y + height - 13 * mm, width - 12 * mm, headline_style, 18 * mm)
         paragraph(body_html, x + 6 * mm, y + height - 29 * mm, width - 12 * mm, card_body_style, height - 34 * mm)
 
-    def horizontal_bars(x: float, top: float, width: float, data: list[tuple[str, float]], palette: list[Any], percent: bool = False) -> float:
+    def horizontal_bars(x: float, top: float, width: float, data: list[tuple[str, float]], palette: list[Any], percent: bool = False, step_mm: float = 15) -> float:
         maximum = max([value for _, value in data] + [1])
         for index, (label, value) in enumerate(data):
-            y = top - index * 15 * mm
+            y = top - index * step_mm * mm
             canvas.setFillColor(ink)
             canvas.setFont("Helvetica-Bold", 8.3)
             canvas.drawString(x, y, label[:32])
@@ -4850,7 +4867,7 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
             canvas.setFont("Helvetica-Bold", 7.5)
             display = f"{value:.1f}%" if percent else f"{value:,.0f}"
             canvas.drawRightString(x + width, y, display)
-        return top - len(data) * 15 * mm
+        return top - len(data) * step_mm * mm
 
     def line_chart(x: float, y: float, width: float, height: float, points: list[tuple[str, float, float]]) -> None:
         rounded_card(x, y, width, height, white)
@@ -4873,11 +4890,43 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
             canvas.setFillColor(muted)
             canvas.setFont("Helvetica", 6.5)
             canvas.drawRightString(chart_left - 2 * mm, line_y - 1.5 * mm, f"{low + (high-low)*step/4:.0f}")
+        volumes = [max(0.0, item[2]) for item in points]
+        volume_high = max(volumes + [0.0])
+        if volume_high > 0:
+            volume_coords = []
+            for index, volume in enumerate(volumes):
+                point_x = chart_left + (chart_right - chart_left) * index / max(1, len(points) - 1)
+                point_y = chart_bottom + (chart_top - chart_bottom) * volume / volume_high
+                volume_coords.append((point_x, point_y))
+            canvas.saveState()
+            canvas.setStrokeColor(colors.HexColor("#18B4A7"))
+            canvas.setLineWidth(1.5)
+            canvas.setDash(5, 3)
+            volume_path = canvas.beginPath()
+            volume_path.moveTo(*volume_coords[0])
+            for point_x, point_y in volume_coords[1:]:
+                volume_path.lineTo(point_x, point_y)
+            canvas.drawPath(volume_path, stroke=1, fill=0)
+            canvas.restoreState()
+            canvas.setFillColor(colors.HexColor("#18B4A7")); canvas.setFont("Helvetica", 6.2)
+            canvas.drawString(chart_right - 23 * mm, chart_top + 4 * mm, f"Volume max {volume_high:,.0f}")
         coords: list[tuple[float, float]] = []
         for index, (_label, value, _volume) in enumerate(points):
             point_x = chart_left + (chart_right - chart_left) * index / max(1, len(points) - 1)
             point_y = chart_bottom + (chart_top - chart_bottom) * (value - low) / max(0.001, high - low)
             coords.append((point_x, point_y))
+        rolling_values = [sum(values[max(0, index - 2):index + 1]) / min(3, index + 1) for index in range(len(values))]
+        rolling_coords = [
+            (chart_left + (chart_right - chart_left) * index / max(1, len(points) - 1), chart_bottom + (chart_top - chart_bottom) * (value - low) / max(0.001, high - low))
+            for index, value in enumerate(rolling_values)
+        ]
+        canvas.setStrokeColor(colors.HexColor("#8150FF"))
+        canvas.setLineWidth(1.45)
+        rolling_path = canvas.beginPath()
+        rolling_path.moveTo(*rolling_coords[0])
+        for point_x, point_y in rolling_coords[1:]:
+            rolling_path.lineTo(point_x, point_y)
+        canvas.drawPath(rolling_path, stroke=1, fill=0)
         canvas.setStrokeColor(teal)
         canvas.setLineWidth(2.1)
         path = canvas.beginPath()
@@ -4894,7 +4943,130 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
             if index % 2 == 0 or len(points) <= 8:
                 canvas.setFillColor(muted)
                 canvas.setFont("Helvetica", 5.7)
-                canvas.drawCentredString(point_x, y + 7 * mm, label[:10])
+                canvas.drawCentredString(point_x, y + 7 * mm, label[:11])
+        canvas.setFillColor(teal); canvas.circle(chart_left, chart_top + 4 * mm, 1.6 * mm, fill=1, stroke=0)
+        canvas.setFillColor(muted); canvas.setFont("Helvetica", 6.2); canvas.drawString(chart_left + 3 * mm, chart_top + 2.5 * mm, metric)
+        canvas.setStrokeColor(colors.HexColor("#8150FF")); canvas.setLineWidth(1.5); canvas.line(chart_left + 17 * mm, chart_top + 4 * mm, chart_left + 25 * mm, chart_top + 4 * mm)
+        canvas.setFillColor(muted); canvas.drawString(chart_left + 27 * mm, chart_top + 2.5 * mm, "Rolling avg")
+
+    def report_trend_points(key: str) -> list[tuple[str, float, float]]:
+        source = performance_trends.get(key) if isinstance(performance_trends.get(key), list) else []
+        result: list[tuple[str, float, float]] = []
+        for item in source:
+            if not isinstance(item, dict) or item.get("score") is None:
+                continue
+            raw_label = str(item.get("label") or "Period").strip()
+            date_match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", raw_label)
+            if date_match:
+                try:
+                    raw_label = _dt.datetime.strptime(date_match.group(0), "%Y-%m-%d").strftime("%d %b %Y")
+                except ValueError:
+                    pass
+            result.append((raw_label[:16], numeric(item.get("score")), numeric(item.get("volume"))))
+        return result
+
+    def performance_view_page(page_number: int, title_text: str, points: list[tuple[str, float, float]]) -> None:
+        page_header(page_number)
+        top = heading(title_text, "A board-room view of score movement, volume context, stability, and period-level highs and lows from the completed analysis.")
+        if not points:
+            callout(margin, top - 55 * mm, content_width, 40 * mm, "Evidence availability", "No valid period-level evidence was returned for this view. The report does not substitute or estimate missing periods.", navy)
+            end_page()
+            return
+        values = [item[1] for item in points]
+        volumes = [item[2] for item in points]
+        best = max(points, key=lambda item: item[1])
+        weakest = min(points, key=lambda item: item[1])
+        movement_value = values[-1] - values[-2] if len(values) > 1 else 0
+        average_value = sum(values) / len(values)
+        variance = sum((value - average_value) ** 2 for value in values) / max(1, len(values))
+        volatility_value = math.sqrt(variance)
+        callout_width = (content_width - 9 * mm) / 4
+        callout_y = top - 34 * mm
+        callouts = [
+            ("Trend interpretation", "Improving" if values[-1] >= values[0] else "Declining", f"{values[-1] - values[0]:+.2f} pts across the shown range", green if values[-1] >= values[0] else red),
+            ("Best period", best[0], f"{metric} {best[1]:.2f} | Vol {best[2]:,.0f}", green),
+            ("Lowest period", weakest[0], f"{metric} {weakest[1]:.2f} | Vol {weakest[2]:,.0f}", red),
+            ("Latest movement", f"{movement_value:+.2f} pts", f"Latest volume {volumes[-1]:,.0f}", teal),
+        ]
+        for index, (label, value, note, accent) in enumerate(callouts):
+            kpi_card(margin + index * (callout_width + 3 * mm), callout_y, callout_width, label, str(value)[:24], note, accent, compact=True)
+        chart_y = callout_y - 100 * mm
+        line_chart(margin, chart_y, content_width - 48 * mm, 88 * mm, points)
+        stats_x = page_width - margin - 43 * mm
+        stat_width = 43 * mm
+        stat_height = 19 * mm
+        stats = [
+            (f"Mean {metric}", f"{average_value:.2f}"),
+            (f"{metric} range", f"{max(values) - min(values):.2f}"),
+            ("Volatility", f"{volatility_value:.2f}"),
+            ("Total volume", f"{sum(volumes):,.0f}"),
+        ]
+        for index, (label, value) in enumerate(stats):
+            y = chart_y + 88 * mm - (index + 1) * (stat_height + 3 * mm)
+            rounded_card(stats_x, y, stat_width, stat_height, pale_teal)
+            canvas.setFillColor(teal); canvas.setFont("Helvetica-Bold", 6.7); canvas.drawString(stats_x + 4 * mm, y + 12.5 * mm, label.upper()[:30])
+            canvas.setFillColor(navy); canvas.setFont("Helvetica-Bold", 11); canvas.drawString(stats_x + 4 * mm, y + 5 * mm, value[:24])
+        callout(margin, 29 * mm, content_width, 29 * mm, "Leadership read", f"The latest {metric} is <b>{values[-1]:.2f}</b>, moving <b>{movement_value:+.2f} points</b> from the prior period. Read score movement alongside volume and volatility before assigning operational action.", navy)
+        end_page()
+
+    def people_ranking_page(page_number: int, title_text: str, rows: list[dict[str, Any]], entity: str) -> None:
+        page_header(page_number)
+        is_agent = entity == "agent"
+        subtitle = (
+            "The ten highest-ranked eligible agents across the analyzed population. Rank is based on score, followed by positive sentiment and survey volume."
+            if is_agent else
+            "The ten highest-ranked eligible managers/team leaders across the analyzed population. Rank is based on score, followed by positive sentiment and survey volume."
+        )
+        top = heading(title_text, subtitle)
+        if not rows:
+            callout(margin, top - 55 * mm, content_width, 40 * mm, "Evidence availability", "No consolidated ranking rows were returned for this report. Run the completed analysis with mapped agent and manager fields before generating the Board Room PDF.", navy)
+            end_page()
+            return
+        if is_agent:
+            headers = ["RANK", "AGENT NAME", "MANAGER / TL", "SURVEYS", metric, "POSITIVE SENT. %"]
+            widths = [13, 43, 39, 20, 23, 32]
+        else:
+            headers = ["RANK", "MANAGER / TL", "AGENTS", "SURVEYS", metric, "POSITIVE SENT. %"]
+            widths = [13, 51, 22, 22, 25, 37]
+        scale = content_width / (sum(widths) * mm)
+        widths = [value * mm * scale for value in widths]
+        table_top = top - 14 * mm
+        header_height = 12 * mm
+        row_height = 15.5 * mm
+        canvas.setFillColor(navy)
+        canvas.roundRect(margin, table_top - header_height, content_width, header_height, 3 * mm, fill=1, stroke=0)
+        x = margin
+        for header, column_width in zip(headers, widths):
+            canvas.setFillColor(white); canvas.setFont("Helvetica-Bold", 6.8)
+            canvas.drawCentredString(x + column_width / 2, table_top - 7.5 * mm, header)
+            x += column_width
+        for index, row in enumerate(rows[:10]):
+            y = table_top - header_height - (index + 1) * row_height
+            canvas.setFillColor(pale_teal if index < 3 else (pale if index % 2 else white))
+            canvas.rect(margin, y, content_width, row_height, fill=1, stroke=0)
+            canvas.setStrokeColor(line); canvas.setLineWidth(0.35); canvas.line(margin, y, page_width - margin, y)
+            rank = str(row_value(row, ["Rank Among Agents", "Rank among Managers", "Rank"], index + 1))
+            name = str(row_value(row, ["Agent Name"] if is_agent else ["Manager/TL", "Manager"], "Unknown"))
+            manager = str(row_value(row, ["Manager/TL", "Manager"], "Unknown")) if is_agent else ""
+            surveys = str(row_value(row, ["Surveys", "Responses", "Survey Volume"], "0"))
+            score_value = numeric(row_value(row, [f"{metric} Score", metric, f"Agent {metric}", f"Manager {metric}"], 0))
+            positive_value = numeric(row_value(row, ["Positive Sentiment %", "Positive %", "Positive"], 0))
+            if is_agent:
+                values = [rank, name, manager, surveys, f"{score_value:.2f}", f"{positive_value:.2f}%"]
+            else:
+                agent_count = str(row_value(row, ["Total Agents", "Agents", "Agent Count"], "0"))
+                values = [rank, name, agent_count, surveys, f"{score_value:.2f}", f"{positive_value:.2f}%"]
+            x = margin
+            for column_index, (value, column_width) in enumerate(zip(values, widths)):
+                canvas.setFillColor(green if index < 3 and column_index == 0 else ink)
+                canvas.setFont("Helvetica-Bold" if column_index in (0, 1, 4) else "Helvetica", 7.5 if column_index not in (1, 2) else 7.1)
+                if column_index in (1, 2):
+                    canvas.drawString(x + 3 * mm, y + 6 * mm, str(value)[:30])
+                else:
+                    canvas.drawCentredString(x + column_width / 2, y + 6 * mm, str(value)[:18])
+                x += column_width
+        callout(margin, 27 * mm, content_width, 31 * mm, "Interpretation guardrail", "Rank identifies comparative performance in the completed analysis. Validate minimum sample, customer mix, operating context and representative interactions before using the table for recognition or coaching.", navy)
+        end_page()
 
     def end_page() -> None:
         canvas.showPage()
@@ -4902,8 +5074,14 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
     custom_page_count = min(3, len(custom_dashboards))
     signal_horizon_page = 9
     evidence_relationship_page = 10
-    question_summary_page = 11 if leadership_questions else 0
-    custom_start_page = 12 if leadership_questions else 11
+    weekly_performance_page = 11
+    monthly_performance_page = 12
+    dimension_evidence_start_page = 13
+    dimension_page_count = len(dimension_evidence)
+    agent_ranking_page = dimension_evidence_start_page + dimension_page_count
+    manager_ranking_page = agent_ranking_page + 1
+    question_summary_page = manager_ranking_page + 1 if leadership_questions else 0
+    custom_start_page = manager_ranking_page + 1 + (1 if leadership_questions else 0)
     question_appendix_page_count = math.ceil(len(leadership_questions) / 8) if leadership_questions else 0
     chapters = [
         ("Overall Performance Lens", 3),
@@ -4914,7 +5092,12 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
         ("Risk and score-sentiment alignment", 8),
         ("Signal Horizon", signal_horizon_page),
         ("Evidence & Relationship Intelligence", evidence_relationship_page),
+        ("Weekly Performance View", weekly_performance_page),
+        ("Monthly Performance View", monthly_performance_page),
     ]
+    if dimension_page_count:
+        chapters.append(("Selected-dimension strong evidence", dimension_evidence_start_page))
+    chapters.extend([("Top 10 Agents", agent_ranking_page), ("Top 10 Managers", manager_ranking_page)])
     if leadership_questions:
         chapters.append(("100-question leadership results", question_summary_page))
     for index in range(custom_page_count):
@@ -4932,6 +5115,7 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
     chapters.append(("Conclusion and next steps", conclusion_page))
 
     # Cover
+    canvas.bookmarkPage("page-1")
     canvas.setFillColor(colors.HexColor("#FAFAFB"))
     canvas.rect(0, 0, page_width, page_height, fill=1, stroke=0)
     canvas.setFillColor(colors.HexColor("#DFF5F3"))
@@ -4964,6 +5148,10 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
     canvas.setFont("Helvetica", 8.5)
     canvas.drawString(margin, 49 * mm, f"{account}  |  {generated_at}")
     canvas.drawString(margin, 15 * mm, footer_note[:100])
+    canvas.setFillColor(teal)
+    canvas.setFont("Helvetica-Bold", 7.5)
+    canvas.drawRightString(page_width - margin, 15 * mm, "Open Contents")
+    canvas.linkAbsolute("Open Contents", "contents", Rect=(page_width - margin - 28 * mm, 11 * mm, page_width - margin, 19 * mm), thickness=0)
     end_page()
 
     # Contents
@@ -4984,6 +5172,7 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
         canvas.setFillColor(muted)
         canvas.setFont("Helvetica", 9)
         canvas.drawRightString(page_width - margin, y, str(chapter_page))
+        canvas.linkAbsolute(chapter, f"page-{chapter_page}", Rect=(margin + 10 * mm, y - 5 * mm, page_width - margin, y + 5 * mm), thickness=0)
     end_page()
 
     # Overall Performance Lens executive summary
@@ -5228,18 +5417,16 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
     canvas.setFillColor(navy)
     canvas.setFont("Helvetica-Bold", 11.5)
     canvas.drawString(margin + 7 * mm, ranking_y + 70 * mm, "Selected-dimension relationship ranking")
-    ranking_rows = [(str(item.get("Dimension") or "Unknown"), max(0.0, numeric(item.get("Effect Size")) * 100)) for item in evidence_dimensions[:6] if item.get("Effect Size") is not None]
+    ranking_rows = [(str(item.get("Dimension") or "Unknown"), max(0.0, numeric(item.get("Effect Size")) * 100)) for item in evidence_dimensions[:5] if item.get("Effect Size") is not None]
     if ranking_rows:
-        horizontal_bars(margin + 7 * mm, ranking_y + 59 * mm, ranking_width - 14 * mm, ranking_rows, [teal, cyan, green, amber, red, navy], False)
+        horizontal_bars(margin + 7 * mm, ranking_y + 59 * mm, ranking_width - 14 * mm, ranking_rows, [teal, cyan, green, amber, red, navy], False, 13)
     else:
         paragraph("No selected dimension currently has enough eligible groups for an effect-size ranking.", margin + 7 * mm, ranking_y + 56 * mm, ranking_width - 14 * mm, body_small, 38 * mm)
 
     relationship_x = margin + ranking_width + 10 * mm
     relationship_width = content_width - ranking_width - 10 * mm
     rounded_card(relationship_x, ranking_y, relationship_width, 82 * mm, pale_teal)
-    canvas.setFillColor(deep_teal)
-    canvas.setFont("Helvetica-Bold", 11.5)
-    canvas.drawString(relationship_x + 7 * mm, ranking_y + 70 * mm, "What leadership should take from this")
+    paragraph("What leadership should take from this", relationship_x + 7 * mm, ranking_y + 72 * mm, relationship_width - 14 * mm, relationship_heading_style, 18 * mm)
     if evidence_strongest:
         relationship_body = (
             f"<b>{safe(evidence_strongest.get('Dimension'))}</b> has the strongest measurable association with {metric}. "
@@ -5249,7 +5436,7 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
         )
     else:
         relationship_body = "Selected dimensions were retained, but the current run does not provide enough eligible group variation for a reliable statistical relationship ranking."
-    paragraph(relationship_body, relationship_x + 7 * mm, ranking_y + 61 * mm, relationship_width - 14 * mm, card_body_style, 51 * mm)
+    paragraph(relationship_body, relationship_x + 7 * mm, ranking_y + 56 * mm, relationship_width - 14 * mm, card_body_style, 46 * mm)
 
     detail_y = ranking_y - 58 * mm
     rounded_card(margin, detail_y, content_width, 47 * mm, white)
@@ -5266,8 +5453,40 @@ def _build_boardroom_pdf(payload: dict[str, Any]) -> bytes:
         y = detail_y + (27 - index * 7.5) * mm
         canvas.setFillColor(teal)
         canvas.circle(margin + 8 * mm, y + 1 * mm, 1.5 * mm, fill=1, stroke=0)
-        paragraph(item, margin + 12 * mm, y + 3 * mm, content_width - 19 * mm, body_small, 7 * mm)
+        paragraph(item, margin + 12 * mm, y + 3 * mm, content_width - 19 * mm, compact_note_style, 7 * mm)
     end_page()
+
+    # Weekly and monthly board-room performance views.
+    performance_view_page(weekly_performance_page, "Weekly Performance View", report_trend_points("weekly"))
+    performance_view_page(monthly_performance_page, "Monthly Performance View", report_trend_points("monthly"))
+
+    # Up to five Strong-evidence questions for every Setup-selected dimension.
+    for dimension_index, group in enumerate(dimension_evidence):
+        page_number = dimension_evidence_start_page + dimension_index
+        page_header(page_number)
+        dimension_name = str(group.get("dimension") or f"Selected dimension {dimension_index + 1}")
+        questions = group.get("questions") if isinstance(group.get("questions"), list) else []
+        questions = [item for item in questions if isinstance(item, dict) and str(item.get("evidence") or "").lower().startswith("strong")][:5]
+        top = heading(f"{dimension_name}: Strong Evidence", "Up to five strongly supported questions from this Setup-selected dimension. Moderate, directional and insufficient evidence is intentionally excluded.")
+        if not questions:
+            callout(margin, top - 55 * mm, content_width, 40 * mm, "Evidence threshold", "No question for this selected dimension met the Strong evidence threshold in the completed analysis. No weaker result has been substituted.", navy)
+        else:
+            card_height = 35 * mm
+            card_step = 38 * mm
+            for question_index, item in enumerate(questions):
+                y = top - (question_index + 1) * card_step + 3 * mm
+                rounded_card(margin, y, content_width, card_height, white)
+                canvas.setFillColor(green)
+                canvas.roundRect(margin, y, 3 * mm, card_height, 1.5 * mm, fill=1, stroke=0)
+                canvas.setFillColor(teal)
+                canvas.setFont("Helvetica-Bold", 7.5)
+                canvas.drawString(margin + 8 * mm, y + 26 * mm, f"Q{int(numeric(item.get('number'), question_index + 1)):02d}  |  STRONG EVIDENCE")
+                paragraph(safe(item.get("question"), 180), margin + 8 * mm, y + 23 * mm, content_width - 16 * mm, appendix_question_style, 7 * mm)
+                paragraph(safe(item.get("answer"), 330), margin + 8 * mm, y + 14 * mm, content_width - 16 * mm, appendix_answer_style, 11 * mm)
+        end_page()
+
+    people_ranking_page(agent_ranking_page, "Top 10 Agents", report_agent_rankings, "agent")
+    people_ranking_page(manager_ranking_page, "Top 10 Managers", report_manager_rankings, "manager")
 
     # Existing 100-question leadership results
     if leadership_questions:
@@ -7872,6 +8091,43 @@ class NPSHandler(BaseHTTPRequestHandler):
             _json_response(self, {"ok": True, "entries": _audit_log_entries(limit), "auditFolder": str(AUDIT_DIR), "userLogFolder": str(USER_LOG_DIR)})
             return
         if parsed_path.path == "/api/status":
+            light_status = str(parse_qs(parsed_path.query).get("light", [""])[0]).strip().lower() in {"1", "true", "yes"}
+            if light_status:
+                with STATE_LOCK:
+                    base_columns = list(STATE.base_df.columns)
+                    lookup_columns = list(STATE.lookup_df.columns)
+                    base_rows = int(len(STATE.base_df))
+                    lookup_rows = int(len(STATE.lookup_df))
+                    analyzed_rows = int(len(STATE.analyzed_df))
+                    analysis_meta = {
+                        "status": STATE.status,
+                        "progress": STATE.progress,
+                        "running": STATE.analysis_running,
+                        "error": STATE.analysis_error,
+                        "analysisId": STATE.analysis_id,
+                        "analysisEngines": dict(STATE.analysis_engines),
+                        "modelPaths": dict(STATE.model_paths),
+                        "summary": {"total": analyzed_rows},
+                    }
+                    light_payload = {
+                        "ok": True,
+                        "lightweight": True,
+                        "files": dict(STATE.files),
+                        "base_columns": base_columns,
+                        "lookup_columns": lookup_columns,
+                        "base_rows": base_rows,
+                        "lookup_rows": lookup_rows,
+                        "row_counts": {"base": base_rows, "lookup": lookup_rows, "analyzed": analyzed_rows},
+                        "base_column_stats": dict(STATE.base_column_profile),
+                        "lookup_column_stats": dict(STATE.lookup_column_profile),
+                        "dynamic_dimensions": list(STATE.dynamic_dimensions),
+                        "guesses": _guess_columns(base_columns),
+                        "analysis": analysis_meta,
+                        "sparrow_training": _training_snapshot(),
+                    }
+                light_payload["model_status"] = _model_status()
+                _json_response(self, light_payload)
+                return
             _json_response(
                 self,
                 {

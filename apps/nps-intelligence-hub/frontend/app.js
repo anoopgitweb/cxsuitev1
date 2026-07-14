@@ -407,8 +407,6 @@ function activateView(viewId) {
 
 
 const DASHBOARD_HANDOFF_VIEWS = new Set([
-  "setuphome",
-  "setup",
   "datasetsummary",
   "performanceoverview",
   "weeklytrenddashboards",
@@ -1276,7 +1274,7 @@ function isEligibleDynamicDimension(column) {
   const counts = [];
   if (inBase) counts.push(dynamicDimensionUniqueCount(column, "base"));
   if (inLookup) counts.push(dynamicDimensionUniqueCount(column, "lookup"));
-  return counts.some((count) => Number.isFinite(count) && count > 0 && count <= 10);
+  return counts.some((count) => Number.isFinite(count) && count > 0 && count <= 20);
 }
 
 function refreshDynamicDimensionPicker() {
@@ -1407,7 +1405,7 @@ function clearSetupCache() {
 }
 
 async function verifyServerUpload(kind) {
-  const response = await fetch("/api/status", { cache: "no-store" });
+  const response = await fetch("/api/status?light=1", { cache: "no-store" });
   const payload = await response.json();
   const columns = normalizeColumnList(kind === "base" ? payload.base_columns : payload.lookup_columns);
   const rows = Number(kind === "base" ? (payload.row_counts?.base || payload.base_rows || 0) : (payload.row_counts?.lookup || payload.lookup_rows || 0));
@@ -1774,7 +1772,8 @@ function updateGuidedSetupState() {
   if (analysisCompleteStep) analysisCompleteStep.hidden = !analysisComplete;
   updateSetupConfirmButtons();
   updateGuidedAnalysisEstimate();
-  const onboardingActive = state.guidedReleaseToApp !== true;
+  const setupHomeRequested = new URLSearchParams(window.location.search).get("view") === "setuphome";
+  const onboardingActive = state.guidedReleaseToApp !== true && !setupHomeRequested;
   document.body.classList.toggle("nps-onboarding-active", onboardingActive);
   document.body.classList.remove("nps-stage-upload", "nps-stage-success", "nps-stage-coverage", "nps-stage-lookup", "nps-stage-mapping", "nps-stage-analysis", "nps-stage-complete", "nps-stage-story");
   document.body.classList.remove("nps-review-step-1", "nps-review-step-2", "nps-review-step-3", "nps-review-step-4", "nps-review-step-5", "nps-review-step-6", "nps-review-step-7", "nps-review-step-8", "nps-review-step-9");
@@ -12453,6 +12452,83 @@ function boardRoomPdfCustomDashboardData() {
   return dashboards;
 }
 
+function boardRoomDimensionEvidenceData(analysis = state.analysis || {}) {
+  const rows = typeof resultDimensionRows === "function" ? resultDimensionRows(analysis) : [];
+  return typeof window.dimensionIntelligenceBoardroomEvidence === "function"
+    ? window.dimensionIntelligenceBoardroomEvidence(rows, analysis, 5) : [];
+}
+
+function boardRoomPeopleRankingData() {
+  const rows = allFeedbackRows();
+  return {
+    agents: consolidatedPeopleRows("agent", rows, "All Agents").slice(0, 10),
+    managers: consolidatedPeopleRows("manager", rows, "All Managers").slice(0, 10),
+  };
+}
+
+function boardRoomPerformanceTrendData(analysis = state.analysis || {}, metric = "NPS") {
+  const number = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+  const normalize = (rows, labelKeys) => (Array.isArray(rows) ? rows : []).map((row) => {
+    const label = labelKeys.map((key) => row?.[key]).find((value) => value !== undefined && value !== null && String(value).trim()) || "Period";
+    const score = number(row?.[metric] ?? row?.NPS ?? row?.CSAT ?? row?.Score);
+    const volume = number(row?.Responses ?? row?.Volume ?? row?.["Survey Volume"] ?? row?.Count) || 0;
+    return score === null ? null : { label: String(label), score, volume };
+  }).filter(Boolean);
+  const weekly = normalize(analysis.weekly, ["Week", "Period", "Date", "Key"]).slice(-16);
+  const daily = Array.isArray(analysis.population?.daily) ? analysis.population.daily : [];
+  const monthMap = new Map();
+  daily.forEach((row) => {
+    const rawDate = row?.Period ?? row?.Date ?? row?.Key;
+    const date = new Date(rawDate);
+    const score = number(row?.[metric] ?? row?.NPS ?? row?.CSAT ?? row?.Score);
+    const volume = number(row?.Responses ?? row?.Volume ?? row?.Count) || 0;
+    if (!rawDate || Number.isNaN(date.getTime()) || score === null) return;
+    const key = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0");
+    const item = monthMap.get(key) || { key, weighted: 0, volume: 0, scoreSum: 0, scoreCount: 0 };
+    item.weighted += score * Math.max(volume, 1); item.volume += volume; item.scoreSum += score; item.scoreCount += 1;
+    monthMap.set(key, item);
+  });
+  let monthly = Array.from(monthMap.values()).sort((a, b) => a.key.localeCompare(b.key)).map((item) => {
+    const date = new Date(item.key + "-01T00:00:00");
+    return { label: date.toLocaleDateString(undefined, { month: "short", year: "numeric" }), score: item.volume ? item.weighted / item.volume : item.scoreSum / item.scoreCount, volume: item.volume };
+  }).slice(-12);
+  if (!monthly.length && weekly.length) {
+    const fallback = new Map();
+    weekly.forEach((row) => {
+      const date = new Date(row.label);
+      if (Number.isNaN(date.getTime())) return;
+      const key = date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0");
+      const item = fallback.get(key) || { key, weighted: 0, volume: 0, count: 0 };
+      item.weighted += row.score * Math.max(row.volume, 1); item.volume += row.volume; item.count += 1; fallback.set(key, item);
+    });
+    monthly = Array.from(fallback.values()).sort((a, b) => a.key.localeCompare(b.key)).map((item) => ({ label: new Date(item.key + "-01T00:00:00").toLocaleDateString(undefined, { month: "short", year: "numeric" }), score: item.weighted / Math.max(item.volume, item.count), volume: item.volume }));
+  }
+  const rolling = (rows) => rows.map((row, index) => ({ ...row, rolling: rows.slice(Math.max(0, index - 2), index + 1).reduce((sum, item) => sum + item.score, 0) / Math.min(3, index + 1) }));
+  return { weekly: rolling(weekly), monthly: rolling(monthly) };
+}
+
+function boardRoomTrendSectionHtml(id, title, points, metric) {
+  if (!points?.length) return `<section id="${id}" class="interactive-section interactive-trend-section"><p class="interactive-eyebrow">Performance Trend</p><h2>${escapeHtml(title)}</h2><p>No period-level evidence is available for this view.</p></section>`;
+  const scores = points.map((item) => item.score), volumes = points.map((item) => item.volume);
+  const scoreLow = metric === "NPS" ? -100 : Math.min(0, ...scores), scoreHigh = metric === "NPS" ? 100 : Math.max(100, ...scores);
+  const volumeHigh = Math.max(1, ...volumes), width = 980, height = 330, left = 64, right = 52, top = 28, bottom = 56;
+  const x = (index) => left + (width - left - right) * index / Math.max(1, points.length - 1);
+  const scoreY = (value) => top + (height - top - bottom) * (scoreHigh - value) / Math.max(.001, scoreHigh - scoreLow);
+  const volumeY = (value) => top + (height - top - bottom) * (volumeHigh - value) / volumeHigh;
+  const path = (field, mapper) => points.map((item, index) => `${index ? "L" : "M"}${x(index).toFixed(1)},${mapper(item[field]).toFixed(1)}`).join(" ");
+  const grid = [0, .25, .5, .75, 1].map((step) => { const y = top + (height - top - bottom) * step; return `<line x1="${left}" y1="${y}" x2="${width-right}" y2="${y}"/><text x="${left-10}" y="${y+4}" text-anchor="end">${(scoreHigh-(scoreHigh-scoreLow)*step).toFixed(0)}</text>`; }).join("");
+  const labels = points.map((item, index) => `<text x="${x(index)}" y="${height-25}" text-anchor="middle">${escapeHtml(item.label).slice(0, 12)}</text>`).join("");
+  const dots = points.map((item, index) => `<g><title>${escapeHtml(item.label)}: ${metric} ${item.score.toFixed(2)}, volume ${Math.round(item.volume).toLocaleString()}</title><circle cx="${x(index)}" cy="${scoreY(item.score)}" r="4"/><text class="point-label" x="${x(index)}" y="${scoreY(item.score)-9}" text-anchor="middle">${item.score.toFixed(2)}</text></g>`).join("");
+  const best = points.reduce((a, b) => b.score > a.score ? b : a), worst = points.reduce((a, b) => b.score < a.score ? b : a), latest = points.at(-1), previous = points.at(-2);
+  const average = scores.reduce((sum, value) => sum + value, 0) / scores.length;
+  return `<section id="${id}" class="interactive-section interactive-trend-section"><div class="interactive-section-toolbar"><a class="interactive-section-top-link" href="#interactive-home">Move to top</a></div><p class="interactive-eyebrow">Performance Trend</p><h2>${escapeHtml(title)}</h2><div class="interactive-trend-callouts"><div><span>Trend interpretation</span><strong>${latest.score >= points[0].score ? "Improving" : "Declining"}</strong><small>${(latest.score-points[0].score).toFixed(2)} pts across shown range</small></div><div><span>Best period</span><strong>${escapeHtml(best.label)}</strong><small>${metric} ${best.score.toFixed(2)}</small></div><div><span>Lowest period</span><strong>${escapeHtml(worst.label)}</strong><small>${metric} ${worst.score.toFixed(2)}</small></div><div><span>Latest movement</span><strong>${previous ? (latest.score-previous.score).toFixed(2) : "0.00"} pts</strong><small>Latest volume ${Math.round(latest.volume).toLocaleString()}</small></div></div><div class="interactive-trend-layout"><div class="interactive-trend-chart"><div class="interactive-trend-legend"><span class="score">${metric}</span><span class="volume">Volume</span><span class="rolling">Rolling avg</span></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}"><g class="grid">${grid}${labels}</g><path class="rolling-line" d="${path("rolling", scoreY)}"/><path class="volume-line" d="${path("volume", volumeY)}"/><path class="score-line" d="${path("score", scoreY)}"/><g class="score-dots">${dots}</g></svg></div><aside class="interactive-trend-stats"><div><span>Mean ${metric}</span><strong>${average.toFixed(2)}</strong></div><div><span>${metric} range</span><strong>${(best.score-worst.score).toFixed(2)}</strong></div><div><span>Total volume</span><strong>${Math.round(volumes.reduce((sum,value)=>sum+value,0)).toLocaleString()}</strong></div><div><span>Average volume</span><strong>${Math.round(volumes.reduce((sum,value)=>sum+value,0)/volumes.length).toLocaleString()}</strong></div></aside></div></section>`;
+}
+
+function boardRoomDimensionEvidenceHtml(groups) {
+  const cards = (groups || []).map((group) => `<article class="interactive-dimension-evidence-card"><header><div><span>Selected Dimension</span><h3>${escapeHtml(group.dimension)}</h3></div><strong>${group.questions.length} strong-evidence answer${group.questions.length === 1 ? "" : "s"}</strong></header>${group.questions.length ? `<ol>${group.questions.map((item) => `<li><span>Q${String(item.number).padStart(2,"0")}</span><div><h4>${escapeHtml(item.question)}</h4><p>${escapeHtml(item.answer)}</p><small>${escapeHtml(item.evidence)}</small></div></li>`).join("")}</ol>` : `<p class="interactive-dimension-evidence-empty">No question for this selected dimension met the Strong evidence threshold. Moderate, directional and insufficient results were intentionally excluded.</p>`}</article>`).join("");
+  return `<section id="interactive-dimension-evidence" class="interactive-section interactive-dimension-evidence-section"><div class="interactive-section-toolbar"><a class="interactive-section-top-link" href="#interactive-home">Move to top</a></div><p class="interactive-eyebrow">Dimension Intelligence</p><h2>Strong Evidence by Selected Dimension</h2><p class="interactive-dimension-evidence-intro">Every dimension selected during Setup is reviewed independently. Up to five strongly supported questions and answers are retained per dimension.</p><div class="interactive-dimension-evidence-grid">${cards || "<p>No Setup-selected dimensions are available.</p>"}</div></section>`;
+}
+
 function createInteractiveHtmlReport(options = {}) {
   const tabs = selectedBoardPdfTabs();
   const customDashboards = interactiveCustomDashboardCollection();
@@ -12461,6 +12537,9 @@ function createInteractiveHtmlReport(options = {}) {
     return;
   }
   const analysis = state.analysis || {};
+  const dimensionEvidence = boardRoomDimensionEvidenceData(analysis);
+  const performanceTrends = boardRoomPerformanceTrendData(analysis, "NPS");
+  const peopleRankings = boardRoomPeopleRankingData();
   const rows = analysis.feedbackRows || analysis.preview || [];
   if (!rows.length && !analysis.summary) {
     alert("Run analysis first. The Interactive HTML will be available as soon as NPS analysis is complete.");
@@ -12503,6 +12582,9 @@ function createInteractiveHtmlReport(options = {}) {
     analysis: enrichedAnalysisForExport(),
     options: htmlOptions,
     customDashboards: boardRoomPdfCustomDashboardData(),
+    dimensionEvidence,
+    performanceTrends,
+    peopleRankings,
   }).replace(/</g, "\\u003c");
   const snapshot = analysisCompleteSummaryHtml(analysisCompleteSummary(analysis));
   reportWindow.document.open();
@@ -12588,6 +12670,40 @@ function createInteractiveHtmlReport(options = {}) {
           .interactive-kpi-strip strong { display: block; color: #fff; margin-top: 8px; font-size: 24px; font-weight: 400; }
           .interactive-index, .interactive-executive-read { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid rgba(255,255,255,.20); border-radius: 24px; background: transparent; color: #ffffff; box-shadow: none; }
           .interactive-section { margin: 22px auto; max-width: 1320px; padding: 28px; border: 1px solid #cfe4ec; border-radius: 24px; background: #fff; color: #0c2340; box-shadow: 0 18px 45px rgba(12,35,64,.08); }
++          .interactive-trend-callouts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin: 18px 0 14px; }
+          .interactive-trend-callouts div, .interactive-trend-stats div { padding: 12px 14px; border: 1px solid #cfe4ec; border-radius: 14px; background: #f8fcfd; }
+          .interactive-trend-callouts span, .interactive-trend-stats span { display: block; color: #008f92; text-transform: uppercase; letter-spacing: .09em; font-size: 9px; }
+          .interactive-trend-callouts strong, .interactive-trend-stats strong { display: block; margin-top: 5px; color: #0c2340; font-size: 16px; }
+          .interactive-trend-callouts small { display: block; margin-top: 3px; color: #60798b; }
+          .interactive-trend-layout { display: grid; grid-template-columns: minmax(0,1fr) 210px; gap: 16px; align-items: stretch; }
+          .interactive-trend-chart { padding: 12px; border: 1px solid #cfe4ec; border-radius: 18px; overflow: hidden; }
+          .interactive-trend-chart svg { display: block; width: 100%; height: auto; }
+          .interactive-trend-chart .grid line { stroke: #dce8ed; stroke-width: 1; }
+          .interactive-trend-chart .grid text { fill: #60798b; font-size: 10px; }
+          .interactive-trend-chart .score-line { fill: none; stroke: #00798b; stroke-width: 4; }
+          .interactive-trend-chart .volume-line { fill: none; stroke: #16b4a7; stroke-width: 3; stroke-dasharray: 9 7; }
+          .interactive-trend-chart .rolling-line { fill: none; stroke: #8150ff; stroke-width: 3; }
+          .interactive-trend-chart .score-dots circle { fill: #fff; stroke: #00798b; stroke-width: 3; }
+          .interactive-trend-chart .point-label { fill: #0c2340; font-size: 9px; font-weight: 700; }
+          .interactive-trend-legend { display: flex; justify-content: center; gap: 26px; margin: 2px 0 4px; color: #36566d; font-size: 12px; }
+          .interactive-trend-legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; margin-right: 7px; vertical-align: middle; background: #00798b; }
+          .interactive-trend-legend .volume::before { background: #16b4a7; }
+          .interactive-trend-legend .rolling::before { background: #8150ff; }
+          .interactive-trend-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; align-content: start; padding: 10px; border: 1px solid #cfe4ec; border-radius: 18px; background: #f5fbfb; }
+          .interactive-dimension-evidence-intro { margin: -4px 0 18px; color: #60798b; }
+          .interactive-dimension-evidence-grid { display: grid; gap: 16px; }
+          .interactive-dimension-evidence-card { padding: 18px; border: 1px solid #cfe4ec; border-radius: 18px; background: #fbfefe; break-inside: avoid; }
+          .interactive-dimension-evidence-card header { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #dce8ed; }
+          .interactive-dimension-evidence-card header span { color: #008f92; text-transform: uppercase; letter-spacing: .1em; font-size: 9px; }
+          .interactive-dimension-evidence-card h3 { margin: 4px 0 0; color: #0c2340; font-size: 21px; }
+          .interactive-dimension-evidence-card header > strong { padding: 7px 11px; border-radius: 999px; color: #087756; background: #e4f8ef; font-size: 11px; white-space: nowrap; }
+          .interactive-dimension-evidence-card ol { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
+          .interactive-dimension-evidence-card li { display: grid; grid-template-columns: 42px 1fr; gap: 12px; padding: 11px 12px; border-radius: 13px; background: #fff; box-shadow: inset 3px 0 #2eb785; }
+          .interactive-dimension-evidence-card li > span { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: #007f83; background: #e6f8f8; font-weight: 700; }
+          .interactive-dimension-evidence-card h4 { margin: 0; color: #0c2340; font-size: 14px; }
+          .interactive-dimension-evidence-card li p { margin: 5px 0; color: #36566d; line-height: 1.45; }
+          .interactive-dimension-evidence-card li small { color: #087756; font-weight: 700; }
+          .interactive-dimension-evidence-empty { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; color: #60798b; background: #f1f5f7; }
           .interactive-index h2, .interactive-executive-read h2 { margin: 0 0 14px; color: #ffffff; font-size: 34px; font-weight: 300; }
           .interactive-executive-summary-read { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: #ffffff; box-shadow: none; }
           .interactive-executive-summary-read h2 { color: #ffffff !important; font-size: 30px !important; margin-bottom: 16px !important; }
@@ -12941,6 +13057,7 @@ function createInteractiveHtmlReport(options = {}) {
                     <a href="#interactive-executive-signals-section">Executive Signals</a>
                   </div>
                   ${reportMenuGroupsHtml}
+                  <div class="interactive-dropdown-section"><strong>Performance Evidence</strong><a href="#interactive-weekly-performance">Weekly Performance View</a><a href="#interactive-monthly-performance">Monthly Performance View</a><a href="#interactive-dimension-evidence">Dimension Strong Evidence</a></div>
                 </div>
               </div>
               ${customDashboards.count ? `<div class="interactive-menu interactive-custom-dashboard-menu" aria-label="Custom dashboards menu">
@@ -12963,6 +13080,9 @@ function createInteractiveHtmlReport(options = {}) {
             ${snapshot}
           </section>
           ${interactiveExecutiveSignalsSectionHtml()}
+          ${boardRoomTrendSectionHtml("interactive-weekly-performance", "Weekly Performance View", performanceTrends.weekly, "NPS")}
+          ${boardRoomTrendSectionHtml("interactive-monthly-performance", "Monthly Performance View", performanceTrends.monthly, "NPS")}
+          ${boardRoomDimensionEvidenceHtml(dimensionEvidence)}
           ${sections}
           ${customDashboards.sectionsHtml}
         </main>
@@ -18938,6 +19058,38 @@ function populateDashboardSelect(selectId, values, allLabel, currentValue) {
   return select.value || allLabel;
 }
 
+function consolidatedPeopleRows(kind, rows, selected = "") {
+  const groups = new Map();
+  (rows || []).forEach((row) => {
+    const name = kind === "agent" ? agentName(row) : managerName(row);
+    if (!name || name === "Unknown") return;
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(row);
+  });
+  if (kind === "agent") {
+    const agents = Array.from(groups.entries()).map(([name, groupRows]) => {
+      const managerCounts = new Map();
+      groupRows.forEach((row) => { const manager = managerName(row); managerCounts.set(manager, (managerCounts.get(manager) || 0) + 1); });
+      const manager = Array.from(managerCounts.entries()).sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))[0]?.[0] || "Unknown";
+      const stats = npsDashboardSummary(groupRows);
+      return { name, manager, surveys: groupRows.length, score: Number(stats.summary.NPS || 0), positive: Number(stats.sentiment.Positive || 0) };
+    });
+    agents.sort((a, b) => b.score - a.score || b.positive - a.positive || b.surveys - a.surveys || a.name.localeCompare(b.name));
+    agents.forEach((item, index) => { item.rank = index + 1; });
+    return agents.filter((item) => !selected || selected === "All Agents" || item.name === selected)
+      .sort((a, b) => a.rank - b.rank || a.manager.localeCompare(b.manager) || a.name.localeCompare(b.name))
+      .map((item) => ({ "Agent Name": item.name, "Manager/TL": item.manager, Surveys: item.surveys.toLocaleString(), "NPS Score": Number(item.score.toFixed(2)), "Positive Sentiment %": Number(item.positive.toFixed(2)), "Rank Among Agents": String(item.rank) }));
+  }
+  const managers = Array.from(groups.entries()).map(([name, groupRows]) => {
+    const stats = npsDashboardSummary(groupRows);
+    return { name, agents: new Set(groupRows.map(agentName).filter((value) => value && value !== "Unknown")).size, surveys: groupRows.length, score: Number(stats.summary.NPS || 0), positive: Number(stats.sentiment.Positive || 0) };
+  }).sort((a, b) => b.score - a.score || b.positive - a.positive || b.surveys - a.surveys || a.name.localeCompare(b.name));
+  managers.forEach((item, index) => { item.rank = index + 1; });
+  return managers.filter((item) => !selected || selected === "All Managers" || item.name === selected)
+    .sort((a, b) => a.rank - b.rank)
+    .map((item) => ({ "Manager/TL": item.name, "Total Agents": item.agents.toLocaleString(), Surveys: item.surveys.toLocaleString(), "NPS Score": Number(item.score.toFixed(2)), "Positive Sentiment %": Number(item.positive.toFixed(2)), "Rank among Managers": String(item.rank) }));
+}
+
 function renderPeopleDashboard(kind) {
   const isAgent = kind === "agent";
   const selectId = isAgent ? "agentDashboardSelect" : "managerDashboardSelect";
@@ -18967,17 +19119,8 @@ function renderPeopleDashboard(kind) {
   renderGauge(stats.summary, `${prefix}NpsGauge`);
   renderSentiment(stats.sentiment, `${prefix}SentimentMix`);
   renderComposition(stats.counts, stats.summary, `${prefix}NpsComposition`);
-  const tableRows = selectedRows.slice(0, 250).map((row, index) => ({
-    "#": index + 1,
-    "Agent Name": agentName(row),
-    "Manager/TL": managerName(row),
-    "NPS Score": displayCellValue(firstValue(row, [$("scoreCol")?.value || "", "NPS Score", "NPS", "Inline NPS", "Rating", "Score"])),
-    "NPS Type": npsDashboardType(row) || rowNpsType(row),
-    Sentiment: row.Sentiment || "",
-    "Feedback Date": displayCellValue(firstValue(row, [$("dateCol")?.value || "", "Feedback Date", "Response Date", "Conversation Date", "Date"])),
-    "Verbatim Feedback": displayCellValue(feedbackText(row)),
-  }));
-  renderAnyTable(`${prefix}Table`, tableRows, 8);
+  const tableRows = consolidatedPeopleRows(kind, rows, selected);
+  renderAnyTable(`${prefix}Table`, tableRows, 6);
   if (!isAgent) {
     const managerAgents = groupCount(selectedRows, agentName, 100).map((row) => {
       const agentRows = selectedRows.filter((item) => agentName(item) === row.Label);
@@ -19523,7 +19666,7 @@ function resultAutoDimensionRows(analysis = state.analysis || {}, scoreName = "N
     if (displayDimension === "Agent" || displayDimension === "Manager") return;
     const values = rows.map((row) => String(row?.[column] ?? "").trim()).filter(Boolean);
     const unique = Array.from(new Set(values));
-    if (unique.length < 2 || unique.length >= 15) return;
+    if (unique.length < 2 || unique.length > 20) return;
     const groups = new Map();
     rows.forEach((row) => {
       const value = String(row?.[column] ?? "").trim();
@@ -19941,6 +20084,7 @@ function renderResultDimensionTable(rows = []) {
       ? `${filtered.length.toLocaleString()} of ${rows.length.toLocaleString()} dimension rows shown across ${Math.max(dimensions.length - 1, 0).toLocaleString()} dimensions.`
       : "Run analysis to populate this result.";
   }
+  if (typeof window.renderDimensionIntelligenceCallouts === "function") window.renderDimensionIntelligenceCallouts(rows, state.analysis || {});
   renderResultDimensionCards(filtered);
   renderResultDimensionInsightTable(filtered, current);
 }
@@ -22175,8 +22319,10 @@ function showToastMessage(message) {
 }
 
 async function loadStatus() {
+  const rawRequestedView = new URLSearchParams(window.location.search).get("view") || "";
   const initialRequestedView = requestedDashboardHandoffView();
   const initialDashboardHandoff = Boolean(initialRequestedView);
+  const lightweightStartup = !initialDashboardHandoff || rawRequestedView === "setuphome" || rawRequestedView === "setup";
   if (initialDashboardHandoff) {
     state.guidedReleaseToApp = true;
     clearCoachTips();
@@ -22184,7 +22330,7 @@ async function loadStatus() {
   }
   try {
   if (initialDashboardHandoff) updateProgress("Dashboard handoff: contacting the local analyzer for the completed result package...", 14);
-  const response = await fetch("/api/status");
+  const response = await fetch(lightweightStartup ? "/api/status?light=1" : "/api/status");
   if (initialDashboardHandoff) updateProgress("Dashboard handoff: result package received. Validating workbook, rows, and dashboard context...", 28);
   const payload = await response.json();
   const setupCache = readSetupCache();
@@ -22219,14 +22365,14 @@ async function loadStatus() {
     && window.sessionStorage.getItem("npsGuidedBaseFile") === savedBaseName);
   const analysisSessionMatches = Boolean(savedAnalysisId)
     && window.sessionStorage.getItem("npsGuidedAnalysisId") === savedAnalysisId;
-  const analysisComplete = !restartRequested
+  const analysisComplete = !lightweightStartup && !restartRequested
     && baseSessionMatches
     && analysisSessionMatches
     && savedAnalysis.running !== true
     && Number(savedAnalysis.progress || 0) >= 100
     && Number(savedAnalysis.summary?.total || savedAnalysis.summary?.Total || 0) > 0;
   const forceGuidedStart = !dashboardHandoff && (restartRequested || !hasSavedBase || !baseSessionMatches);
-  state.guidedReleaseToApp = dashboardHandoff === true;
+  state.guidedReleaseToApp = dashboardHandoff === true || rawRequestedView === "setuphome";
   state.guidedAnalysisComplete = analysisComplete;
   state.guidedMappingConfirmed = analysisComplete;
   state.guidedStoryActive = false;
@@ -22244,7 +22390,7 @@ async function loadStatus() {
   state.guesses = forceGuidedStart ? {} : (Object.keys(payload.guesses || {}).some((key) => payload.guesses[key]) ? payload.guesses : (setupCache.guesses || {}));
   if (!forceGuidedStart && setupCache.baseColumnStats) state.baseColumnStats = setupCache.baseColumnStats;
   if (!forceGuidedStart && setupCache.lookupColumnStats) state.lookupColumnStats = setupCache.lookupColumnStats;
-  if (forceGuidedStart) activateView("setup");
+  if (forceGuidedStart && rawRequestedView !== "setuphome") activateView("setup");
   if (dashboardHandoff) {
     const rows = Number(savedAnalysis.summary?.total || savedAnalysis.summary?.Total || payload.row_counts?.base || payload.base_rows || 0);
     const rowText = Number.isFinite(rows) && rows > 0 ? ` for ${rows.toLocaleString()} rows` : "";
@@ -22278,7 +22424,12 @@ async function loadStatus() {
   if (dashboardHandoff) updateProgress("Dashboard handoff: refreshing mappings and preparing dashboard filters...", 58);
   refreshMapping();
   if (dashboardHandoff) updateProgress("Dashboard handoff: rendering dashboard cards, trends, gauges, and evidence tables...", 78);
-  renderAnalysis(savedAnalysis);
+  if (!lightweightStartup) {
+    renderAnalysis(savedAnalysis);
+  } else {
+    state.analysis = {};
+    updateAnalysisAccessUi();
+  }
   if (dashboardHandoff) updateProgress("Dashboard handoff: dashboard views rendered. Preparing guided context and next-step tour...", 88);
   if (analysisComplete) {
     state.guidedInsightIndex = 0;
@@ -22378,6 +22529,19 @@ $("addDynamicDimension")?.addEventListener("click", () => {
     writeSetupCache({ dynamicDimensions: state.dynamicDimensions });
     refreshDynamicDimensionPicker();
   }
+});
+$("addAllDynamicDimensions")?.addEventListener("click", () => {
+  const eligible = Array.from($("dynamicDimensionSelect")?.options || [])
+    .map((option) => option.value)
+    .filter(Boolean);
+  if (!eligible.length) {
+    showToastMessage("All eligible dimensions are already selected.");
+    return;
+  }
+  state.dynamicDimensions = Array.from(new Set([...state.dynamicDimensions, ...eligible]));
+  writeSetupCache({ dynamicDimensions: state.dynamicDimensions });
+  refreshDynamicDimensionPicker();
+  showToastMessage(`${eligible.length} dimension${eligible.length === 1 ? "" : "s"} added.`);
 });
 $("browseSparrowModel")?.addEventListener("click", () => browseModel("sparrow").catch((err) => alert(err.message)));
 $("browseOwlModel")?.addEventListener("click", () => browseModel("theme").catch((err) => alert(err.message)));
@@ -22734,7 +22898,8 @@ document.addEventListener("click", (event) => {
 });
 function wireUploadInputs() {
   const dashboardHandoff = Boolean(requestedDashboardHandoffView());
-  if (dashboardHandoff) {
+  const setupHomeRequested = new URLSearchParams(window.location.search).get("view") === "setuphome";
+  if (dashboardHandoff || setupHomeRequested) {
     state.guidedReleaseToApp = true;
     clearCoachTips();
   }
@@ -22773,7 +22938,7 @@ function wireUploadInputs() {
   wireGuidedRunAnalysis();
   wireGuidedNextActions();
   updateGuidedSetupState();
-  if (!dashboardHandoff) {
+  if (!dashboardHandoff && !setupHomeRequested) {
     showCoachTipSoon("baseUploadButton", "Start here. Upload the Base File and I will guide the rest.", { key: "start-upload-base", position: "top", delay: 700 });
   }
 }
